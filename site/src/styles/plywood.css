@@ -1,7 +1,7 @@
 /*
  * plywood's look, on the plunge site's structure: Geist for reading and
  * headings, Geist Mono for anything a terminal prints, warm neutrals, one wood
- * accent, a darker grain for fine details and a steel gray from the bench's legs.
+ * accent, a darker grain for fine details and a steel gray from the board's dark edge.
  *
  * Every colour comes from the logo (public/brand/plywood-160.png):
  *   light wood #f2ac59, mid wood #df8e3f, deep wood #b36521,
@@ -212,8 +212,8 @@ h1#_top {
 	padding: 0.05em 0.35em;
 }
 
-/* The home hero: the bench, large and crisp, with no frame since its background is transparent. */
-.hero .pw-hero-bench {
+/* The home hero: the board, large and crisp, with no frame since its background is transparent. */
+.hero .pw-hero-board {
 	width: clamp(8rem, 22vw, 16rem);
 	height: auto;
 	margin-inline: auto;

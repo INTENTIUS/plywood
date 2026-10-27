@@ -8,7 +8,7 @@
 // neverLine from src/prompts.ts, which forbids apply, approval and merge.
 // Adapted from plunge's site.
 import { promptText } from '../prompts';
-import Bench from "./Bench.astro";
+import Board from "./Board.astro";
 
 interface Props {
 	label?: string;
@@ -26,7 +26,7 @@ const prompt = text ?? promptText(Astro.locals.starlightRoute?.entry.data.prompt
 	<figure class="pw-prompt not-content" id="agent-prompt">
 		<details>
 			<summary>
-				<span class="label"><Bench size={16} />{label}</span>
+				<span class="label"><Board size={16} />{label}</span>
 				<span class="note">{note}</span>
 			</summary>
 			<pre class="full"><code>{prompt}</code></pre>

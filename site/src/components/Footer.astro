@@ -1,9 +1,9 @@
 ---
-// The page's agent prompt, then Starlight's footer, with a small bench and the wordmark under it on every page,
+// The page's agent prompt, then Starlight's footer, with a small board and the wordmark under it on every page,
 // and a privacy note on a build that loads analytics. Adapted from plunge's
 // site.
 import Default from '@astrojs/starlight/components/Footer.astro';
-import Bench from "./Bench.astro";
+import Board from "./Board.astro";
 import AgentPrompt from './AgentPrompt.astro';
 
 // The page's agent prompt, closed, under its content. A page that places the
@@ -19,7 +19,7 @@ const analytics = Boolean(import.meta.env.PUBLIC_POSTHOG_KEY);
 {real && !placed && <AgentPrompt />}
 <Default />
 <p class="pw-foot not-content">
-	<a href={`${base}/`}><Bench size={32} /><span>plywood</span></a>
+	<a href={`${base}/`}><Board size={32} /><span>plywood</span></a>
 </p>
 {analytics && (
 	<p class="pw-privacy not-content">

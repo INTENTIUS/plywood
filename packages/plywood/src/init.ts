@@ -43,6 +43,7 @@ import { dirname, join } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
+import { packsForStack, policyPacksOf } from "./config/policy";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
@@ -226,13 +227,16 @@ export function initStacks(detected: Detected, doc: RawConfig): InitStack[] {
     const own = listed[key] ?? {};
     const backend = own.backend ?? (typeof doc.backend === "string" ? doc.backend : undefined);
     const engine = engineOf(doc, backend)?.engine;
+    const stackDir = own.dir ?? dir;
+    const packs = packsForStack(policyPacksOf(doc), stackDir);
     out.push({
       key,
       project,
       stack,
-      dir: own.dir ?? dir,
+      dir: stackDir,
       ...(engine ? { engine } : {}),
       ...(own.gate ? { gate: own.gate } : {}),
+      ...(packs.length ? { policyPacks: packs } : {}),
     });
     seen.add(key);
   };

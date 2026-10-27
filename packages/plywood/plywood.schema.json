@@ -167,6 +167,67 @@
         }
       }
     },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Rego rules and CrossGuard policy packs in the preview job, feeding chant's gate. Read at base.",
+      "properties": {
+        "rego": {
+          "type": "string",
+          "description": "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line."
+        },
+        "engine": {
+          "type": "string",
+          "enum": [
+            "conftest",
+            "opa"
+          ],
+          "default": "conftest",
+          "description": "The result shape the rules' engine prints: conftest or opa. A hold needs opa."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "The Rego package to read. conftest: every package; opa: main."
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "argv in place of the engine's own; {policy} is the rules' directory at base, {input} the change set."
+        },
+        "packs": {
+          "type": "array",
+          "description": "CrossGuard packs the preview and the update run with --policy-pack. Mandatory violations deny; advisory ones are note lines.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The pack's directory, relative to the repository root."
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "dir"
+                ],
+                "properties": {
+                  "dir": {
+                    "type": "string",
+                    "description": "The pack's directory, relative to the repository root."
+                  },
+                  "config": {
+                    "type": "string",
+                    "description": "Its --policy-pack-config file."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     "review_stacks": {
       "type": "object",
       "additionalProperties": false,
@@ -390,9 +451,6 @@
           }
         }
       ]
-    },
-    "policy": {
-      "description": "Read by a later plywood; accepted as written."
     },
     "drift": {
       "description": "Read by a later plywood; accepted as written."

@@ -16,5 +16,6 @@
     "packages/*/test/**/*.ts",
     "chant.config.ts",
     "vitest.config.ts"
-  ]
+  ],
+  "exclude": ["packages/*/test/fixtures/**"]
 }

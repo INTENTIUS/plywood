@@ -34,13 +34,13 @@ describe("plywood.yml", () => {
     const config = parseConfig(text);
     expect(errors(text)).toEqual([]);
     expect(toChantSettings(config)).toEqual({
-      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource" },
+      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource", policy: { path: "policy" } },
       members: [
         { name: "shop/dev", dir: "infra", engine: "pulumi" },
         { name: "shop/prod-east", dir: "infra", engine: "pulumi" },
       ],
       memberDefaults: { engine: "pulumi" },
-      pipeline: { waves: [["shop/dev"], ["shop/prod-east"]], gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP },
+      pipeline: { waves: [["shop/dev"], ["shop/prod-east"]], gate: "on-destructive", approval: "ledger", excludeAuthor: true, policyPacks: [{ dir: "policy/aws-guard" }], engineSetup: DEFAULT_SETUP },
     });
   });
 

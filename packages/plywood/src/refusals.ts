@@ -6,7 +6,7 @@
  * in plywood's verbs. The code itself is chant's, passed through unchanged.
  */
 import type { ExitName, ExitTable } from "./exit-codes";
-import { PR_GATE, PRODUCT } from "./words";
+import { POLICY_RULE_FORMS, PR_GATE, PRODUCT } from "./words";
 
 /** Where the refusal happened, so the line names the right next command. */
 export interface RefusalContext {
@@ -40,7 +40,7 @@ export function refusalLine(refusal: Refusal, ctx: RefusalContext = {}): string 
     case "superseded":
       return `A newer push stands in for this one, which stood down. Nothing needs doing: the newer run updates the stacks.`;
     case "denied":
-      return `A policy denied the change. Fix it and preview again, or override it with '${PRODUCT} override <stack> --rule <id> --reason <text>' naming exactly the rules chant listed. An override is spent once its update runs.`;
+      return `A policy denied the change. Fix it and preview again, or override it with '${PRODUCT} override <stack> --rule <id> --reason <text>' naming exactly the rules chant listed (${POLICY_RULE_FORMS}). An override is spent once its update runs.`;
     case "declined":
       return `An approver declined the change, so nothing was updated. Push a new change and preview it again.`;
   }

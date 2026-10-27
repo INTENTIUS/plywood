@@ -59,7 +59,7 @@ export default defineConfig({
 			title: 'plywood',
 			// src/pages/404.astro is the 404 page.
 			disable404Route: true,
-			// The bench's image files live in public/ and are referenced by URL.
+			// The board's image files live in public/ and are referenced by URL.
 			// SiteTitle.astro draws the logo and the wordmark.
 			favicon: '/favicon.ico',
 			head: [
@@ -68,7 +68,7 @@ export default defineConfig({
 				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://intentius.io/plywood/plywood-share.png' } },
 				{ tag: 'meta', attrs: { property: 'og:image:width', content: '400' } },
 				{ tag: 'meta', attrs: { property: 'og:image:height', content: '400' } },
-				{ tag: 'meta', attrs: { property: 'og:image:alt', content: 'The plywood bench: a pixel-art wooden bench' } },
+				{ tag: 'meta', attrs: { property: 'og:image:alt', content: 'The plywood board: a pixel-art plywood plank' } },
 				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary' } },
 				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://intentius.io/plywood/plywood-share.png' } },
 			],

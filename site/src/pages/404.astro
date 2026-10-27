@@ -2,13 +2,13 @@
 // The 404 page, which GitHub Pages serves for any missing address. Starlight's
 // own 404 route is off (disable404Route in astro.config.mjs).
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import Bench from '../components/Bench.astro';
+import Board from '../components/Board.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <StarlightPage frontmatter={{ title: 'Page not found', description: 'No page at this address.', template: 'splash', editUrl: false, pagefind: false }}>
 	<div class="pw-404 not-content">
-		<Bench size={128} />
+		<Board size={128} />
 		<p class="pw-404-title">Page not found</p>
 		<p>Check the link for a typo.</p>
 		<p>Start from <a href={`${base}/`}>the home page</a> or <a href={`${base}/llms.txt`}>llms.txt</a>.</p>

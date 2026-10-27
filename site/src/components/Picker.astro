@@ -5,7 +5,7 @@
 // comes from data/rooms.ts, the room pages' source. The first pick is rendered
 // on the server, so the card reads the same without script. A production build
 // shows only rooms whose page it publishes, and no picker when it has none.
-import Bench from './Bench.astro';
+import Board from './Board.astro';
 import { BACKENDS, ROLES, SHAPES, room } from '../data/rooms';
 import { href, live } from '../lib/links';
 
@@ -26,7 +26,7 @@ const show = tiles.length > 0 && shapeTiles.length > 0;
 			<span id="pw-pick-backend" class="h">Your backend</span>
 			{backends.map((b, i) => (
 				<button type="button" class="tile" data-pick="tile" value={b.id} aria-pressed={String(i === 0)}>
-					<Bench size={32} />
+					<Board size={32} />
 					<b>{b.label}</b>
 					<small>{b.blurb}</small>
 				</button>
@@ -36,7 +36,7 @@ const show = tiles.length > 0 && shapeTiles.length > 0;
 			<span id="pw-pick-shape" class="h">Your repo shape</span>
 			{shapes.map((s, i) => (
 				<button type="button" class="tile" data-pick="shape" value={s.id} aria-pressed={String(i === 0)}>
-					<Bench size={32} />
+					<Board size={32} />
 					<b>{s.label}</b>
 					<small>{s.blurb}</small>
 				</button>
@@ -49,7 +49,7 @@ const show = tiles.length > 0 && shapeTiles.length > 0;
 		{roles.length > 0 && (
 			<nav class="roles" aria-label="By role">
 				<span>Or start from your role</span>
-				{roles.map((r) => <a class="role" href={href(roomHref(r.room))}><Bench size={16} />{r.label}</a>)}
+				{roles.map((r) => <a class="role" href={href(roomHref(r.room))}><Board size={16} />{r.label}</a>)}
 			</nav>
 		)}
 		<script type="application/json" data-picker-data set:html={JSON.stringify(data).replace(/</g, '\\u003c')} />

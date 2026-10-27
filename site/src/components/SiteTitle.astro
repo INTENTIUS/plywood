@@ -1,12 +1,12 @@
 ---
-// The site title: the bench and the "plywood" wordmark, linking home. It is drawn
+// The site title: the board and the "plywood" wordmark, linking home. It is drawn
 // here rather than through Starlight's `logo` option so the image is a URL
 // reference to public/brand/, as on plunge's site.
 //
 // On a phone a Docs link sits beside it: Starlight hides the header's right side
 // (where SocialIcons.astro puts Docs) below its md width.
 // Adapted from plunge's site.
-import Bench from './Bench.astro';
+import Board from './Board.astro';
 
 import { href, live } from '../lib/links';
 
@@ -15,7 +15,7 @@ const docs = href(['/getting-started/', '/concepts/glossary/'].find(live) ?? '/'
 const { siteTitleHref } = Astro.locals.starlightRoute;
 ---
 <a href={siteTitleHref} class="site-title sl-flex">
-	<Bench size={32} />
+	<Board size={32} />
 	<span translate="no">plywood</span>
 </a>
 <a class="pw-docs-phone" href={docs}>Docs</a>

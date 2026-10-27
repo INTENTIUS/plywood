@@ -1,8 +1,44 @@
-# plywood's recipes. For now they cover the docs site in site/, as plunge's
-# justfile does for plunge's site.
+# plywood's recipes: the @intentius/plywood package in packages/plywood, its
+# CI workflow, and the docs site in site/, as plunge's justfile does for
+# plunge's site.
 
 default:
     @just --list
+
+# Install the package's dependencies from the root lock file.
+install:
+    npm ci
+
+# Typecheck the package, its tests, ci/ and chant.config.ts.
+typecheck:
+    npm run typecheck
+
+# Build the CLI into packages/plywood/dist/plywood.mjs.
+build:
+    npm run build
+
+# Run the package's unit tests.
+test:
+    npm test
+
+# Build, then hold the package to its shape: one runtime dependency
+# (@intentius/chant at the exact pin), a bundle that imports only Node's own
+# modules, and a packed tarball under 2048 KB.
+bundle-check: build
+    npm run bundle-check -w @intentius/plywood
+
+# Build against a local chant instead of the pin: `just chant-local` packs
+# chant's origin/main from a worktree next to the chant checkout, `just
+# chant-local <chant-dir>` packs that directory, and `just chant-local --reset`
+# goes back to the pin. Each installed chant package gets a chantLocal field
+# naming the chant commit.
+chant-local *args:
+    scripts/chant-local.sh {{args}}
+
+# Render .github/workflows/ci.yml from ci/ci.ts. CI fails when the committed
+# file differs from the render.
+ci:
+    npx chant build ci -o .github/workflows/ci.yml --format yaml
 
 # Install the site's dependencies from its lock file.
 site-install:

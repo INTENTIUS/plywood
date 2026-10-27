@@ -12,6 +12,7 @@
  */
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
+import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
 import { approve, override, up } from "./up";
@@ -41,6 +42,12 @@ export function helpText(): string {
     "",
     "Commands:",
     ...VERBS.map((v) => `  ${v.verb.padEnd(width)}  ${v.summary}`),
+    "",
+    "Setup:",
+    "  init [--preset <name>] [--gate <when>] [--engine pulumi|plunge] [--forge <kind>]",
+    "       [--env <env>] [--no-bucket-check] [--dry-run] [--yes]",
+    "                                                      plywood.yml, the stacks and the workflow, from the repository",
+    "  init --print-prompt                                 the prompt that has a coding agent set plywood up",
     "",
     "Stages:",
     "  check [--base <rev>] [<target>...]                  plywood.yml, then the check hooks at base",
@@ -88,6 +95,11 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   }
   if (verb === "config") return config(args.slice(1), table, emit);
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
+  if (verb === "init") {
+    const interactive = !json && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true && process.stderr.isTTY === true;
+    const initIo: InitIo = interactive ? { ...stageIo, ask: askOnTerminal } : stageIo;
+    return init(args.slice(1), json, table, initIo);
+  }
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);
   if (verb === "up") return up(args.slice(1), json, table, stageIo);
@@ -108,6 +120,23 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     return table.failed;
   }
   return notBuilt(known.verb, table.failed, emit);
+}
+
+/** A question on the terminal, answered by name or by number; Enter takes the fallback. */
+async function askOnTerminal(question: string, choices: readonly string[], fallback: string): Promise<string> {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    for (;;) {
+      const answer = (await rl.question(`${question} (${choices.map((c, i) => `${i + 1}. ${c}`).join(", ")}) [${fallback}]: `)).trim();
+      if (answer === "") return fallback;
+      const byNumber = choices[Number(answer) - 1];
+      if (byNumber) return byNumber;
+      if (choices.includes(answer)) return answer;
+    }
+  } finally {
+    rl.close();
+  }
 }
 
 function notBuilt(

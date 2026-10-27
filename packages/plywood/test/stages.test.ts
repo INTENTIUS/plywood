@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
@@ -29,6 +29,12 @@ function fakeChant(code = 0) {
     approveLine: () => "plywood approve up --plan sha256:x --sign",
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
+      // The generator writes the file it is given, as chant's build does.
+      const out = argv.indexOf("--output");
+      if (code === 0 && argv[0] === "build" && out >= 0) {
+        mkdirSync(dirname(argv[out + 1]!), { recursive: true });
+        writeFileSync(argv[out + 1]!, "jobs:\n  plan:\n    steps:\n      - run: npx --no-install plywood components pr-plan\n");
+      }
       return code;
     },
   };
@@ -157,12 +163,13 @@ describe("plywood ci", () => {
   it("checks the words against productPipelineJobs, then has chant's generator write the file", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await ci(["--forge", "forgejo"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    const dir = repo();
+    expect(await ci(["--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(0);
     expect(chant.pipelines).toHaveLength(1);
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
       "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up",
-      "--output", ".forgejo/workflows/plywood.yml",
+      "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
   });
 

@@ -148,8 +148,8 @@ describe("plywood check", () => {
 
 describe("plywood ci", () => {
   it("has a preview job, and lock jobs when locks are taken at preview", () => {
-    expect(pipelineShape({}, "github", undefined)).toEqual({ jobs: ["plan", "lock", "unlock"], applyBeforeMerge: false, locks: "plan" });
-    expect(pipelineShape({}, "gitlab", undefined)).toEqual({ jobs: ["plan"], applyBeforeMerge: false });
+    expect(pipelineShape({}, "github", undefined)).toEqual({ jobs: ["plan", "lock", "unlock"], applyBeforeMerge: false, waves: false, locks: "plan" });
+    expect(pipelineShape({}, "gitlab", undefined)).toEqual({ jobs: ["plan"], applyBeforeMerge: false, waves: false });
     expect(pipelineShape({ apply: { when: "pull-request" } }, "github", undefined).jobs).toContain("apply");
     expect(pipelineShape({ locks: { when: "up" } }, "github", {}).jobs).toEqual(["plan", "apply"]);
   });

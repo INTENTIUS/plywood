@@ -35,7 +35,7 @@ export interface ProductPipelineJobs {
   record?: { jobName: string; command: string };
   applyBeforeMerge?: { jobName: string; command: string };
   comments: Partial<Record<ChantCommand, string>>;
-  waves?: { specFile: string; jobs: Array<{ command: string[] }> };
+  waves?: { spec: unknown; specFile: string; jobs: Array<{ command: string[] }> };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */

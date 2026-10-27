@@ -1,0 +1,10 @@
+{
+  "name": "@intentius/plywood",
+  "version": "0.0.0",
+  "description": "A lifecycle kit for Pulumi and plunge stacks, built on chant. Reserved; nothing is built yet.",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/INTENTIUS/plywood.git" },
+  "homepage": "https://github.com/INTENTIUS/plywood",
+  "files": ["README.md", "LICENSE"],
+  "publishConfig": { "access": "public" }
+}

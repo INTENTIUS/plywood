@@ -1,7 +1,7 @@
 ---
 title: 'Keep the stack export current'
 description: 'Each update stores the stack export under refs/chant/snapshots for the graph to read.'
-needs: [plywood#1, chant#4541, chant#4519, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4519, chant#4550]
 draft: true
 ---
 

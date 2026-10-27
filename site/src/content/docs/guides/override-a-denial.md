@@ -1,7 +1,7 @@
 ---
 title: 'Override a denial'
 description: 'plywood override records a person''s reasoned approval of one denied preview. It is spent once the update runs.'
-needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4550]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'Fix a refused wave'
 description: 'Each refusal names its cause and the command that clears it.'
-needs: [plywood#1, chant#4541, TBD-chant-exit-codes, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4553, chant#4550]
 draft: true
 ---
 

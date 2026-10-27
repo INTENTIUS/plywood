@@ -1,7 +1,7 @@
 ---
 title: 'Why previews are grouped'
 description: 'One note and one digest across stacks keep a reviewer''s approval tied to the whole change.'
-needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4550]
 draft: true
 ---
 

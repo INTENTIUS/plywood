@@ -1,7 +1,7 @@
 ---
 title: 'From pulumi/actions in GitHub Actions'
 description: 'plywood init reads your existing pulumi/actions workflow and writes plywood.yml and the generated pipeline next to it.'
-needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4550]
 draft: true
 ---
 

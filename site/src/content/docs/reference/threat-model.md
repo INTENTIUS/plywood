@@ -1,7 +1,7 @@
 ---
 title: 'Threat model'
 description: 'The reach of each job, starting with the preview job that runs the pull request''s program.'
-needs: [plywood#1, chant#4541, TBD-pulumi-cloud-token, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4549, chant#4550]
 draft: true
 ---
 

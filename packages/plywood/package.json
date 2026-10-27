@@ -27,7 +27,8 @@
   "scripts": {
     "build": "node scripts/build-cli.mjs",
     "schema": "node scripts/build-schema.mjs",
-    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/bundle-check.mjs",
+    "images": "node scripts/build-images.mjs",
+    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/build-images.mjs --check && node scripts/bundle-check.mjs",
     "prepack": "node scripts/build-cli.mjs"
   },
   "dependencies": {

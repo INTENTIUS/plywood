@@ -5,7 +5,8 @@
  * clean config into chant's settings.
  *
  * Each group of keys has its own module; GROUPS lists them in the order
- * they translate (stacks before engine, which fills each stack's engine).
+ * they translate (stacks before engine, which fills each stack's engine;
+ * images after routing, since it reads each stack's engine and the forge).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -14,6 +15,7 @@ import { apply } from "./apply";
 import { approval } from "./approval";
 import { chantKeys } from "./chant-keys";
 import { engine } from "./engine";
+import { images } from "./images";
 import { later } from "./later";
 import { locks } from "./locks";
 import { reviewStacks } from "./review-stacks";
@@ -23,7 +25,7 @@ import { error, isObject, type ConfigGroup, type ConfigProblem, type JsonSchema,
 
 export type { ConfigGroup, ConfigProblem, RawConfig } from "./types";
 
-export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, reviewStacks, routing, later];
+export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, reviewStacks, routing, images, later];
 
 /** The names chant's pulumi lexicon also looks for (chant#4559, member-engine.ts `PLYWOOD_FILES`). */
 export const CONFIG_NAMES = ["plywood.yml", "plywood.yaml"] as const;

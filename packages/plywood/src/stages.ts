@@ -20,15 +20,16 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
+import { chantProduct, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { configCheck } from "./config-check";
 import { applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
 import { locksOf } from "./config/locks";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
+import { writeWorkflow } from "./init/workflow";
 import { writeWaveJobs } from "./waves-workflow";
-import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand } from "./words";
+import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
 export interface StageIo {
   out: (s: string) => void;
@@ -204,20 +205,14 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     } catch (e) {
       return usage(`.chant/op-waves/${OP_NAME}.spec.json: ${(e as Error).message}`, table, io);
     }
-    const shape = pipelineShape(config.doc, forge, waves);
-    const words = wordsForJobs(shape.jobs);
-    let jobs;
+    let plan: WorkflowPlan;
     try {
-      jobs = chant.productPipelineJobs(forge, env, {
-        words,
-        ...(shape.applyBeforeMerge ? { applyBeforeMerge: true } : {}),
-        ...(shape.locks ? { locks: shape.locks } : {}),
-        ...(shape.waves ? { waves } : {}),
-      });
+      plan = workflowPlan(chant, config.doc, forge, env, waves);
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;
     }
+    const { jobs } = plan;
     const summary = {
       forge,
       env,
@@ -240,17 +235,47 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       for (const job of summary.waves?.jobs ?? []) io.err(`  wave      ${job}`);
     }
     if (dryRun) return table.done;
-    const argv = [
-      "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
-      ...(shape.applyBeforeMerge ? ["--apply-before-merge"] : []),
-      "--output", output,
-    ];
     // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
-    const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
-    const code = await chant.runChantInProcess(argv, prWords);
-    if (code !== table.done || !jobs.waves) return code;
-    return writeWaveJobs(chant, forge, jobs.waves, words, table, io);
+    const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });
+    if (!json && written.kept.length) io.err(`  kept your own jobs: ${written.kept.join(", ")}`);
+    if (json) io.out(JSON.stringify({ command: "ci", ok: written.code === 0, exitCode: written.code, dryRun, ...summary, status: written.status, kept: written.kept }));
+    if (written.code !== table.done || !jobs.waves) return written.code;
+    return writeWaveJobs(chant, forge, jobs.waves, plan.words, table, io);
   });
+}
+
+/** What a workflow is generated from: the jobs chant names for the words, and the build argv (without --output). */
+export interface WorkflowPlan {
+  jobs: ProductPipelineJobs;
+  /** The words for every job, the waves' included. */
+  words: ProductWordsInput;
+  /** The words of the pull request workflow: without `/plywood up` unless it updates before merge. */
+  prWords: ProductWordsInput;
+  argv: string[];
+}
+
+/**
+ * The jobs and chant's build argv for plywood.yml on `forge`, shared by
+ * `plywood ci` and `plywood init`. productPipelineJobs checks the words
+ * against the jobs and throws when they disagree. `extra` goes on the build
+ * line (`--image`, `--before-script`, from src/images.ts).
+ */
+export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, env: string, waves: unknown, extra: string[] = []): WorkflowPlan {
+  const shape = pipelineShape(doc, forge, waves);
+  const words = wordsForJobs(shape.jobs);
+  const jobs = chant.productPipelineJobs(forge, env, {
+    words,
+    ...(shape.applyBeforeMerge ? { applyBeforeMerge: true } : {}),
+    ...(shape.locks ? { locks: shape.locks } : {}),
+    ...(shape.waves ? { waves } : {}),
+  });
+  const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
+  const argv = [
+    "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
+    ...(shape.applyBeforeMerge ? ["--apply-before-merge"] : []),
+    ...extra,
+  ];
+  return { jobs, words, prWords, argv };
 }
 
 export function usage(message: string, table: ExitTable, io: StageIo): number {

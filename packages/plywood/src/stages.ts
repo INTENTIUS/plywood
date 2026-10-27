@@ -27,6 +27,7 @@ import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/in
 import { locksOf } from "./config/locks";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
+import { writeWaveJobs } from "./waves-workflow";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand } from "./words";
 
 export interface StageIo {
@@ -65,7 +66,7 @@ export function positionals(args: string[]): string[] {
   return out;
 }
 
-async function withChant(what: string, table: ExitTable, io: StageIo, run: (chant: ChantProduct) => Promise<number>): Promise<number> {
+export async function withChant(what: string, table: ExitTable, io: StageIo, run: (chant: ChantProduct) => Promise<number>): Promise<number> {
   const chant = await chantProduct();
   if (!chant) {
     io.err(`${PRODUCT}: ${needsChantMessage(what)}`);
@@ -152,14 +153,16 @@ export function readWavesSpec(cwd: string): unknown {
 }
 
 /** What the pipeline has jobs for, from plywood.yml and the forge. */
-export function pipelineShape(doc: RawConfig, forge: ForgeKind, waves: unknown): { jobs: ChantCommand[]; applyBeforeMerge: boolean; locks?: "plan" } {
+export function pipelineShape(doc: RawConfig, forge: ForgeKind, waves: unknown): { jobs: ChantCommand[]; applyBeforeMerge: boolean; waves: boolean; locks?: "plan" } {
   const applyBeforeMerge = applyWhenOf(doc) === "pull-request";
   // chant's lock and unlock jobs are GitHub and Forgejo only.
   const locks = locksOf(doc).when === "preview" && forge !== "gitlab" ? ("plan" as const) : undefined;
+  // An update before merge applies the pull request's preview in one job, so nothing applies on merge.
+  const onMerge = !applyBeforeMerge && waves !== undefined;
   const jobs: ChantCommand[] = ["plan"];
-  if (applyBeforeMerge || waves !== undefined) jobs.push("apply");
+  if (applyBeforeMerge || onMerge) jobs.push("apply");
   if (locks) jobs.push("lock", "unlock");
-  return { jobs, applyBeforeMerge, ...(locks ? { locks } : {}) };
+  return { jobs, applyBeforeMerge, waves: onMerge, ...(locks ? { locks } : {}) };
 }
 
 /**
@@ -209,7 +212,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
         words,
         ...(shape.applyBeforeMerge ? { applyBeforeMerge: true } : {}),
         ...(shape.locks ? { locks: shape.locks } : {}),
-        ...(waves !== undefined ? { waves } : {}),
+        ...(shape.waves ? { waves } : {}),
       });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
@@ -234,6 +237,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       if (summary.record) io.err(`  record    ${summary.record}`);
       if (summary.applyBeforeMerge) io.err(`  up        ${summary.applyBeforeMerge}`);
       for (const [command, line] of Object.entries(jobs.comments)) io.err(`  comment   ${line} (${command})`);
+      for (const job of summary.waves?.jobs ?? []) io.err(`  wave      ${job}`);
     }
     if (dryRun) return table.done;
     const argv = [
@@ -241,11 +245,15 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       ...(shape.applyBeforeMerge ? ["--apply-before-merge"] : []),
       "--output", output,
     ];
-    return chant.runChantInProcess(argv, words);
+    // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
+    const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
+    const code = await chant.runChantInProcess(argv, prWords);
+    if (code !== table.done || !jobs.waves) return code;
+    return writeWaveJobs(chant, forge, jobs.waves, words, table, io);
   });
 }
 
-function usage(message: string, table: ExitTable, io: StageIo): number {
+export function usage(message: string, table: ExitTable, io: StageIo): number {
   // A usage error is chant's `failed`, 1 (chant#4553 ruling C).
   io.err(`${PRODUCT}: ${message}`);
   return table.failed;

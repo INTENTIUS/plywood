@@ -1,8 +1,8 @@
 /**
  * The plywood CLI. Each verb hands plywood's words to chant, which runs the
  * stage in process (chant#4550 ruling C). `check`, `preview` and `ci` are
- * built (src/stages.ts); the other verbs say they are not built yet and exit
- * with chant's `failed` code. `config check` reads plywood.yml
+ * built (src/stages.ts), and `up`, `approve` and `override` (src/up.ts);
+ * `drift` says it is not built yet and exits with chant's `failed` code. `config check` reads plywood.yml
  * (src/config-check.ts). chant's own verbs (`components`, `ci <sub>`, `run`,
  * `lock`, `unlock`) pass to chant unchanged with plywood's words, for the
  * lines the generated jobs run through the bin.
@@ -14,6 +14,7 @@ import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
+import { approve, override, up } from "./up";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
 declare const __PLYWOOD_VERSION__: string | undefined;
@@ -48,6 +49,13 @@ export function helpText(): string {
     "  ci [--forge <kind>] [--env <env>] [--output <file>] [--dry-run]",
     "                                                      write the pull request workflow",
     "  tips [<id>]                                         the tips a preview can name",
+    "  up [--wave <k>] [--decide | --share <i> | --group <name>]",
+    "                                                      run the merge's waves through the pulumi-up step",
+    "  up --pr <n> [--base <rev>]                          update an open pull request (apply.when: pull-request)",
+    "",
+    "Approvals:",
+    "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request) or wave-<k>",
+    "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
@@ -82,6 +90,9 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);
+  if (verb === "up") return up(args.slice(1), json, table, stageIo);
+  if (verb === "approve") return approve(args.slice(1), json, table, stageIo);
+  if (verb === "override") return override(args.slice(1), json, table, stageIo);
   // `plywood ci` writes the workflow; `plywood ci <sub>` is chant's `ci <sub>`, as a generated job runs it.
   if (verb === "ci") {
     const sub = args[1];

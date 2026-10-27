@@ -6,8 +6,8 @@ import { FALLBACK_EXIT, exitCodes, isExitTable } from "../src/exit-codes";
 import { VERBS } from "../src/words";
 
 const RULED = ["check", "preview", "up", "drift", "approve", "override"];
-/** The verbs later units build (plywood#7, #8). */
-const NOT_BUILT = ["up", "drift", "approve", "override"];
+/** The verbs later units build (plywood#8). */
+const NOT_BUILT = ["drift"];
 
 function capture(): Io & { stdout: string[]; stderr: string[] } {
   const stdout: string[] = [];
@@ -33,9 +33,9 @@ describe("plywood CLI", () => {
 
   it("prints one JSON object with --json", async () => {
     const io = capture();
-    expect(await main(["up", "--json"], io)).toBe(1);
+    expect(await main(["drift", "--json"], io)).toBe(1);
     expect(io.stdout).toHaveLength(1);
-    expect(JSON.parse(io.stdout[0])).toEqual({ command: "up", ok: false, exitCode: 1, error: "plywood up is not built yet." });
+    expect(JSON.parse(io.stdout[0])).toEqual({ command: "drift", ok: false, exitCode: 1, error: "plywood drift is not built yet." });
   });
 
   it("exits 1 on an unknown command", async () => {

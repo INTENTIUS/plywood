@@ -6,6 +6,8 @@ import { FALLBACK_EXIT, exitCodes, isExitTable } from "../src/exit-codes";
 import { VERBS } from "../src/words";
 
 const RULED = ["check", "preview", "up", "drift", "approve", "override"];
+/** The verbs later units build (plywood#7, #8). */
+const NOT_BUILT = ["up", "drift", "approve", "override"];
 
 function capture(): Io & { stdout: string[]; stderr: string[] } {
   const stdout: string[] = [];
@@ -22,7 +24,7 @@ describe("plywood CLI", () => {
     expect(helpText()).toContain("Pull request automation for Pulumi");
   });
 
-  it.each(RULED)("%s says it is not built yet and exits with chant's failed code", async (verb) => {
+  it.each(NOT_BUILT)("%s says it is not built yet and exits with chant's failed code", async (verb) => {
     const io = capture();
     expect(await main([verb], io)).toBe(FALLBACK_EXIT.failed);
     expect(io.stderr.join("\n")).toBe(`plywood: plywood ${verb} is not built yet.`);

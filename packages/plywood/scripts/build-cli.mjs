@@ -17,11 +17,12 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 const outfile = join(pkgDir, "dist/plywood.mjs");
 mkdirSync(dirname(outfile), { recursive: true });
 
-// chant subpaths a released chant may lack (src/exit-codes.ts). One the
+// chant subpaths a released chant may lack (src/exit-codes.ts,
+// src/chant-product.ts). One the
 // installed chant lacks resolves to a module that throws when imported, so
 // the bundle builds on the pin and the caller's fallback takes over; a chant
 // that has it is bundled in.
-const CHANT_NEXT = /^@intentius\/chant\/(exit-codes)$/;
+const CHANT_NEXT = /^@intentius\/chant\/(exit-codes|ci-product)$/;
 const chantNext = {
   name: "chant-next",
   setup(b) {
@@ -36,6 +37,11 @@ const chantNext = {
     }));
   },
 };
+
+// The chant the bundle is built with, named in src/chant-product.ts's message
+// when that chant has no product pipeline.
+const chantPkg = JSON.parse(readFileSync(join(root, "node_modules/@intentius/chant/package.json"), "utf8"));
+const builtChant = chantPkg.chantLocal ? `${chantPkg.version} (local ${String(chantPkg.chantLocal.commit).slice(0, 10)})` : chantPkg.version;
 
 const result = await build({
   entryPoints: [join(pkgDir, "src/bin.ts")],
@@ -55,7 +61,7 @@ const result = await build({
       "const require = __plywoodRequire(import.meta.url);",
     ].join("\n"),
   },
-  define: { __PLYWOOD_VERSION__: JSON.stringify(pkg.version) },
+  define: { __PLYWOOD_VERSION__: JSON.stringify(pkg.version), __PLYWOOD_CHANT__: JSON.stringify(builtChant) },
   plugins: [chantNext],
   logLevel: "warning",
 });

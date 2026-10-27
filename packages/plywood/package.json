@@ -15,6 +15,7 @@
   },
   "files": [
     "dist",
+    "plywood.schema.json",
     "LICENSE"
   ],
   "engines": {
@@ -25,7 +26,8 @@
   },
   "scripts": {
     "build": "node scripts/build-cli.mjs",
-    "bundle-check": "node scripts/bundle-check.mjs",
+    "schema": "node scripts/build-schema.mjs",
+    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/bundle-check.mjs",
     "prepack": "node scripts/build-cli.mjs"
   },
   "dependencies": {

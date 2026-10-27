@@ -1,7 +1,7 @@
 ---
 title: 'Your first pull request'
 description: 'Change a queue setting and read the preview note on the pull request.'
-needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4550]
 draft: true
 ---
 

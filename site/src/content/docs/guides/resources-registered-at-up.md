@@ -1,7 +1,7 @@
 ---
 title: 'Resources registered inside apply()'
 description: 'A preview cannot run an apply() whose input is unknown. The note lists those components as may register at up.'
-needs: [plywood#1, chant#4541, TBD-may-register-note, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4548, chant#4550]
 draft: true
 ---
 

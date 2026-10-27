@@ -1,7 +1,7 @@
 ---
 title: 'Have an agent review a pull request'
 description: 'A model compares the pull request''s description with its previews and posts one note.'
-needs: [plywood#1, chant#4541, chant#4544, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4544, chant#4550]
 draft: true
 ---
 

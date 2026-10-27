@@ -1,7 +1,7 @@
 ---
 title: 'Roll a stack back to a release'
 description: 'chant release cut records a stack''s program tree, and a rollback previews and updates that tree.'
-needs: [plywood#1, chant#4541, chant#4542, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4542, chant#4550]
 draft: true
 ---
 

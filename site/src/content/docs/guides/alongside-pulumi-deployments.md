@@ -1,7 +1,7 @@
 ---
 title: 'Alongside Pulumi Deployments'
 description: 'Some stacks keep deploying from Pulumi Deployments, and others run from your forge through plywood, on the same Pulumi Cloud organisation.'
-needs: [plywood#1, chant#4541, TBD-pulumi-cloud-token, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4549, chant#4550]
 draft: true
 ---
 

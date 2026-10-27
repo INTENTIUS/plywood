@@ -1,7 +1,7 @@
 ---
 title: 'Now your repo'
 description: 'Point the same setup at your own programs, stacks and backend.'
-needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+needs: [plywood#1, chant#4541, chant#4550]
 draft: true
 ---
 

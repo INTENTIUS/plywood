@@ -81,3 +81,23 @@ export function wordsForJobs(jobs: readonly ChantCommand[]): ProductWordsInput {
   const commands = Object.fromEntries(Object.entries(PRODUCT_WORDS.commands).filter(([, c]) => jobs.includes(c)));
   return { ...PRODUCT_WORDS, commands };
 }
+
+/**
+ * Policy in plywood's words (plywood#13). chant's gate reads Rego rules
+ * (`ci.policy`) and the CrossGuard packs each stack's preview runs, and
+ * renders every finding under its stack in the note; these are the words
+ * plywood prints around them.
+ */
+export const POLICY_OUTCOMES = {
+  deny: "denies the preview; it updates only under a plywood override",
+  hold: "holds the preview for a person's approval, even where the gate would not ask",
+  advisory: "is a note line under the stack and blocks nothing",
+} as const;
+
+/** The rule id chant gives a CrossGuard policy (`crossGuardRule`, chant's pulumi lexicon), as `plywood override --rule` takes it. */
+export function crossGuardRuleId(pack: string, policy: string): string {
+  return `crossguard.${pack}.${policy}`;
+}
+
+/** How a denial's rule ids read, for the line after a denied preview or update. */
+export const POLICY_RULE_FORMS = "a CrossGuard rule is crossguard.<pack>.<policy>, a Rego rule <package>.<rule>";

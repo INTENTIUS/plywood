@@ -7,7 +7,7 @@
  *
  *   ci       chant's workspace `ci` block, under chant's own key names
  *            (`ci.workflow`, `ci.locks`, `ci.lockGrain`, `ci.prEnvironment`,
- *            `ci.branches`, `ci.labels`).
+ *            `ci.policy`, `ci.branches`, `ci.labels`).
  *   members  one entry per stack, as a Pulumi member: its directory, and the
  *            engine and backend chant's pulumi lexicon takes as the member's
  *            config (chant#4559, the first rule `pulumiMemberEngine` asks);
@@ -24,6 +24,7 @@
  * Each config group writes its own part (src/config/<group>.ts).
  */
 import { GROUPS, type PlywoodConfig } from "./config/index";
+import type { ChantPolicySettings, PolicyPack } from "./config/policy";
 
 /** chant's `ci.workflow` values plywood sets (chant `CiWorkflow`). */
 export type ChantCiWorkflow = "trunk-curated+apply-on-merge" | "apply-before-merge";
@@ -48,6 +49,8 @@ export interface ChantCiSettings {
   locks?: ChantCiLocks;
   lockGrain?: ChantLockGrain;
   prEnvironment?: { template: string; ttl?: string };
+  /** chant's gate policy over the change set, read at base (chant#4294). */
+  policy?: ChantPolicySettings;
   branches?: Record<string, string[]>;
   labels?: Record<string, string[]>;
 }
@@ -92,6 +95,8 @@ export interface ChantPipelineSettings {
   engineSetup?: string[];
   /** The runner the jobs run on. */
   runner?: ChantRunner;
+  /** CrossGuard packs every stack's pulumi-up step runs, relative to the repository root (chant#4541). */
+  policyPacks?: PolicyPack[];
 }
 
 export interface ChantSettings {

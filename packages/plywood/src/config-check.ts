@@ -12,6 +12,8 @@ import { engineOf } from "./config/engine";
 import { checkConfig, ConfigError, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
 import { LATER_KEYS } from "./config/later";
 import { LOCK_GRAIN_OF, CI_LOCKS_OF, locksOf } from "./config/locks";
+import { chantPolicyOf, policyPacksOf } from "./config/policy";
+import type { RawConfig } from "./config/types";
 import { PRODUCT } from "./words";
 
 export interface ConfigCheckResult {
@@ -60,7 +62,19 @@ export function configCheck(cwd: string, file?: string): ConfigCheckResult {
     `  approval     ${settings.approval}`,
     `  locks.when   ${locks.when} (ci.locks ${CI_LOCKS_OF[locks.when]})`,
     `  locks.grain  ${locks.grain} (ci.lockGrain ${LOCK_GRAIN_OF[locks.grain]})`,
+    `  policy       ${policyLine(doc)}`,
     ...(later.length ? [`  read as written, not yet passed to chant: ${later.join(", ")}`] : []),
   );
   return { ok: true, lines, envelope: { file: path, problems, settings, chant: toChantSettings(config) } };
+}
+
+/** What plywood.yml's policy key switches on, for the settings line. */
+function policyLine(doc: RawConfig): string {
+  const rego = chantPolicyOf(doc);
+  const packs = policyPacksOf(doc);
+  const parts = [
+    ...(rego ? [`Rego in ${rego.path ?? "policy"} (${rego.engine ?? "conftest"}), read at base`] : []),
+    ...(packs.length ? [`CrossGuard ${packs.map((p) => p.dir).join(", ")} in each preview`] : []),
+  ];
+  return parts.length ? parts.join("; ") : "none";
 }

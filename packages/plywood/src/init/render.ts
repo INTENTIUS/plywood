@@ -16,6 +16,7 @@
  */
 import { emitYAMLEntry } from "@intentius/chant/yaml";
 import type { ChantCiSettings, ChantGatePolicy, ChantRunner, ChantRunnerSpec } from "../chant-config";
+import type { PolicyPack } from "../config/policy";
 import type { RawConfig } from "../config/types";
 import { fill, template } from "../templates";
 import { OP_NAME, PR_GATE } from "../words";
@@ -32,6 +33,8 @@ export interface InitStack {
   gate?: ChantGatePolicy;
   /** chant's lock grain (chant#4552): `resource`, or `target` for plywood's `stack`. */
   lockGrain?: "resource" | "target";
+  /** CrossGuard packs the stack's preview and update run, relative to its directory (plywood.yml `policy.packs`). */
+  policyPacks?: PolicyPack[];
 }
 
 /** plywood.yml's text: the template's header and the keys, in the order given. */
@@ -72,6 +75,7 @@ export function stepInput(s: InitStack): Record<string, unknown> {
     member: s.project,
     ...(s.engine ? { engine: s.engine } : {}),
     ...(s.lockGrain ? { lockGrain: s.lockGrain } : {}),
+    ...(s.policyPacks?.length ? { policyPacks: s.policyPacks } : {}),
   };
 }
 

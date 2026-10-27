@@ -22,6 +22,6 @@ Pulumi Deployments and plywood share one Pulumi Cloud organisation well. Each st
 | Path filters | `stacks.<name>.paths` |
 | Environment variables | your forge's variables and secrets |
 | Pre-run commands | `steps.before` |
-| ESC environment | stays in the stack config, and the job reads it as Pulumi does |
+| ESC environment | stays in the stack config; stock Pulumi resolves it with the job's Pulumi Cloud token |
 
 Stacks that suit Deployments, such as review stacks driven from Pulumi Cloud, keep working there.

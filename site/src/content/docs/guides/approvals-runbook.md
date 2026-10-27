@@ -12,7 +12,7 @@ plywood switches on chant's [approval rules](https://intentius.io/chant/guide/ap
 `.chant/trust.json` maps roles to people, and `plywood.yml` maps stacks to roles:
 
 ```yaml
-approvals:
+approval_rules:
   "shop/prod-*": { role: platform, quorum: 2 }
   "*": { role: developers }
 ```

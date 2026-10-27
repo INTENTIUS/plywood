@@ -17,4 +17,4 @@ stacks:
     gate: never
 ```
 
-With `gate: never` the merge is the approval. Waves still run in order, and policy still runs on every preview. `gate: destroy` waits only for a wave whose preview deletes or replaces a resource.
+With `gate: never` the merge is the approval. Waves still run in order, and policy still runs on every preview. `gate: on-destructive` waits only for a wave whose preview deletes or replaces a resource.

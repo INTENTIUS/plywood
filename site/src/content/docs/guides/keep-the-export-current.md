@@ -5,7 +5,7 @@ needs: [plywood#8, chant#4541, chant#4519, chant#4550]
 draft: true
 ---
 
-After each `up`, the update writes the stack's export as the member's snapshot under `refs/chant/snapshots`. The working tree stays clean.
+After each `up`, chant's pulumi apply writes the stack's export as the member's snapshot under `refs/chant/snapshots`. The working tree stays clean.
 
 The graph and behold read the snapshot, and so does drift, so none of them needs a backend login. This reads one by hand:
 
@@ -14,4 +14,4 @@ git fetch origin 'refs/chant/snapshots/*:refs/chant/snapshots/*'
 npx chant workspace graph --member shop/prod-east
 ```
 
-Secrets in the export stay ciphertext.
+The apply strips secret values from the export before it writes the snapshot.

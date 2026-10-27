@@ -8,7 +8,7 @@ draft: true
 plywood switches on chant's [pull request environments](https://intentius.io/chant/guide/pr-environments/) with Pulumi review stacks.
 
 ```yaml
-reviewStacks:
+review_stacks:
   template: shop/dev
   name: pr-{number}
 ```

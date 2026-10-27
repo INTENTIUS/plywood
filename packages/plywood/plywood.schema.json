@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intentius.io/plywood/plywood.schema.json",
+  "title": "plywood.yml",
+  "description": "plywood's config. Each key wraps a chant setting; plywood sets chant's keys from it, so a ci. key is refused.",
+  "$comment": "Generated from packages/plywood/src/config by scripts/build-schema.mjs; edit the group modules, then run npm run schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "stacks": {
+      "type": "object",
+      "description": "Each stack as project/stack. plywood init finds them when the key is absent.",
+      "propertyNames": {
+        "pattern": "^[^/\\s]+\\/[^/\\s]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "The directory holding the stack's Pulumi.yaml."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths whose change previews the stack, beside its directory."
+          },
+          "gate": {
+            "type": "string",
+            "enum": [
+              "always",
+              "on-destructive",
+              "never"
+            ],
+            "description": "The stack's gate, in place of the top-level gate."
+          },
+          "backend": {
+            "type": "string",
+            "description": "The backend URL. A plunge+ URL (plunge+file://, plunge+s3://) picks the plunge engine."
+          }
+        }
+      }
+    },
+    "waves": {
+      "type": "array",
+      "description": "Lists of stacks, updated in order; the first wave is the canary. One wave per environment when absent.",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      }
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "pulumi",
+        "plunge"
+      ],
+      "description": "pulumi or plunge. Absent, a plunge+ backend picks plunge, else chant reads PULUMI_BACKEND_URL and Pulumi.yaml."
+    },
+    "backend": {
+      "type": "string",
+      "description": "The backend URL. A plunge+ URL (plunge+file://, plunge+s3://) picks the plunge engine."
+    },
+    "apply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "pull-request"
+          ],
+          "default": "merge",
+          "description": "merge, or pull-request for /plywood up before merge."
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "mergeable",
+              "undiverged",
+              "checks"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "What an open pull request needs before /plywood up updates it. All four when absent. Only with when: pull-request."
+        }
+      }
+    },
+    "locks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "string",
+          "enum": [
+            "preview",
+            "up"
+          ],
+          "default": "preview",
+          "description": "preview, from the first preview, or up, from an update before merge or a /plywood lock comment."
+        },
+        "grain": {
+          "type": "string",
+          "enum": [
+            "resource",
+            "stack"
+          ],
+          "default": "resource",
+          "description": "resource, one lock per resource, or stack, one lock per stack."
+        }
+      }
+    },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "always",
+        "on-destructive",
+        "never"
+      ],
+      "default": "on-destructive",
+      "description": "always, on-destructive or never."
+    },
+    "approval": {
+      "type": "string",
+      "enum": [
+        "ledger",
+        "sealed",
+        "pr-review"
+      ],
+      "default": "ledger",
+      "description": "ledger, sealed or pr-review."
+    },
+    "approval_rules": {
+      "type": "object",
+      "description": "Role and quorum per stack glob. Read at base.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "A role .chant/trust.json gives the approvers."
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Roles, any of which counts."
+          },
+          "quorum": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Distinct approvers the stacks need."
+          }
+        }
+      }
+    },
+    "review_stacks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template"
+      ],
+      "description": "A stack per open pull request. Off when absent.",
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "The stack whose config a review stack starts from, as project/stack."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "\\{number\\}",
+          "default": "pr-{number}",
+          "description": "The review stack's name; {number} is the pull request's number."
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^\\d+[mhd]$",
+          "description": "How long a review stack lives after its last update, such as 72h. chant's default when absent."
+        }
+      }
+    },
+    "branches": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Branch name to stack globs. A stack a glob matches updates from that branch alone."
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Pull request label to stack globs. A labelled pull request previews only the stacks its labels match."
+    },
+    "forge": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The forge the jobs talk to. Read from the repository's remote when absent.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab",
+            "forgejo"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "description": "The forge's base URL, for a self-hosted forge."
+        }
+      }
+    },
+    "policy": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "drift": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "identity": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "pulumi_cloud": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "notify": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "telemetry": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "reports": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "review": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "agent": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "control": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "pulumi": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "plunge": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "runners": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "env": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "pass": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "parallelism": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "environments": {
+      "description": "Read by a later plywood; accepted as written."
+    }
+  }
+}

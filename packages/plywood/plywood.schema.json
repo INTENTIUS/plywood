@@ -231,6 +231,166 @@
         }
       }
     },
+    "pulumi": {
+      "description": "The Pulumi CLI release the jobs run, such as 3.272.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+          }
+        }
+      ]
+    },
+    "plunge": {
+      "description": "The plunge release the jobs run, such as 0.1.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+          }
+        }
+      ]
+    },
+    "image": {
+      "description": "The image every job runs in, in place of plywood's: a reference pinned by digest, or a map with name and the plugins a prepared image carries.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The image reference, built FROM plywood-pulumi or plywood-plunge, pinned by digest."
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?:(resource|converter|language|analyzer|tool):)?([a-z0-9][a-z0-9-]*)@(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)$"
+              },
+              "description": "Plugins the prepared image installs, as name@version or kind:name@version."
+            }
+          }
+        }
+      ]
+    },
+    "runners": {
+      "description": "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[^\\s,]+$"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "group"
+              ],
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[^\\s,]+$"
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "not": {
+            "required": [
+              "group"
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "default",
+              "preview",
+              "up",
+              "drift"
+            ]
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\s,]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "group"
+                ],
+                "properties": {
+                  "group": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[^\\s,]+$"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
     "policy": {
       "description": "Read by a later plywood; accepted as written."
     },
@@ -259,15 +419,6 @@
       "description": "Read by a later plywood; accepted as written."
     },
     "control": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "pulumi": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "plunge": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "runners": {
       "description": "Read by a later plywood; accepted as written."
     },
     "env": {

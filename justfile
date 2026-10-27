@@ -35,6 +35,27 @@ bundle-check: build
 chant-local *args:
     scripts/chant-local.sh {{args}}
 
+# Render images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
+# from packages/plywood/src/images.ts, which holds the engine pins and their
+# checksums. bundle-check fails when a committed Dockerfile differs.
+images-render:
+    npm run images -w @intentius/plywood
+
+# Build the plywood-pulumi and plywood-plunge images into the local Docker
+# daemon for one platform (default: this machine's). Each checks its engine
+# against the release checksums; `checksums=<url>` builds against another
+# checksums file, so a tampered one can be shown to fail. Nothing is pushed.
+images platform="" checksums="": build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(node -p 'require("./packages/plywood/package.json").version')"
+    for engine in pulumi plunge; do
+      tool="$(node -e 'const s=require("fs").readFileSync("packages/plywood/src/images.ts","utf8");const m=new RegExp(process.argv[1]+": \"([^\"]+)\"").exec(s);console.log(m[1])' "$engine")"
+      docker build {{ if platform == "" { "" } else { "--platform " + platform } }} \
+        {{ if checksums == "" { "" } else { "--build-arg CHECKSUMS_URL=" + checksums } }} \
+        -f "images/plywood-$engine/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool" .
+    done
+
 # Render .github/workflows/ci.yml from ci/ci.ts. CI fails when the committed
 # file differs from the render.
 ci:

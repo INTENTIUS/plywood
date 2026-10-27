@@ -8,7 +8,7 @@ draft: true
 Each job starts from the `plywood-pulumi` or `plywood-plunge` image. A program in Python, Go, .NET or Java, or one with many provider plugins, starts faster from an image of your own.
 
 ```dockerfile
-FROM ghcr.io/intentius/plywood-pulumi:3.272.0
+FROM ghcr.io/intentius/plywood-pulumi:0.1.0-pulumi3.272.0
 RUN pip install -r /tmp/requirements.txt
 RUN pulumi plugin install resource aws 7.4.0
 ```

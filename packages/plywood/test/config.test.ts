@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, GROUPS, parseConfig, plywoodSchema } from "../src/config/index";
 import { PLYWOOD_KEY_FOR } from "../src/config/chant-keys";
+import { installLine, TOOL_VERSIONS } from "../src/images";
+
+/** The line every config without a pin gets: Pulumi at plywood's release, on PATH. */
+const DEFAULT_SETUP = [installLine("pulumi", TOOL_VERSIONS.pulumi)];
 
 const DOCS = join(import.meta.dirname, "../../../site/src/content/docs");
 const errors = (text: string) => checkConfig(parseConfig(text)).filter((p) => p.severity === "error");
@@ -36,7 +40,7 @@ describe("plywood.yml", () => {
         { name: "shop/prod-east", dir: "infra", engine: "pulumi" },
       ],
       memberDefaults: { engine: "pulumi" },
-      pipeline: { waves: [["shop/dev"], ["shop/prod-east"]], gate: "on-destructive", approval: "ledger", excludeAuthor: true },
+      pipeline: { waves: [["shop/dev"], ["shop/prod-east"]], gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP },
     });
   });
 
@@ -45,7 +49,7 @@ describe("plywood.yml", () => {
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource" },
       members: [],
       memberDefaults: {},
-      pipeline: { gate: "on-destructive", approval: "ledger", excludeAuthor: true },
+      pipeline: { gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP },
     });
   });
 

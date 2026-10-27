@@ -21,7 +21,7 @@ mkdirSync(dirname(outfile), { recursive: true });
 // installed chant lacks resolves to a module that throws when imported, so
 // the bundle builds on the pin and the caller's fallback takes over; a chant
 // that has it is bundled in.
-const CHANT_NEXT = /^@intentius\/chant\/(exit-codes)$/;
+const CHANT_NEXT = /^@intentius\/chant\/(exit-codes|ci-product)$/;
 const chantNext = {
   name: "chant-next",
   setup(b) {

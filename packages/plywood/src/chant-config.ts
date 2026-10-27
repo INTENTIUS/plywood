@@ -14,7 +14,8 @@
  *            `memberDefaults` for a stack plywood.yml does not list.
  *   pipeline what plywood hands chant's product pipeline in process
  *            (chant#4550 ruling C): gate policy, approval source and rules,
- *            waves, and what an open pull request needs before `/plywood up`.
+ *            waves, what an open pull request needs before `/plywood up`,
+ *            and the image, engine install lines and runners (plywood#12).
  *
  * `ci.lockGrain` is chant#4552's key (ruling A: target, resource or repo).
  * A chant without the lock grain build ignores it; plywood writes it, and
@@ -61,7 +62,16 @@ export interface ChantMemberSettings {
   engine?: "pulumi" | "plunge";
   backend?: string;
   gate?: ChantGatePolicy;
+  /** The engine release plywood.yml's `pulumi:` or `plunge:` pins for the stack. */
+  engineVersion?: string;
+  /** The engine binary for a stack pinned to a release other than the one on PATH (src/images.ts `engineBin`). */
+  engineBin?: string;
 }
+
+/** One runner: a label, every label of a list, or a GitHub runner group with labels its runners also carry. */
+export type ChantRunnerSpec = string | string[] | { group: string; labels?: string[] };
+/** The jobs' runner: one for all, or one per stage over a default. */
+export type ChantRunner = ChantRunnerSpec | Partial<Record<"default" | "preview" | "up" | "drift", ChantRunnerSpec>>;
 
 export interface ChantPipelineSettings {
   gate?: ChantGatePolicy;
@@ -76,6 +86,12 @@ export interface ChantPipelineSettings {
   /** The review stack name pattern; `{number}` is the pull request's number. */
   reviewStackName?: string;
   forge?: { kind?: string; url?: string };
+  /** The image every job runs in, by digest. Absent: chant's default image (src/images.ts `chantPipelineOptions`). */
+  image?: string;
+  /** The verified engine install lines; each skips an engine the image already carries. */
+  engineSetup?: string[];
+  /** The runner the jobs run on. */
+  runner?: ChantRunner;
 }
 
 export interface ChantSettings {

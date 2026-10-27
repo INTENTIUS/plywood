@@ -1,7 +1,7 @@
 ---
 title: 'A stack per pull request'
 description: 'Each open pull request gets its own stack from a template stack''s config, destroyed and removed when it closes.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#15, chant#4541, chant#4550]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'Add plywood to a repo'
 description: 'plywood init finds each Pulumi.yaml and its stacks, writes plywood.yml and renders the pipeline for your forge.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#9, chant#4541, chant#4550]
 draft: true
 prompt: setup
 ---

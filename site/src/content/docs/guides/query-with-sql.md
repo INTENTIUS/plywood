@@ -1,7 +1,7 @@
 ---
 title: 'Query with SQL'
 description: 'chant query answers questions such as which stacks changed in prod this week, over the ledger.'
-needs: [plywood#1]
+needs: [plywood#20]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'Re-preview from a comment'
 description: 'A /plywood preview comment previews the pull request''s head again and replaces the note.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#6, chant#4541, chant#4550]
 draft: true
 ---
 

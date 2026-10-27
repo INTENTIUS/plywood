@@ -1,7 +1,7 @@
 ---
 title: 'Update a stack before it merges'
 description: 'Opt in with ci.workflow, then a /plywood up comment updates the approved preview from the pull request.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

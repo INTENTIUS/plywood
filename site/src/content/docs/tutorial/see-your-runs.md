@@ -1,7 +1,7 @@
 ---
 title: 'See your runs'
 description: 'Read the tutorial''s runs and approvals with plywood audit and chant query.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#11, plywood#20, chant#4541, chant#4550]
 draft: true
 ---
 

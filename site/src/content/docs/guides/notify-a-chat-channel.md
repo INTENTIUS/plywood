@@ -1,7 +1,7 @@
 ---
 title: 'Notify a chat channel'
 description: 'A chat channel or a signed webhook hears about waiting waves and failed updates.'
-needs: [plywood#1]
+needs: [plywood#20]
 draft: true
 ---
 

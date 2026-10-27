@@ -1,7 +1,7 @@
 ---
 title: 'Waves and approvals'
 description: 'The way stacks form waves, and the digest each gate binds.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

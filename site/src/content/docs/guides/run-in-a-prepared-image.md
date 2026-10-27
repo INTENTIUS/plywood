@@ -1,7 +1,7 @@
 ---
 title: 'Run in a prepared image'
 description: 'Use an image with your language runtime and plugins installed, so each job skips the install.'
-needs: [plywood#1]
+needs: [plywood#12]
 draft: true
 ---
 

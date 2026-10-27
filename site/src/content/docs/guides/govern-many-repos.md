@@ -1,7 +1,7 @@
 ---
 title: 'Govern many repositories'
 description: 'One control repo sets policy and approvers for all of them.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#18, chant#4541, chant#4550]
 draft: true
 ---
 

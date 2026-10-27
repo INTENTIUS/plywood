@@ -1,7 +1,7 @@
 ---
 title: 'Scope state and cloud access'
 description: 'Preview and update run as different identities, and on Pulumi Cloud they use different tokens.'
-needs: [plywood#1, chant#4541, chant#4549, chant#4550]
+needs: [plywood#14, chant#4541, chant#4549, chant#4550]
 draft: true
 ---
 

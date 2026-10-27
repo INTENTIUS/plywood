@@ -1,7 +1,7 @@
 ---
 title: 'Order stacks by their references'
 description: 'A stack that reads another''s outputs updates after it.'
-needs: [plywood#1, chant#4541, chant#4547, chant#4550]
+needs: [plywood#18, chant#4541, chant#4547, chant#4550]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'Use your CrossGuard policy packs'
 description: 'The preview job runs your CrossGuard policy packs, and their violations go into the note and the gate.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#13, chant#4541, chant#4550]
 draft: true
 ---
 

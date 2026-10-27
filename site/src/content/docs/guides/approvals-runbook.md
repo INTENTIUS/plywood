@@ -1,7 +1,7 @@
 ---
 title: 'Approvals runbook'
 description: 'The people who approve each stack, and the reasons an approval stops counting.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

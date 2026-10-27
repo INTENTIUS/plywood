@@ -1,7 +1,7 @@
 ---
 title: 'Approve a wave'
 description: 'plywood approve records an approval of one preview digest, and the wave''s next job updates the stacks it covers.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

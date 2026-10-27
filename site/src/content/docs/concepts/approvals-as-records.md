@@ -1,7 +1,7 @@
 ---
 title: 'Approvals are records'
 description: 'An approval is a row in the chant workspace ledger in your repository, bound to one preview digest.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

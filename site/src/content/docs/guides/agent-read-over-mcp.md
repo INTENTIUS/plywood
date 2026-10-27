@@ -1,7 +1,7 @@
 ---
 title: 'Read your stacks over MCP'
 description: 'An agent reads your stacks and their runs with read-only tools.'
-needs: [plywood#1, chant#4543]
+needs: [plywood#19, chant#4543]
 draft: true
 ---
 

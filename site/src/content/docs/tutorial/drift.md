@@ -1,7 +1,7 @@
 ---
 title: 'Find drift'
 description: 'Change a queue by hand on floci; the scheduled drift job opens one issue naming the URN and the attribute.'
-needs: [plywood#1]
+needs: [plywood#11, plywood#8]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'CLI'
 description: 'Every plywood command and flag.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#7, plywood#8, chant#4541, chant#4550]
 draft: true
 ---
 

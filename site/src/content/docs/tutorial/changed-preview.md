@@ -1,7 +1,7 @@
 ---
 title: 'A preview that changed after review'
 description: 'Push again after an approval, and plywood refuses the old approval and names the change.'
-needs: [plywood#1, chant#4541, chant#4553, chant#4550]
+needs: [plywood#11, plywood#7, chant#4541, chant#4553, chant#4550]
 draft: true
 ---
 

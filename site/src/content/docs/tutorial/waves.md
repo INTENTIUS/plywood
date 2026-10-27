@@ -1,7 +1,7 @@
 ---
 title: 'Canary, then waves'
 description: 'The dev stack updates first, and the prod stacks wait behind their own gate for an approval of their preview digest.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#11, plywood#7, chant#4541, chant#4550]
 draft: true
 ---
 

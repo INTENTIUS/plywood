@@ -1,7 +1,7 @@
 ---
 title: 'Changes'
 description: 'Changes in each plywood release.'
-needs: [plywood#1]
+needs: [plywood#23]
 draft: true
 ---
 

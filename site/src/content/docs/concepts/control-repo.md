@@ -1,7 +1,7 @@
 ---
 title: 'The control repo'
 description: 'One home for the policy and approvers of many repositories.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#18, chant#4541, chant#4550]
 draft: true
 ---
 

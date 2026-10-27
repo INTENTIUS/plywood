@@ -1,7 +1,7 @@
 ---
 title: 'Tips'
 description: 'Each tip id the report can print, and the fix for it.'
-needs: [plywood#1]
+needs: [plywood#6]
 draft: true
 ---
 

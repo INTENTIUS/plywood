@@ -1,7 +1,7 @@
 ---
 title: 'Send traces and metrics'
 description: 'Each run is an OpenTelemetry trace with a span per stack.'
-needs: [plywood#1]
+needs: [plywood#20]
 draft: true
 ---
 

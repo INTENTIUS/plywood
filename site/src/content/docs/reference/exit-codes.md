@@ -1,7 +1,7 @@
 ---
 title: 'Exit codes'
 description: 'plywood uses chant''s exit-code table, which terragucci shares.'
-needs: [plywood#1, chant#4541, chant#4553, chant#4550]
+needs: [plywood#7, chant#4541, chant#4553, chant#4550]
 draft: true
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: 'Boot the example'
 description: 'One command starts a local forge and an AWS emulator with an example repository. Nothing reaches a real cloud account.'
-needs: [plywood#1]
+needs: [plywood#11]
 draft: true
 prompt: |
   Follow https://intentius.io/plywood/tutorial/ on this machine: start the bench with `just tutorial-up` and report the three addresses it prints.

@@ -1,7 +1,7 @@
 ---
 title: 'Versions and pins'
 description: 'The pins for the Pulumi CLI and plunge, and the CI image digests.'
-needs: [plywood#1]
+needs: [plywood#12]
 draft: true
 ---
 

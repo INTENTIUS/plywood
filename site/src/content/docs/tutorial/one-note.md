@@ -1,7 +1,7 @@
 ---
 title: 'One note for every stack'
 description: 'A change that reaches four stacks gives one note with a section per stack and one approval command.'
-needs: [plywood#1, chant#4541, chant#4550]
+needs: [plywood#11, plywood#6, chant#4541, chant#4550]
 draft: true
 ---
 

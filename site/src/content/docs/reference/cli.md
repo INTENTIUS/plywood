@@ -22,7 +22,7 @@ draft: true
 | Comment | Does |
 |---|---|
 | `/plywood preview [stack]` | previews the head again |
-| `/plywood up [wave]` | updates from the pull request, with `ci.workflow: up-before-merge` |
+| `/plywood up [wave]` | updates from the pull request, with `apply.when: pull-request` |
 | `/plywood lock`, `/plywood unlock` | takes or frees the pull request's locks |
 
 Exit codes are on [Exit codes](/plywood/reference/exit-codes/).

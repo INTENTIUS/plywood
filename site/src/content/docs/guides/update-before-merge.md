@@ -1,6 +1,6 @@
 ---
 title: 'Update a stack before it merges'
-description: 'Opt in with ci.workflow, then a /plywood up comment updates the approved preview from the pull request.'
+description: 'Opt in with apply.when, then a /plywood up comment updates the approved preview from the pull request.'
 needs: [plywood#7, chant#4541, chant#4550]
 draft: true
 ---
@@ -8,8 +8,8 @@ draft: true
 plywood switches on chant's [apply before merge](https://intentius.io/chant/guide/apply-before-merge/).
 
 ```yaml
-ci:
-  workflow: up-before-merge
+apply:
+  when: pull-request
 ```
 
 Approve the preview, then comment:

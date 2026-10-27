@@ -21,7 +21,7 @@ plywood uses Pulumi's words with Pulumi's meanings. The additions are at the end
 | stack export | the deployment JSON from `pulumi stack export` |
 | stack reference | one stack reading another's outputs with `StackReference` |
 | policy pack | CrossGuard policies, run in the preview job |
-| ESC environment | config and secrets a stack imports from Pulumi ESC |
+| ESC environment | config and secrets a stack imports from Pulumi ESC; stock Pulumi resolves them on the Pulumi Cloud backend, and chant keeps no copy |
 | review stack | a stack per pull request |
 
 ## plywood's additions

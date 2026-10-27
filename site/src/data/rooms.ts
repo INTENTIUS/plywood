@@ -97,7 +97,8 @@ export const ROOMS: Room[] = [
 		lede: 'Your stacks live in Pulumi Cloud, and you want previews and updates to run from your own forge\'s pull requests.',
 		works: [
 			'State and update history stay in Pulumi Cloud next to ESC environments and Insights',
-			'Previews and updates run in your forge\'s CI, logged in with a Pulumi access token',
+			'Previews and updates run in your forge\'s CI, logged in with a Pulumi Cloud token traded from the job\'s OIDC token',
+			'Stock Pulumi resolves each stack\'s ESC environments on the Pulumi Cloud backend with that token',
 			'Pulumi Cloud\'s stack lock keeps updates to a stack in order',
 			'An approval binds the preview digest, on top of Pulumi Cloud\'s own controls',
 		],

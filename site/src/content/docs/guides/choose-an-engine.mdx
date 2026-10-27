@@ -1,0 +1,37 @@
+---
+title: 'Choose pulumi or plunge'
+description: 'Every stage runs with stock Pulumi or with plunge. The engine table, and the features plunge adds.'
+needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+draft: true
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Stock Pulumi is the default, and `init` never picks plunge on its own. A stack runs plunge when `plywood.yml` says `engine: plunge`, or when its backend URL starts with `plunge+`.
+
+| | Pulumi | plunge |
+|---|---|---|
+| State | one checkpoint per stack in your backend | one record per resource in your bucket |
+| Lock on update | the backend's stack lock | none: each record write is conditional |
+| `up` applies | a fresh preview, checked against the approved one | the saved plan from the preview job |
+| Drift | `pulumi refresh --preview-only` | `plunge drift --resource <urn>` |
+| CI image | `plywood-pulumi` | `plywood-plunge` |
+| Version pin | `pulumi:` in `plywood.yml` | `plunge:` in `plywood.yml` |
+
+<Tabs syncKey="engine">
+<TabItem label="Pulumi">
+Every stage runs the Pulumi CLI your stacks use today with your own plugins.
+</TabItem>
+<TabItem label="plunge">
+plunge is the Pulumi fork from the team behind plywood. It runs the same programs and providers. With plunge, the pipeline also gets:
+
+| You get | Where you see it |
+|---|---|
+| Updates to different resources of one stack, side by side | [Locking and staleness](/plywood/concepts/locking-and-staleness/#with-plunge) |
+| A saved plan stamped with each record's version | the `up` stage in [Stages](/plywood/reference/stages/) |
+| Drift of one resource, with no program run | [Turn on drift checks](/plywood/guides/turn-on-drift-checks/) |
+| Ownership from `plunge-stack` and `plunge-urn` markers | [See your stacks in behold](/plywood/guides/see-your-estate-in-behold/) |
+
+Each row's status is on [plunge's claims page](https://intentius.io/plunge/claims/).
+</TabItem>
+</Tabs>

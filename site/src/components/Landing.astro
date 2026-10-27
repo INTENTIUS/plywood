@@ -1,0 +1,39 @@
+---
+// The home page under the hero: plywood in two lines, then the door picker.
+import Picker from './Picker.astro';
+---
+<div class="pw-landing not-content">
+	<section class="about" aria-label="About plywood">
+		<p>
+			One preview note covers every stack, and each approval binds the preview you read. Changes roll out in waves on GitHub, GitLab or Forgejo, with no account to create.
+		</p>
+		<p>
+			plywood is for teams who like Pulumi and want its previews and updates in their own pull requests. Programs and backends stay as they are, and so does a Pulumi Cloud organisation.
+		</p>
+	</section>
+	<Picker />
+</div>
+
+<style>
+	.pw-landing {
+		display: grid;
+		gap: 2rem;
+		max-width: 64rem;
+		margin: 0 auto;
+		font-size: var(--sl-text-sm);
+		line-height: 1.55;
+		overflow-wrap: anywhere;
+	}
+	.pw-landing :global(.pw-picker) {
+		margin: 0;
+	}
+	.about {
+		display: grid;
+		gap: 0.75rem;
+		font-size: var(--sl-text-base);
+		color: var(--sl-color-gray-2);
+	}
+	.about p {
+		margin: 0;
+	}
+</style>

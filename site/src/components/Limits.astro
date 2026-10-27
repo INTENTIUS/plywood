@@ -1,0 +1,8 @@
+---
+// The home page's Limits table, from LIMITS in data/rooms.ts.
+import { LIMITS } from '../data/rooms';
+---
+<table>
+	<thead><tr><th>plywood leaves out</th><th>Because</th></tr></thead>
+	<tbody>{LIMITS.map((l) => <tr><td>{l.label}</td><td>{l.why}</td></tr>)}</tbody>
+</table>

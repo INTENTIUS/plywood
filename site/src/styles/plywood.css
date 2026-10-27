@@ -1,0 +1,357 @@
+/*
+ * plywood's look, on the plunge site's structure: Geist for reading and
+ * headings, Geist Mono for anything a terminal prints, warm neutrals, one wood
+ * accent, a darker grain for fine details and a steel gray from the bench's legs.
+ *
+ * Every colour comes from the logo (public/brand/plywood-160.png):
+ *   light wood #f2ac59, mid wood #df8e3f, deep wood #b36521,
+ *   dark wood #65330e, darkest wood #4b2608, steel #6e6e6e, dark steel #323232.
+ *
+ * The accent is the light wood on the dark theme and a deeper wood on the light
+ * one (#df8e3f is 2.6:1 on white, under the text floor). scripts/check-contrast.mjs
+ * reads the two token blocks below and fails the build when a pair drops under
+ * WCAG AA (4.5:1 for text, 3:1 for hairlines and other UI). Its numbers:
+ *
+ *   dark  page #161412, panel #1d1a17, gray-6 #25211d
+ *         body gray-2 #d2c7ba on the page 11.04, on a panel 10.41
+ *         secondary gray-3 #a89c8e on the page 6.83, on a panel 6.44
+ *         --pw-accent #f2ac59 on the page 9.47, on a panel 8.93, on gray-6 8.24
+ *         --pw-grain #b36521 on the page 4.20, --pw-steel #8c8c8c 5.46
+ *   light page #ffffff, panel #faf7f3, gray-6 #f3eee8
+ *         body gray-2 #3d362f on the page 11.88, on a panel 11.13
+ *         secondary gray-3 #61584e on the page 6.97, on a panel 6.52
+ *         --pw-accent #94501a on the page 6.14, on a panel 5.75, on gray-6 5.32
+ *         --pw-grain #b36521 on the page 4.37, --pw-steel #4a4a4a 8.86
+ *
+ * Starlight's dark theme lives on :root and its light theme on
+ * :root[data-theme='light'], so both palettes are set here as tokens.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+:root {
+	--pw-display: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--sl-font: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--sl-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* dark: warm charcoal neutrals, light-wood accent, deep-wood grain, steel */
+	--sl-color-white: #f7f2ec;
+	--sl-color-gray-1: #ebe3d9;
+	--sl-color-gray-2: #d2c7ba;
+	--sl-color-gray-3: #a89c8e;
+	--sl-color-gray-4: #6b6158;
+	--sl-color-gray-5: #3a342e;
+	--sl-color-gray-6: #25211d;
+	--sl-color-black: #161412;
+	--sl-color-accent-low: #3d2510;
+	--sl-color-accent: #f2ac59;
+	--sl-color-accent-high: #f9d6ac;
+
+	--pw-accent: #f2ac59;
+	--pw-grain: #b36521;
+	--pw-steel: #8c8c8c;
+	--pw-warn: #f0907a;
+	--pw-panel: #1d1a17;
+	--pw-rule: #3a342e;
+}
+
+:root[data-theme='light'] {
+	--sl-color-white: #1a1612;
+	--sl-color-gray-1: #2a241e;
+	--sl-color-gray-2: #3d362f;
+	--sl-color-gray-3: #61584e;
+	--sl-color-gray-4: #a69a8c;
+	--sl-color-gray-5: #e2d9ce;
+	--sl-color-gray-6: #f3eee8;
+	--sl-color-gray-7: #faf7f3;
+	--sl-color-black: #ffffff;
+	--sl-color-accent-low: #fbe9d4;
+	--sl-color-accent: #94501a;
+	--sl-color-accent-high: #65330e;
+
+	--pw-accent: #94501a;
+	--pw-grain: #b36521;
+	--pw-steel: #4a4a4a;
+	--pw-warn: #b23a26;
+	--pw-panel: #faf7f3;
+	--pw-rule: #e2d9ce;
+}
+
+/*
+ * Pixel art in the logo's grid, drawn as masks so they follow the theme: a plank
+ * with two nails marks each section heading and stands in for a horizontal rule,
+ * and a small isometric block is the list bullet.
+ */
+:root {
+	--pw-plank: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 8' width='16' height='8' shape-rendering='crispEdges'><path d='M0 2h16v1h-16zM0 3h1v2h-1zM15 3h1v2h-1zM0 5h16v1h-16zM3 3h1v1h-1zM12 4h1v1h-1zM6 4h3v1h-3z'/></svg>");
+	--pw-block: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' width='10' height='10' shape-rendering='crispEdges'><path d='M4 1h2v1h-2zM2 2h6v1h-6zM1 3h8v1h-8zM1 4h8v4h-8zM2 8h6v1h-6zM4 9h2v1h-2z'/></svg>");
+}
+
+.sl-markdown-content :is(h1, h2, h3),
+h1#_top {
+	font-family: var(--pw-display);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+h1#_top {
+	font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+}
+
+.site-title {
+	font-family: var(--pw-display);
+	font-weight: 600;
+	font-size: 1.1rem;
+	letter-spacing: -0.02em;
+	color: var(--sl-color-white);
+}
+
+.sl-markdown-content {
+	font-size: 0.9375rem;
+	line-height: 1.7;
+	color: var(--sl-color-gray-2);
+}
+.sl-markdown-content :is(strong, b):not(.not-content, .not-content *) {
+	color: var(--sl-color-white);
+	font-weight: 600;
+}
+.sl-markdown-content :is(h2, h3, h4):not(.not-content, .not-content *) {
+	color: var(--sl-color-white);
+}
+.sl-markdown-content h2:not(.not-content, .not-content *) {
+	font-size: 1.3rem;
+	margin-top: 2.75rem;
+}
+.sl-markdown-content h2:not(.not-content, .not-content *)::before {
+	content: '';
+	display: block;
+	width: 32px;
+	height: 16px;
+	margin: 0 0 0.75rem;
+	background: var(--pw-accent);
+	-webkit-mask: var(--pw-plank) center / 32px 16px no-repeat;
+	mask: var(--pw-plank) center / 32px 16px no-repeat;
+}
+.sl-markdown-content hr:not(.not-content, .not-content *) {
+	width: 32px;
+	height: 16px;
+	margin: 2.5rem auto;
+	border: none;
+	background: var(--pw-steel);
+	-webkit-mask: var(--pw-plank) center / 32px 16px no-repeat;
+	mask: var(--pw-plank) center / 32px 16px no-repeat;
+}
+
+.sl-markdown-content > ul:not(.not-content, .not-content *),
+.sl-markdown-content :not(li) > ul:not(.not-content, .not-content *, .starlight-aside *) {
+	list-style: none;
+	padding-left: 1.6rem;
+}
+.sl-markdown-content > ul:not(.not-content, .not-content *) > li,
+.sl-markdown-content :not(li) > ul:not(.not-content, .not-content *, .starlight-aside *) > li {
+	position: relative;
+}
+.sl-markdown-content > ul:not(.not-content, .not-content *) > li::before,
+.sl-markdown-content :not(li) > ul:not(.not-content, .not-content *, .starlight-aside *) > li::before {
+	content: '';
+	position: absolute;
+	left: -1.4rem;
+	top: calc((1lh - 10px) / 2);
+	width: 10px;
+	height: 10px;
+	background: var(--pw-accent);
+	-webkit-mask: var(--pw-block) center / 10px 10px no-repeat;
+	mask: var(--pw-block) center / 10px 10px no-repeat;
+}
+.sl-markdown-content h3:not(.not-content, .not-content *) {
+	font-size: 1.05rem;
+	margin-top: 2rem;
+}
+
+.sl-markdown-content a:not(.not-content, .not-content *, :is(h1, h2, h3, h4) a) {
+	color: var(--pw-accent);
+	text-decoration-line: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+	text-decoration-color: color-mix(in srgb, var(--pw-accent) 35%, transparent);
+}
+.sl-markdown-content a:not(.not-content, .not-content *):hover {
+	text-decoration-color: var(--pw-grain);
+}
+
+.sl-markdown-content table:not(.not-content, .not-content *) {
+	border-collapse: collapse;
+	font-size: 0.85rem;
+	line-height: 1.55;
+}
+.sl-markdown-content :is(th, td):not(.not-content, .not-content *) {
+	border: none;
+	border-bottom: 1px solid var(--pw-rule);
+	padding: 0.6rem 0.9rem 0.6rem 0;
+	vertical-align: top;
+}
+.sl-markdown-content th:not(.not-content, .not-content *) {
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--sl-color-gray-3);
+	background: none;
+	border-bottom: 1px solid var(--pw-grain);
+}
+.sl-markdown-content td:first-child:not(.not-content, .not-content *) {
+	color: var(--sl-color-white);
+}
+.sl-markdown-content tbody tr:hover td:not(.not-content, .not-content *) {
+	background: color-mix(in srgb, var(--pw-grain) 6%, transparent);
+}
+
+.sl-markdown-content :not(pre):not(.not-content, .not-content *) > code {
+	background: var(--sl-color-gray-6);
+	color: var(--sl-color-gray-1);
+	border: 1px solid var(--pw-rule);
+	border-radius: 0.3rem;
+	padding: 0.05em 0.35em;
+}
+
+/* The home hero: the bench, large and crisp, with no frame since its background is transparent. */
+.hero .pw-hero-bench {
+	width: clamp(8rem, 22vw, 16rem);
+	height: auto;
+	margin-inline: auto;
+	image-rendering: pixelated;
+}
+.hero {
+	padding-block: clamp(2.5rem, 8vw, 5rem) 1rem;
+}
+.hero h1 {
+	font-family: var(--pw-display);
+	font-weight: 600;
+	font-size: clamp(2.4rem, 6vw, 4rem);
+	line-height: 1.05;
+	letter-spacing: -0.035em;
+	text-wrap: balance;
+	color: var(--sl-color-white);
+}
+.hero .tagline {
+	font-size: clamp(1.05rem, 2vw, 1.3rem);
+	color: var(--sl-color-gray-2);
+	max-width: 42rem;
+	text-wrap: pretty;
+}
+.hero .tagline .pw-hero-sub {
+	display: block;
+	margin-top: 0.75rem;
+	font-size: var(--sl-text-sm);
+	color: var(--sl-color-gray-3);
+}
+
+[data-has-hero] .sl-markdown-content h2:not(.not-content *) {
+	font-size: clamp(1.5rem, 3vw, 2rem);
+	margin-top: 4rem;
+	border: none;
+}
+
+.not-content code {
+	overflow-wrap: anywhere;
+}
+.sl-markdown-content td > code {
+	white-space: nowrap;
+}
+code, pre, kbd, samp {
+	font-variant-ligatures: none;
+	font-feature-settings: 'calt' 0, 'liga' 0;
+}
+
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+	background: var(--sl-color-gray-6);
+	color: var(--sl-color-white);
+	font-weight: 600;
+}
+
+.starlight-aside {
+	background: var(--sl-color-gray-6);
+	border-inline-start-color: var(--pw-accent);
+	color: var(--sl-color-gray-1);
+}
+.starlight-aside .starlight-aside__title {
+	color: var(--sl-color-white);
+}
+.starlight-aside .starlight-aside__icon {
+	color: var(--pw-accent);
+}
+.starlight-aside--caution,
+.starlight-aside--danger {
+	border-inline-start-color: var(--pw-warn);
+}
+.starlight-aside--caution .starlight-aside__icon,
+.starlight-aside--danger .starlight-aside__icon {
+	color: var(--pw-warn);
+}
+.starlight-aside a {
+	color: var(--sl-color-accent-high);
+}
+
+.pw-404 {
+	display: grid;
+	justify-items: center;
+	gap: 1rem;
+	padding-block: clamp(3rem, 10vw, 6rem) 2rem;
+	text-align: center;
+}
+.pw-404 p {
+	margin: 0;
+	max-width: 36rem;
+	color: var(--sl-color-gray-2);
+}
+.pw-404 .pw-404-title {
+	font-family: var(--pw-display);
+	font-size: clamp(2rem, 5vw, 3rem);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: var(--sl-color-white);
+}
+.pw-404 a {
+	color: var(--sl-color-accent-high);
+	font-weight: 500;
+}
+
+.sidebar-content a {
+	font-size: var(--sl-text-sm);
+}
+.sidebar-content .sl-badge {
+	font-family: var(--sl-font);
+	font-size: 0.68rem;
+	font-weight: 500;
+	color: var(--sl-color-gray-3);
+	background: none;
+	border: 1px solid var(--pw-rule);
+	border-radius: 999px;
+	padding: 0 0.4rem;
+}
+
+@media (max-width: 40rem) {
+	.sl-markdown-content table:not(.not-content, .not-content *) {
+		display: block;
+		overflow-x: auto;
+		font-size: 0.8rem;
+	}
+	.sl-markdown-content :is(th, td):not(.not-content, .not-content *) {
+		min-width: 7.5rem;
+	}
+}
+
+/* Each top-level sidebar group's label starts with a small steel square, a nail head. */
+.sidebar-content .top-level > li > details > summary .group-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+.sidebar-content .top-level > li > details > summary .group-label::before {
+	content: '';
+	flex: none;
+	width: 6px;
+	height: 6px;
+	margin-left: 2px;
+	background: var(--pw-steel);
+}

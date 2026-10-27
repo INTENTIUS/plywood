@@ -1,0 +1,12 @@
+---
+title: 'Watch an update on plunge'
+description: 'Per-resource progress comes from plunge''s records while the update runs.'
+needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+draft: true
+---
+
+import WithPlunge from '../../../components/WithPlunge.astro';
+
+<WithPlunge feature="per-resource progress during up, read from the records as each one lands" />
+
+The `up` job's log and its trace show each resource as plunge writes its record. behold shows the same progress for every running wave.

@@ -1,0 +1,48 @@
+---
+// The site title: the bench and the "plywood" wordmark, linking home. It is drawn
+// here rather than through Starlight's `logo` option so the image is a URL
+// reference to public/brand/, as on plunge's site.
+//
+// On a phone a Docs link sits beside it: Starlight hides the header's right side
+// (where SocialIcons.astro puts Docs) below its md width.
+// Adapted from plunge's site.
+import Bench from './Bench.astro';
+
+import { href, live } from '../lib/links';
+
+// The docs start at the first page this build publishes.
+const docs = href(['/getting-started/', '/concepts/glossary/'].find(live) ?? '/');
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+<a href={siteTitleHref} class="site-title sl-flex">
+	<Bench size={32} />
+	<span translate="no">plywood</span>
+</a>
+<a class="pw-docs-phone" href={docs}>Docs</a>
+
+<style>
+	.site-title {
+		align-items: center;
+		gap: var(--sl-nav-gap);
+		text-decoration: none;
+		white-space: nowrap;
+		min-width: 0;
+	}
+	.pw-docs-phone {
+		align-self: center;
+		margin-left: 0.75rem;
+		padding: 0.2rem 0.65rem;
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		color: var(--sl-color-white);
+		text-decoration: none;
+		border: 1px solid var(--pw-rule);
+		border-radius: 999px;
+		white-space: nowrap;
+	}
+	@media (min-width: 50rem) {
+		.pw-docs-phone {
+			display: none;
+		}
+	}
+</style>

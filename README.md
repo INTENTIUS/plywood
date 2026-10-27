@@ -1,9 +1,11 @@
 # plywood
 
-A lifecycle kit for Pulumi and [plunge](https://intentius.io/plunge/) stacks, built on [chant](https://intentius.io/chant/): grouped previews, gated waves and drift, run in your own forge's CI.
+Pull request automation for Pulumi.
 
-plywood is terragucci's sibling for Pulumi. Both are front doors on chant's runtime: the capability lives in chant, and plywood holds the Pulumi vocabulary, defaults, templates and docs (chant#4530).
+It runs Pulumi previews and updates from pull requests on GitHub, GitLab or Forgejo. A change gets one preview note for every stack it reaches, then rolls out in waves, each behind an approval of its preview digest.
 
-Nothing is built yet. This repository and the `@intentius/plywood` npm name are reserved.
+The runtime underneath is [chant](https://intentius.io/chant/), which terragucci shares. With [plunge](https://intentius.io/plunge/), the Pulumi fork from the same team, the pipeline also gets updates per resource.
+
+The docs are at https://intentius.io/plywood/. The site lives in `site/`, and `just site-serve` serves it locally.
 
 Apache-2.0 (see LICENSE).

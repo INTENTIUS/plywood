@@ -1,3 +1,5 @@
 node_modules/
 packages/*/dist/
 .chant-local/
+stack/.state/
+stack/.state.*/

@@ -40,6 +40,32 @@ chant-local *args:
 ci:
     npx chant build ci -o .github/workflows/ci.yml --format yaml
 
+# The tutorial bench (stack/): a local Forgejo with a runner and the floci AWS
+# emulator, with the repository tutor/shop holding the plunge corpus's aws-ts
+# program and stacks dev, staging, prod-us and prod-eu. Containers, network and
+# volumes are named plywood-tutorial; files go to stack/.state. Nothing reaches
+# a real cloud, Pulumi Cloud or the default Pulumi backend.
+
+# Start the bench, seed it and print its addresses.
+tutorial-up:
+    stack/tutorial.sh up
+
+# Remove the bench's containers, network and volumes. Files under stack/.state stay.
+tutorial-down:
+    stack/tutorial.sh down
+
+# Remove the bench, set stack/.state aside as stack/.state.<time>, and start afresh.
+tutorial-reset:
+    stack/tutorial.sh reset
+
+# pulumi preview of a stack inside the bench on the file:// or floci S3 backend (`just tutorial-preview dev s3`).
+tutorial-preview stack="dev" backend="file":
+    stack/tutorial.sh preview {{stack}} {{backend}}
+
+# Fail if a real-cloud or Pulumi Cloud URL appears in the bench's logs.
+tutorial-scan:
+    stack/tutorial.sh scan
+
 # Install the site's dependencies from its lock file.
 site-install:
     cd site && npm ci

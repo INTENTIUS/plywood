@@ -1,0 +1,29 @@
+---
+// The header's right side: a Docs link first, so the docs are one click from the
+// home page (whose splash layout hides the sidebar), then Starlight's own social
+// icons. Adapted from plunge's site.
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+
+import { href, live } from '../lib/links';
+
+// The docs start at the first page this build publishes.
+const docs = href(['/getting-started/', '/concepts/glossary/'].find(live) ?? '/');
+---
+<a class="pw-docs" href={docs}>Docs</a>
+<Default />
+
+<style>
+	.pw-docs {
+		margin-right: 0.5rem;
+		padding: 0.3rem 0.8rem;
+		font-size: var(--sl-text-sm);
+		font-weight: 600;
+		color: var(--sl-color-white);
+		text-decoration: none;
+		border: 1px solid var(--pw-rule);
+		border-radius: 999px;
+	}
+	.pw-docs:hover {
+		border-color: var(--pw-grain);
+	}
+</style>

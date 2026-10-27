@@ -1,0 +1,51 @@
+---
+title: 'Get your first preview note'
+description: 'Add plywood to a repository with a Pulumi program and get one preview note on your next pull request.'
+needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+draft: true
+prompt: setup
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+This takes about ten minutes on GitHub, GitLab or Forgejo. You need a repository with a Pulumi program and at least one stack.
+
+## Install
+
+```sh
+npm i -D @intentius/plywood
+npx plywood init
+```
+
+`init` finds each `Pulumi.yaml` and its stacks and writes `plywood.yml`. It renders the pipeline for the forge your `origin` remote points at, and prints the secrets and settings left for you to add.
+
+## Give the jobs their credentials
+
+<Tabs syncKey="backend">
+<TabItem label="Pulumi Cloud">
+Add two Pulumi access tokens to your forge's secrets: `PULUMI_ACCESS_TOKEN_PREVIEW` for the preview job and `PULUMI_ACCESS_TOKEN_UP` for the update job. A team token scoped to the stacks works well.
+</TabItem>
+<TabItem label="Self-managed">
+Your backend URL goes in `plywood.yml` as `backend:`. Cloud access comes from OIDC: the preview job and the update job each assume their own role.
+</TabItem>
+</Tabs>
+
+## Open a pull request
+
+Commit `plywood.yml` and the pipeline on a branch, then open a pull request. The preview job runs `pulumi preview` on each stack and posts one note:
+
+```text
+plywood preview: 2 stacks, 3 to update, 1 to create
+
+infra/dev       ~ aws:sqs/queue:Queue events   messageRetentionSeconds 3600 => 7200
+                + aws:sns/topic:Topic alerts
+infra/prod      ~ aws:sqs/queue:Queue events   messageRetentionSeconds 3600 => 7200
+
+Approve: plywood approve pr-12 --plan sha256:4be1...
+```
+
+The `plywood/preview` status stays waiting for an approval of that digest.
+
+## Next
+
+[Your first pull request](/plywood/tutorial/first-pull-request/) walks the same loop on a local bench, and [Approve a wave](/plywood/guides/approve-a-wave/) covers the update.

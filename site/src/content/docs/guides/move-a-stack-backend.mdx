@@ -1,0 +1,32 @@
+---
+title: 'Change a stack''s backend'
+description: 'Move a stack between Pulumi Cloud and a self-managed backend with export and import, or onto plunge with adopt.'
+needs: [plywood#1, plunge#7]
+draft: true
+---
+
+import WithPlunge from '../../../components/WithPlunge.astro';
+
+Most teams keep their backend. A team that wants its state somewhere else moves the stack with Pulumi's own export and import.
+
+## Pulumi Cloud and a self-managed backend
+
+```sh
+pulumi stack export --stack prod --file prod.json
+pulumi login s3://acme-pulumi-state
+pulumi stack init prod
+pulumi stack import --file prod.json
+```
+
+Then set the new `backend:` for the stack in `plywood.yml`. The stack keeps its resources and outputs. Update history and Insights stay with Pulumi Cloud.
+
+## Onto plunge
+
+```sh
+pulumi stack export --stack prod --file prod.json
+plunge stack adopt --file prod.json --stack prod --json
+```
+
+`adopt` classifies every resource and writes nothing. Add `--yes` to write one record per resource and its markers. A stock `pulumi stack import` of the same export moves the stack back.
+
+<WithPlunge feature="markers on each resource and a record per resource, which drive per-resource updates and drift" />

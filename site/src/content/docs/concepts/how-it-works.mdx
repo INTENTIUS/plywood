@@ -1,0 +1,28 @@
+---
+title: 'Architecture'
+description: 'The path of a change through plywood, and the parts that belong to Pulumi and to chant.'
+needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+draft: true
+---
+
+A change moves through five steps.
+
+1. The preview job runs `pulumi preview --json` on every stack the pull request reaches.
+2. plywood groups the previews into one change set with a digest per stack and one over the set. It posts one note.
+3. A reviewer runs `plywood approve`, which records an approval of that digest.
+4. After merge, the canary stack updates first. Each later wave waits behind its own gate.
+5. Each step leaves a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/) in your repository.
+
+## Who does each part
+
+| Part | Owner |
+|---|---|
+| The program, the engine, providers and the backend | Pulumi (or plunge) |
+| Change sets, gates, the workspace ledger, target locks, and the one product pipeline that posts notes and statuses | [chant](https://intentius.io/chant/) |
+| `plywood.yml`, defaults, the words on notes, statuses and comments (`/plywood up`), init templates and these docs | plywood |
+
+plywood holds opinion and chant holds capability. plywood and terragucci share every chant CI feature, and each page here links chant's own docs for the feature it switches on. The update itself runs through chant's Pulumi lexicon, the same way terragucci's applies run through chant's Terraform lexicon.
+
+## Where things live
+
+Nothing is hosted. Approvals and overrides are rows in the chant workspace ledger on your repository's `chant/lifecycle` branch, and so are gate decisions and run records. The stack export after each update goes to `refs/chant/snapshots`, and state stays in your backend. [Approvals are records](/plywood/concepts/approvals-as-records/).

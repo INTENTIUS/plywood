@@ -1,0 +1,17 @@
+---
+title: 'Turn on drift checks'
+description: 'A scheduled job reads each stack against the cloud and keeps one issue per stack.'
+needs: [plywood#1]
+draft: true
+---
+
+import WithPlunge from '../../../components/WithPlunge.astro';
+
+```yaml
+drift:
+  schedule: "0 6 * * *"
+```
+
+The drift job runs chant's [drift detection](https://intentius.io/chant/concepts/drift-detection/) on each stack. On stock Pulumi it runs `pulumi refresh --preview-only`. Each drifted stack gets one issue that names each URN and attribute, and the issue closes once the stack matches.
+
+<WithPlunge feature="drift read by plunge drift with one provider read per resource and no program run" />

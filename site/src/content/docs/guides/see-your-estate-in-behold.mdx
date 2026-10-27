@@ -1,0 +1,16 @@
+---
+title: 'See your stacks in behold'
+description: 'behold shows every stack''s resources, owners and drift.'
+needs: [plywood#1, chant#4519, plunge#40]
+draft: true
+---
+
+import WithPlunge from '../../../components/WithPlunge.astro';
+
+behold, chant's console, reads the workspace ledger along with the snapshots under `refs/chant/snapshots`. Each stack shows its resources and its last update, with any drift beside them.
+
+```sh
+npx chant workspace graph --json
+```
+
+<WithPlunge feature="each resource's owner from its plunge-stack and plunge-urn markers, and a graph read from records with no provider call" />

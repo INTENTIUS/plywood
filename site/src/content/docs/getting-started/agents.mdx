@@ -1,0 +1,26 @@
+---
+title: 'Set it up with your agent'
+description: 'A paste-in prompt has your coding agent add plywood to the repository and open the pull request.'
+needs: [plywood#1, chant#4541, TBD-chant-product-pipeline]
+draft: true
+---
+
+import AgentPrompt from '../../../components/AgentPrompt.astro';
+import { setupPrompt } from '../../../prompts';
+
+Paste this into your coding agent in the repository:
+
+<AgentPrompt text={setupPrompt} label="Setup prompt" note="Copy it into Claude Code, Codex or Cursor." />
+
+## The agent's steps
+
+1. Read [llms.txt](/plywood/llms.txt) and this page.
+2. Run `npm i -D @intentius/plywood` and `npx plywood init`.
+3. Ask you which stacks wait for an approval, and set `gate` in `plywood.yml` to match.
+4. Commit the result on a branch and open a pull request.
+
+## The agent's limits
+
+Updates, approvals and merges belong to a person. The prompt ends with that rule word for word, and the agent stops at the pull request.
+
+The pull request's own preview note then shows the agent's work, like any other change.

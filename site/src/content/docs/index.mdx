@@ -1,0 +1,77 @@
+---
+title: 'plywood'
+description: 'Pull request automation for Pulumi'
+template: splash
+hero:
+  title: plywood
+  tagline: Pull request automation for Pulumi
+  image:
+    html: '<img class="pw-hero-bench" src="/plywood/brand/plywood-160.png" width="256" height="256" alt="The plywood bench, a pixel-art wooden bench" />'
+head:
+  - tag: title
+    content: plywood
+---
+
+import Landing from '../../components/Landing.astro';
+import Limits from '../../components/Limits.astro';
+import AgentPrompt from '../../components/AgentPrompt.astro';
+import { setupPrompt } from '../../prompts';
+
+<Landing />
+
+## One note for every stack
+
+A pull request that reaches six stacks gets one preview note. Each stack has its own section listing the resources its preview changes, and one command approves the whole change. The note comes from chant's [pull request CI](https://intentius.io/chant/guide/pull-request-ci/), which plywood switches on with Pulumi's words. [Why previews are grouped](/plywood/concepts/why-previews-are-grouped/).
+
+## Your forge, your backend
+
+plywood runs Pulumi in your own CI on GitHub, GitLab or Forgejo. Programs and stack config stay as you have them, and so does the backend.
+
+| Where it runs | You set | Page |
+|---|---|---|
+| GitHub, GitLab or Forgejo CI | nothing: `init` reads the forge from the `origin` remote | [Add plywood to a repo](/plywood/guides/add-to-a-repo/) |
+| Pulumi Cloud | an access token for previews and one for updates | [Pulumi Cloud stacks](/plywood/for/pulumi-cloud/) |
+| A file, S3, GCS or Azure Blob backend | the backend URL your stacks already use | [Self-managed backends](/plywood/for/diy-backend/) |
+
+## Waves and approvals
+
+A change goes out a few stacks at a time, starting with the canary stack. Each wave waits behind its own gate, and an approval covers the exact preview digest it was shown. A preview that moves after review is refused and named. Waves and gates are chant's [gated waves](https://intentius.io/chant/guide/op-waves/), with plywood's defaults. [Waves and approvals](/plywood/concepts/waves-and-approvals/).
+
+## Drift
+
+A scheduled job reads each stack against the cloud and keeps one issue per stack, naming each drifted URN and attribute, through chant's [drift detection](https://intentius.io/chant/concepts/drift-detection/). [Turn on drift checks](/plywood/guides/turn-on-drift-checks/).
+
+## With plunge
+
+plunge is the Pulumi fork from the team behind plywood. With `engine: plunge` in `plywood.yml` the pipeline also gets:
+
+| You get | Page |
+|---|---|
+| Two pull requests that change different resources of one stack update side by side, with no stack lock | [Locking and staleness](/plywood/concepts/locking-and-staleness/#with-plunge) |
+| A saved plan that carries the version of each record it read, so `up` refuses a record that moved after review | [Stages](/plywood/reference/stages/) |
+| Drift read one resource at a time, with no program run | [Turn on drift checks](/plywood/guides/turn-on-drift-checks/) |
+| `plunge-stack` and `plunge-urn` markers on every resource, which behold reads for ownership | [See your stacks in behold](/plywood/guides/see-your-estate-in-behold/) |
+
+Each row's status is on [plunge's claims page](https://intentius.io/plunge/claims/).
+
+## Security
+
+| Guard | In practice |
+|---|---|
+| Preview and update use separate identities | the preview job runs the pull request's program and never holds the update identity |
+| An approval binds one preview digest | a wave whose preview moved updates nothing and names both digests |
+| Policy and approvers are read at base | a pull request cannot loosen the gate on its own merge |
+
+[The threat model](/plywood/reference/threat-model/) lists the reach of each job.
+
+## Limits
+
+<Limits />
+
+## Hand the setup to your agent
+
+Paste this into your coding agent in your repository. Updates, approvals and merges stay with a person. [Set it up with your agent](/plywood/getting-started/agents/) has the details, and [Add plywood to a repo](/plywood/guides/add-to-a-repo/) has the same steps by hand.
+
+<AgentPrompt text={setupPrompt} label="Setup prompt for your coding agent" note="Copy it into your agent." />
+
+plywood runs on [chant](https://intentius.io/chant/), and its sibling for Terraform and OpenTofu is [terragucci](https://intentius.io/terragucci/). Every recorded run is on [Claims and runs](/plywood/reference/validation/), and plywood is open source under Apache-2.0.

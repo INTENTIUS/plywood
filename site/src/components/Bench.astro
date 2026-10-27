@@ -1,0 +1,27 @@
+---
+// plywood's logo, the pixel-art bench. The image is referenced by URL from
+// public/brand/, not imported, and scaled nearest-neighbour so it stays crisp.
+// `size` is the rendered width and height in px; the nearest drawn size at or
+// above it is used. The 16 px bench is drawn by hand, since the full art
+// scaled that far turns to noise. Decorative by default (alt=""), since a word
+// beside it names plywood.
+interface Props {
+	size?: number;
+	alt?: string;
+	class?: string;
+}
+const { size = 32, alt = '', class: className } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const pick = [16, 32, 64, 128, 160].find((n) => n >= size) ?? 160;
+const src = `${base}/brand/plywood-${pick}.png`;
+---
+<img class:list={['pw-bench', className]} src={src} width={size} height={size} alt={alt} decoding="async" />
+
+<style>
+	.pw-bench {
+		display: inline-block;
+		max-width: none;
+		vertical-align: middle;
+		image-rendering: pixelated;
+	}
+</style>

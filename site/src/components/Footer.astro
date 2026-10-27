@@ -1,0 +1,56 @@
+---
+// The page's agent prompt, then Starlight's footer, with a small bench and the wordmark under it on every page,
+// and a privacy note on a build that loads analytics. Adapted from plunge's
+// site.
+import Default from '@astrojs/starlight/components/Footer.astro';
+import Bench from "./Bench.astro";
+import AgentPrompt from './AgentPrompt.astro';
+
+// The page's agent prompt, closed, under its content. A page that places the
+// prompt itself does not get a second one here.
+const entry = Astro.locals.starlightRoute?.entry;
+const real = entry && entry.id !== '404' && entry.data.title !== 'Page not found';
+const placed = /^\s*<AgentPrompt\b/m.test(entry?.body ?? '');
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+// Said only on a build that loads analytics (see Head.astro).
+const analytics = Boolean(import.meta.env.PUBLIC_POSTHOG_KEY);
+---
+{real && !placed && <AgentPrompt />}
+<Default />
+<p class="pw-foot not-content">
+	<a href={`${base}/`}><Bench size={32} /><span>plywood</span></a>
+</p>
+{analytics && (
+	<p class="pw-privacy not-content">
+		These docs count page views and clicks with PostHog. They set no cookies, store nothing in your browser, and send nothing when your browser asks not to be tracked.
+	</p>
+)}
+
+<style>
+	.pw-foot {
+		margin: 2rem 0 1rem;
+		text-align: center;
+	}
+	.pw-foot a {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		font-family: var(--pw-display);
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		color: var(--sl-color-gray-3);
+		text-decoration: none;
+	}
+	.pw-foot a:hover {
+		color: var(--sl-color-white);
+	}
+	.pw-privacy {
+		margin: 0 auto 1rem;
+		max-width: 40rem;
+		text-align: center;
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-3);
+	}
+</style>

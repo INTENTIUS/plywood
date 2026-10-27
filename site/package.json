@@ -1,0 +1,30 @@
+{
+  "name": "plywood-site",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "node scripts/check-needs.mjs && astro build && node scripts/unwrap-draft-links.mjs && node scripts/check-rooms.mjs && node scripts/check-links.mjs && node scripts/check-contrast.mjs",
+    "preview": "astro preview",
+    "lint:prose": "node scripts/lint-prose.mjs",
+    "check:needs": "node scripts/check-needs.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.5",
+    "astro": "7.3.5",
+    "posthog-js": "1.434.13",
+    "sharp": "^0.34.2"
+  },
+  "overrides": {
+    "@posthog/browser-common": "0.9.0",
+    "@posthog/core": "1.55.2",
+    "@posthog/types": "1.412.4",
+    "web-vitals": "6.2.2"
+  },
+  "devDependencies": {
+    "sentences": "0.5.1"
+  }
+}

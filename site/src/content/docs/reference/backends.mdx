@@ -1,0 +1,19 @@
+---
+title: 'Backends'
+description: 'The backend URLs plywood reads, and the features each gives the pipeline.'
+needs: [plywood#1]
+draft: true
+---
+
+import WithPlunge from '../../../components/WithPlunge.astro';
+
+| Backend | URL | The pipeline gets |
+|---|---|---|
+| Pulumi Cloud | `https://api.pulumi.com` | state, history, ESC, Insights and RBAC in Pulumi Cloud; Pulumi Cloud's stack lock orders updates |
+| File | `file://~/.pulumi` | for local runs and the tutorial |
+| S3 | `s3://bucket` | state in your bucket, with OIDC roles |
+| GCS | `gs://bucket` | the same, on Google Cloud |
+| Azure Blob | `azblob://container` | the same, on Azure |
+| plunge | `plunge+s3://bucket` and the other `plunge+` forms | one record per resource and markers on each object |
+
+<WithPlunge feature="a record per resource with conditional writes in place of a stack lock" />

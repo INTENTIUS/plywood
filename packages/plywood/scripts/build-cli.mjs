@@ -18,11 +18,11 @@ const outfile = join(pkgDir, "dist/plywood.mjs");
 mkdirSync(dirname(outfile), { recursive: true });
 
 // chant subpaths a released chant may lack (src/exit-codes.ts,
-// src/chant-product.ts). One the
+// src/chant-product.ts, src/init/backend.ts, src/init.ts). One the
 // installed chant lacks resolves to a module that throws when imported, so
 // the bundle builds on the pin and the caller's fallback takes over; a chant
 // that has it is bundled in.
-const CHANT_NEXT = /^@intentius\/chant\/(exit-codes|ci-product)$/;
+const CHANT_NEXT = /^@intentius\/chant\/(exit-codes|ci-product|bucket-check|components\/check-hooks)$/;
 const chantNext = {
   name: "chant-next",
   setup(b) {

@@ -53,6 +53,8 @@ export interface ChantProduct {
   productPipelineJobs(forge: ForgeKind, env: string, options: ProductPipelineOptions): ProductPipelineJobs;
   approveLine(words: ProductWords, input: { op: string; gate: string; digest: string }): string;
   runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords): Promise<number>;
+  /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
+  productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;
 }
 

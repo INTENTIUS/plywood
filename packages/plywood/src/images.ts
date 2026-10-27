@@ -30,6 +30,7 @@
 // A named import, so the bundle carries the version and not the whole package.json.
 import { version as PLYWOOD_VERSION } from "../package.json";
 import digests from "./image-digests.json" with { type: "json" };
+import type { ChantRunner } from "./chant-config";
 
 export type EngineName = "pulumi" | "plunge";
 
@@ -315,6 +316,18 @@ export interface ChantEngineOptions {
   beforeScript?: string[];
   /** `PrLoopPipelineOptions.engineSetup` (chant#4550): run in chant's default image in place of its OpenTofu install. */
   prLoop?: { engineSetup: string[] };
+  /** `runners`, as plywood.yml gives it; the waves spec takes the `up` stage's (src/init/render.ts `waveRunner`). */
+  runner?: ChantRunner;
+}
+
+/**
+ * chant's build line for the image and the lines (`chant build --image`,
+ * `--before-script`), for a pipeline generated over argv. The build takes
+ * no product engine lines over argv, so they go to `--before-script` there.
+ */
+export function chantBuildFlags(o: ChantEngineOptions): string[] {
+  const lines = [...(o.beforeScript ?? []), ...(o.prLoop?.engineSetup ?? [])];
+  return [...(o.image ? ["--image", o.image] : []), ...lines.flatMap((l) => ["--before-script", l])];
 }
 
 /**
@@ -323,9 +336,9 @@ export interface ChantEngineOptions {
  * replace chant's OpenTofu install; otherwise every job runs them first,
  * where each skips the engines the image already carries.
  */
-export function chantPipelineOptions(p: { image?: string; engineSetup?: string[] }, chantReadsEngineSetup: boolean): ChantEngineOptions {
+export function chantPipelineOptions(p: { image?: string; engineSetup?: string[]; runner?: ChantRunner }, chantReadsEngineSetup: boolean): ChantEngineOptions {
   const lines = p.engineSetup ?? [];
-  const out: ChantEngineOptions = p.image ? { image: p.image } : {};
+  const out: ChantEngineOptions = { ...(p.image ? { image: p.image } : {}), ...(p.runner !== undefined ? { runner: p.runner } : {}) };
   if (lines.length === 0) return out;
   if (!p.image && chantReadsEngineSetup) out.prLoop = { engineSetup: [...lines] };
   else out.beforeScript = [...lines];

@@ -1,8 +1,6 @@
 ---
 title: 'Get your first preview note'
 description: 'Add plywood to a repository with a Pulumi program and get one preview note on your next pull request.'
-needs: [plywood#6, plywood#9, chant#4541, chant#4550]
-draft: true
 prompt: setup
 ---
 
@@ -23,7 +21,7 @@ npx plywood init
 
 <Tabs syncKey="backend">
 <TabItem label="Pulumi Cloud">
-Add two Pulumi access tokens to your forge's secrets: `PULUMI_ACCESS_TOKEN_PREVIEW` for the preview job and `PULUMI_ACCESS_TOKEN_UP` for the update job. A team token scoped to the stacks works well.
+With `pulumi_cloud.org` and the `identity.preview.pulumi` and `identity.up.pulumi` keys in `plywood.yml`, each job trades its OIDC token for its own Pulumi Cloud token. Your Pulumi Cloud organization then needs an OIDC issuer for the repository. The other way is two access tokens in your forge's secrets: `PULUMI_ACCESS_TOKEN_PREVIEW` for the preview job and `PULUMI_ACCESS_TOKEN_UP` for the update job.
 </TabItem>
 <TabItem label="Self-managed">
 Your backend URL goes in `plywood.yml` as `backend:`. Cloud access comes from OIDC: the preview job and the update job each assume their own role.
@@ -41,7 +39,7 @@ infra/dev       ~ aws:sqs/queue:Queue events   messageRetentionSeconds 3600 => 7
                 + aws:sns/topic:Topic alerts
 infra/prod      ~ aws:sqs/queue:Queue events   messageRetentionSeconds 3600 => 7200
 
-Approve: plywood approve pr-12 --plan sha256:4be1...
+Approve: plywood approve up --plan sha256:4be1...
 ```
 
 The `plywood/preview` status stays waiting for an approval of that digest.

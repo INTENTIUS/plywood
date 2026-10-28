@@ -1,30 +1,33 @@
 ---
 title: 'Find drift'
 description: 'Change a queue by hand on floci; the scheduled drift job opens one issue naming the URN and the attribute.'
-needs: [plywood#11, plywood#8]
-draft: true
 ---
 
-Change the dev queue's retention behind Pulumi's back:
+Turn on the drift check. Add a schedule to `plywood.yml` and write the workflow again:
 
-```sh
-aws --endpoint-url http://localhost:4566 sqs set-queue-attributes \
-  --queue-url http://localhost:4566/000000000000/plc-dev-events \
-  --attributes MessageRetentionPeriod=60
+```yaml
+drift:
+  schedule: "0 6 * * *"
 ```
 
-Run the drift job now in place of waiting for its schedule:
-
 ```sh
-npx plywood drift --stack shop/dev
+npx plywood ci --forge forgejo
+git add -A && git commit -m "drift check" && git push origin main
 ```
 
-On a stock engine the job runs `pulumi refresh --preview-only`. It opens one issue in Forgejo:
+`plywood ci` writes one scheduled drift job per stack.
+
+Change the dev queue's retention behind Pulumi's back, from the clone with the bench's settings in your shell:
+
+```sh
+url=$(pulumi stack output eventsQueueUrl --stack dev)
+aws sqs set-queue-attributes --queue-url "$url" --attributes MessageRetentionPeriod=60
+```
+
+Run `shop/dev`'s drift job from Forgejo's Actions page in place of waiting for its schedule. On a stock engine it runs `pulumi refresh --preview-only` against each resource of the stack's last update, and opens one issue, `plywood: shop/dev has drifted`, with a row for the queue:
 
 ```text
-Drift on shop/dev
-urn:pulumi:dev::corpus-aws-ts::aws:sqs/queue:Queue::events
-  messageRetentionSeconds  program 7200, live 60
+| `urn:pulumi:dev::shop::aws:sqs/queue:Queue::events` | drifted | `messageRetentionSeconds` |
 ```
 
-The next drift run updates the same issue, and closes it once the stack matches again. [Turn on drift checks](/plywood/guides/turn-on-drift-checks/).
+The job exits with the `drift` code. The next drift run leaves the issue as it is while the finding stays the same, edits it when the finding changes, and closes it once the stack matches again. [Turn on drift checks](/plywood/guides/turn-on-drift-checks/).

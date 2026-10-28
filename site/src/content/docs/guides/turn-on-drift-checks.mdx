@@ -1,8 +1,6 @@
 ---
 title: 'Turn on drift checks'
 description: 'A scheduled job reads each stack against the cloud and keeps one issue per stack.'
-needs: [plywood#8]
-draft: true
 ---
 
 import WithPlunge from '../../../components/WithPlunge.astro';
@@ -12,6 +10,17 @@ drift:
   schedule: "0 6 * * *"
 ```
 
-The drift job runs chant's [drift detection](https://intentius.io/chant/concepts/drift-detection/) on each stack. On stock Pulumi it runs `pulumi refresh --preview-only`. Each drifted stack gets one issue that names each URN and attribute, and the issue closes once the stack matches.
+`plywood ci` writes a scheduled job per stack, and each runs chant's [drift detection](https://intentius.io/chant/concepts/drift-detection/) on its stack. On stock Pulumi it runs `pulumi refresh --preview-only --target <urn>` for each resource in the stack's last export. Each drifted stack gets one issue that lists each resource's URN, status and attributes. A run that finds new drift edits the issue, and a clean run closes it.
+
+`drift.stacks` lists the stacks the job reads as names or `project/*` globs. `respond.drift` sets the answer to a finding:
+
+| Value | Answer |
+|---|---|
+| `issue` (the default) | the issue |
+| `pull-request` | the issue and the drift agent's pull request |
+| `up` | the issue and a gated update of the waves holding the drifted stacks |
+| `none` | the exit code only |
+
+`npx plywood drift shop/prod-east` reads one stack by hand.
 
 <WithPlunge claim="drift-per-resource" feature="drift read by plunge drift with one provider read per resource and no program run" />

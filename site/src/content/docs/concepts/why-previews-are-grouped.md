@@ -1,8 +1,6 @@
 ---
 title: 'Why previews are grouped'
 description: 'One note and one digest across stacks keep a reviewer''s approval tied to the whole change.'
-needs: [plywood#6, chant#4541, chant#4550]
-draft: true
 ---
 
 A change to a shared component often reaches many stacks. One comment per stack makes a reviewer approve each piece alone, and a piece can merge while its siblings wait.

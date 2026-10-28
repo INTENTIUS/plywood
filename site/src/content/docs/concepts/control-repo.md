@@ -1,8 +1,6 @@
 ---
 title: 'The control repo'
 description: 'One home for the approvers and pins of many repositories.'
-needs: [plywood#18, chant#4541, chant#4550, chant#4617]
-draft: true
 ---
 
 A control repo is an ordinary repository that sets the approvers and the engine pins for many repositories. Each repository names it in `plywood.yml`:

@@ -224,6 +224,30 @@
           "minItems": 1,
           "description": "argv in place of the engine's own; {policy} is the rules' directory at base, {input} the change set."
         },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo",
+            "ref"
+          ],
+          "description": "A shared rule set from a git ref, fetched by the job at the ref the base names (chant >= the release after 0.124.54). packs are then paths inside it.",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "The repository: https://, ssh:// or file:// URL, or git@<host>:<path>."
+            },
+            "ref": {
+              "type": "string",
+              "description": "A tag, a branch or a full commit."
+            },
+            "path": {
+              "type": "string",
+              "default": "policy",
+              "description": "The Rego directory inside the repository."
+            }
+          }
+        },
         "packs": {
           "type": "array",
           "description": "CrossGuard packs the preview and the update run with --policy-pack. Mandatory violations deny; advisory ones are note lines.",
@@ -537,6 +561,11 @@
             ]
           },
           "description": "The events to send. Default: all of them."
+        },
+        "relay": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the relay key. A waiting wave's Slack and Teams messages then carry the approval that plywood notify relay records."
         }
       }
     },

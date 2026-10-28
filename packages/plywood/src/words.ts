@@ -55,7 +55,16 @@ export interface ProductWordsInput {
   gateName: string;
   approval: "pull-request" | "per-wave";
   bin: string;
+  /**
+   * What chant's notify sends under these words (chant#4610): the event's
+   * `source`, the wave label in its summary and the signed webhook's header
+   * prefix. A chant before chant#4610 reads none of it and sends chant's.
+   */
+  notify?: { source: string; wave: string; headers: string };
 }
+
+/** plywood's notify words: receivers route on `plywood` and verify `x-plywood-*` headers. */
+export const NOTIFY_WORDS = Object.freeze({ source: PRODUCT, wave: "wave {k} ({name}) of {spec}", headers: `x-${PRODUCT}` });
 
 export const PRODUCT_WORDS: Readonly<ProductWordsInput> = Object.freeze({
   product: PRODUCT,
@@ -70,6 +79,7 @@ export const PRODUCT_WORDS: Readonly<ProductWordsInput> = Object.freeze({
   gateName: "wave-{k}",
   approval: "pull-request",
   bin: BIN,
+  notify: NOTIFY_WORDS,
 } satisfies ProductWordsInput);
 
 /**

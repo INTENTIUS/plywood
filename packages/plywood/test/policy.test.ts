@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { packsForStack, policyPacksOf } from "../src/config/policy";
+import { packsForStack, policyPacksOf, setChantPolicySourceForTests } from "../src/config/policy";
 import { FALLBACK_EXIT } from "../src/exit-codes";
 import { componentsFile, stepInput } from "../src/init/render";
 import { refusalLine, refusalOf } from "../src/refusals";
@@ -26,12 +26,20 @@ describe("policy in plywood.yml", () => {
     expect(s.pipeline.policyPacks).toEqual([{ dir: "guard" }]);
   });
 
-  it("refuses an unattended outcome, an outcomes map and a git-ref source, saying why", () => {
-    for (const key of ["allow_unattended", "outcomes", "source"]) {
+  it("refuses an unattended outcome and an outcomes map, saying why", () => {
+    for (const key of ["allow_unattended", "outcomes"]) {
       const found = errors(`policy: { rego: policy, ${key}: x }`);
       expect(found.map((p) => p.key)).toEqual([`policy.${key}`]);
       expect(found[0]!.message).toContain("is not a plywood key");
     }
+  });
+
+  it("refuses a git-ref source on a chant without chant#4613's ci.policy.source", () => {
+    setChantPolicySourceForTests(false);
+    const found = errors("policy: { source: { repo: https://git.acme.internal/policy.git, ref: v1 } }");
+    expect(found.map((p) => p.key)).toEqual(["policy.source"]);
+    expect(found[0]!.message).toContain("chant#4613");
+    setChantPolicySourceForTests("reset");
   });
 
   it("refuses paths outside the repository, a command without {input}, an unknown engine and a pack listed twice", () => {

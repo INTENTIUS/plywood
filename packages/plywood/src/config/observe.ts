@@ -8,8 +8,15 @@
  *                          webhook's URL and the key its events are signed with
  *   notify.on              wave-waiting, up-refused, up-failed, drift
  *                          (default: all four)
+ *   notify.relay           the variable holding the relay key: a waiting
+ *                          wave's Slack message gets Approve and Decline
+ *                          buttons, and its Teams card the reply that
+ *                          approves, which `plywood notify relay` receives
+ *                          and records on the ledger (chant#4611)
  *     -> the waves spec's `notify` (chant `NotifyConfig`, chant#3761): each
- *        event is a `chant.notify/v1` message, signed for the generic webhook
+ *        event is a `chant.notify/v1` message, signed for the generic webhook,
+ *        with `source: plywood` and plywood's summary (the words' `notify`
+ *        slot, chant#4610)
  *
  *   telemetry.endpoint     the OTLP/HTTP base URL; chant adds /v1/traces
  *   telemetry.headers_env  the variable holding OTLP headers (k=v,k2=v2)
@@ -39,6 +46,19 @@ export interface ChantNotifyConfig {
   slack?: string;
   teams?: string;
   events?: ChantNotifyEvent[];
+  /** The variable holding the relay key (chant#4611). A chant before it refuses the setting, so plywood init leaves it out there ({@link notifyForChant}). */
+  relay?: string;
+}
+
+/**
+ * The notify config for the installed chant: `relay` only when chant has
+ * the relay (`NOTIFY_RELAY_FLOOR` on @intentius/chant/ci-product), since an
+ * older chant refuses a setting it does not know.
+ */
+export function notifyForChant(notify: ChantNotifyConfig, chant: { NOTIFY_RELAY_FLOOR?: string } | undefined): ChantNotifyConfig {
+  if (notify.relay === undefined || typeof chant?.NOTIFY_RELAY_FLOOR === "string") return { ...notify };
+  const { relay: _relay, ...rest } = notify;
+  return rest;
 }
 
 export interface TelemetrySettings {
@@ -74,6 +94,7 @@ export function chantNotifyOf(doc: RawConfig): ChantNotifyConfig | undefined {
     ...(typeof slack === "string" ? { slack } : {}),
     ...(typeof teams === "string" ? { teams } : {}),
     ...(on ? { events: [...new Set(on.map((w) => NOTIFY_EVENTS[w]))] } : {}),
+    ...(typeof n.relay === "string" ? { relay: n.relay } : {}),
   };
   return out.webhook || out.slack || out.teams ? out : undefined;
 }
@@ -113,6 +134,7 @@ export const observe: ConfigGroup = {
           },
         },
         on: { type: "array", items: { type: "string", enum: Object.keys(NOTIFY_EVENTS) }, description: "The events to send. Default: all of them." },
+        relay: { type: "string", pattern: VARIABLE.source, description: "The variable holding the relay key. A waiting wave's Slack and Teams messages then carry the approval that plywood notify relay records." },
       },
     },
     telemetry: {
@@ -140,7 +162,13 @@ export const observe: ConfigGroup = {
     if (n !== undefined) {
       if (!isObject(n)) out.push(error("notify", "must be a mapping of slack, teams, webhook and on"));
       else {
-        out.push(...onlyKeys(n, ["slack", "teams", "webhook", "on"], "notify"));
+        out.push(...onlyKeys(n, ["slack", "teams", "webhook", "on", "relay"], "notify"));
+        if (n.relay !== undefined) {
+          out.push(...variable(n.relay, "notify.relay"));
+          // The relay answers a click in Slack or a reply in Teams; the generic webhook has neither.
+          if (n.slack === undefined && n.teams === undefined) out.push(error("notify.relay", "needs notify.slack or notify.teams: approvals come back from a chat message"));
+          else out.push(warning("notify.relay", "needs chant >= the release after 0.124.54 (chant#4611); plywood init leaves it out of the waves spec on a chant without the relay"));
+        }
         for (const chat of ["slack", "teams"] as const) {
           const c = n[chat];
           if (c === undefined) continue;

@@ -50,7 +50,8 @@ import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
 import { identityClouds, pulumiCloudOf } from "./config/identity";
-import { packsForStack, policyPacksOf } from "./config/policy";
+import { notifyForChant } from "./config/observe";
+import { packsForStack, stepPolicyPacksOf } from "./config/policy";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
@@ -255,7 +256,7 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
     const backend = own.backend ?? (typeof doc.backend === "string" ? doc.backend : undefined);
     const engine = engineOf(doc, backend)?.engine;
     const stackDir = own.dir ?? dir;
-    const packs = packsForStack(policyPacksOf(doc), stackDir);
+    const packs = packsForStack(stepPolicyPacksOf(doc), stackDir);
     const pin = pinned.get(key);
     out.push({
       key,
@@ -453,7 +454,8 @@ function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: R
     branch,
     ...(runner !== undefined ? { runner } : {}),
     ...(settings.pipeline.quorum?.length ? { quorum: settings.pipeline.quorum } : {}),
-    ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
+    // notify.relay only on a chant with the relay (chant#4611); an older chant refuses the setting.
+    ...(settings.pipeline.notify ? { notify: { ...notifyForChant(settings.pipeline.notify, chant) } } : {}),
   });
   return chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
 }

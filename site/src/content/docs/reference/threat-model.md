@@ -1,8 +1,6 @@
 ---
 title: 'Threat model'
 description: 'The reach of each job, starting with the preview job that runs the pull request''s program.'
-needs: [plywood#14, chant#4541, chant#4549, chant#4550]
-draft: true
 ---
 
 A Pulumi preview runs the program, so the preview job runs code from the pull request.
@@ -12,6 +10,6 @@ A Pulumi preview runs the program, so the preview job runs code from the pull re
 | preview | the pull request's program | the preview identity, read-only | the update identity, signing keys |
 | up | the merged program | the update identity | signing keys |
 | drift | the default branch's program | the preview identity | the update identity |
-| review agent | no program | a read token | any cloud identity |
+| review | the model command, on the diff | the model's key (`review.key_env`) alone; a second job posts its note | a forge write token, any cloud identity |
 
-The OIDC trade happens before checkout, and later steps drop the token variables. Policy, approvers and pins are read at base, so a pull request cannot change the rules that judge it. Identities are chant's [cloud identities](https://intentius.io/chant/guide/security-cloud-identities/).
+The preview job trades its forge OIDC token before the program is checked out, and every later step starts without the token request variables. On Pulumi Cloud the preview job and the update job each get their own access token, and one identity for both is refused. Policy, approvers and pins are read at base, so a pull request cannot change the rules that judge it. Identities are chant's [cloud identities](https://intentius.io/chant/guide/security-cloud-identities/).

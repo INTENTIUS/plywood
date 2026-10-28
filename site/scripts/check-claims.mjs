@@ -1,7 +1,9 @@
 // Runs before `astro build` (npm run build) and fails it when a page credits
 // plunge with a claim plunge's claims page cannot back: a <WithPlunge> with no
 // `claim`, a claim id src/data/plunge-claims.ts does not list, or a listed
-// claim whose `row` names a run plunge's claims page does not have.
+// claim whose `row` names a run plunge's claims page does not have. A
+// published page credits only a claim with a `row`; a claim with no recorded
+// run stays on draft pages.
 //
 // plunge's page is read from PLUNGE_CLAIMS_MD (a path to plunge's
 // site/src/content/docs/claims.md) when it is set, else from plunge's main
@@ -11,6 +13,7 @@
 //   node scripts/check-claims.mjs
 import { readFileSync } from 'node:fs';
 import { PLUNGE_CLAIMS_DATA, PLUNGE_CLAIM_IDS } from '../src/data/plunge-claims.ts';
+const RECORDED = new Set(PLUNGE_CLAIMS_DATA.filter((c) => c.row !== undefined).map((c) => c.id));
 import { docPages } from '../src/lib/pages.mjs';
 
 const RAW = 'https://raw.githubusercontent.com/INTENTIUS/plunge/main/site/src/content/docs/claims.md';
@@ -22,6 +25,7 @@ for (const p of docPages()) {
 		const claim = /\bclaim="([^"]*)"/.exec(m[1]);
 		if (!claim) problems.push(`${p.file}: <WithPlunge> names no claim; add claim="<id>" from src/data/plunge-claims.ts`);
 		else if (!PLUNGE_CLAIM_IDS.has(claim[1])) problems.push(`${p.file}: claim "${claim[1]}" is not in src/data/plunge-claims.ts`);
+		else if (!p.draft && !RECORDED.has(claim[1])) problems.push(`${p.file}: a published page credits claim "${claim[1]}", which has no recorded run on plunge's claims page`);
 	}
 }
 

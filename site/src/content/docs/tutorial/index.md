@@ -1,21 +1,19 @@
 ---
 title: 'Boot the example'
 description: 'One command starts a local forge and an AWS emulator with an example repository. Nothing reaches a real cloud account.'
-needs: [plywood#11]
-draft: true
 prompt: |
   Follow https://intentius.io/plywood/tutorial/ on this machine: start the bench with `just tutorial-up` and report the three addresses it prints.
   Never run `pulumi up`, `plunge up`, `pulumi destroy` or `plywood approve`, override a policy denial, use `--mode up`, or merge; never touch `.chant/allowed_signers` or `chant/lifecycle`.
 ---
 
-The tutorial runs on your laptop. It uses the `aws-ts` program from the [plunge corpus](https://github.com/INTENTIUS/plunge/tree/main/tests/plunge-corpus), a TypeScript Pulumi program with S3 buckets, SQS queues, an SNS topic, a VPC and SSM parameters. Every AWS call goes to [floci](https://github.com/lex00/floci), a local AWS emulator.
+The tutorial runs on your laptop. It uses the `aws-ts` program from the [plunge corpus](https://github.com/INTENTIUS/plunge/tree/main/tests/plunge-corpus), a TypeScript Pulumi program with S3 buckets, SQS queues, SNS topics, a VPC and SSM parameters. Every AWS call goes to [floci](https://github.com/lex00/floci), a local AWS emulator.
 
 ## You need
 
 - Docker
 - Node.js 22 or later
-- git
-- the Pulumi CLI
+- git and `jq`
+- the Pulumi CLI and the AWS CLI
 
 ## Start the bench
 
@@ -25,20 +23,25 @@ From a checkout of plywood:
 just tutorial-up
 ```
 
-The command starts three containers and prints their addresses:
+The command starts Forgejo with its runner and floci on `127.0.0.1` only, then prints three addresses:
 
-| Container | Address | Role |
+| Name | Address | Role |
 |---|---|---|
-| Forgejo | `http://localhost:3000` | the forge, with a runner and a user `tutor` |
-| floci | `http://localhost:4566` | the AWS API every stack talks to |
+| Forgejo | `http://127.0.0.1:3390` | the forge, with a runner and the user `tutor` (password `plywood-tutorial-local`) |
+| floci | `http://127.0.0.1:4590` | the AWS API every stack talks to, with the keys `test`/`test` |
 | bucket | `s3://plywood-tutorial-state` on floci | the self-managed backend |
 
-It also pushes the example repository `tutor/shop` with the `aws-ts` program and four stacks.
+`PLYWOOD_TUTORIAL_FORGEJO_PORT` and `PLYWOOD_TUTORIAL_FLOCI_PORT` move the two ports. Inside the bench a job reaches the forge as `http://forgejo:3000` and floci as `http://floci:4566`.
 
-| Stack | Role |
+It also pushes the example repository `tutor/shop`, the `aws-ts` program with four stacks, each initialised in the bucket:
+
+| Stack | Region |
 |---|---|
-| `dev` | the canary |
-| `staging` | the second wave |
-| `prod-east`, `prod-west` | the third wave | Each stack has its own `corpus:prefix`, so their resources never share a name.
+| `dev` | `us-east-1` |
+| `staging` | `us-east-1` |
+| `prod-us` | `us-east-1` |
+| `prod-eu` | `eu-west-1` |
 
-`just tutorial-down` stops the bench and removes it.
+Each stack has its own `corpus:prefix`, `plw-<stack>`, so their resources never share a name. `source stack/.state/tutorial.env` gives your shell the bench's AWS endpoint and test keys along with the stacks' passphrase and a Forgejo token.
+
+`just tutorial-down` removes the bench's containers and volumes and keeps the files under `stack/.state`. `just tutorial-reset` sets those files aside and starts again.

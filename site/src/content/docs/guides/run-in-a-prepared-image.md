@@ -1,22 +1,22 @@
 ---
 title: 'Run in a prepared image'
-description: 'Use an image with your language runtime and plugins installed, so each job skips the install.'
-needs: [plywood#12]
-draft: true
+description: 'Use an image with your plugins and language runtime installed, so each job skips the install.'
 ---
 
-Each job starts from the `plywood-pulumi` or `plywood-plunge` image. A program in Python, Go, .NET or Java, or one with many provider plugins, starts faster from an image of your own.
+Each job runs in plywood's image for its engine, `plywood-pulumi` or `plywood-plunge`, with the plywood CLI installed. A program with many provider plugins, or one in a language other than Node.js, starts faster from an image of your own built from it:
 
 ```dockerfile
 FROM ghcr.io/intentius/plywood-pulumi:0.1.0-pulumi3.272.0
-RUN pip install -r /tmp/requirements.txt
 RUN pulumi plugin install resource aws 7.4.0
+RUN chmod -R a+rX /opt/plywood/pulumi-home
 ```
 
-Point the jobs at it:
+The plugins land in the image's Pulumi home, `/opt/plywood/pulumi-home`, so a job downloads none. Build and push the image in your own CI, then point the jobs at it:
 
 ```yaml
-image: ghcr.io/acme/pulumi-ci@sha256:3f1c...
+image:
+  name: ghcr.io/acme/pulumi-ci@sha256:3f1c...
+  plugins: [aws@7.4.0]
 ```
 
-Pin the image by digest. [Versions and pins](/plywood/reference/versions-and-pins/).
+`image` also takes the reference alone. Pin the image by digest, since `plywood config check` warns about a tag. [Versions and pins](/plywood/reference/versions-and-pins/).

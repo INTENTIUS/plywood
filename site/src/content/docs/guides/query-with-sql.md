@@ -1,12 +1,10 @@
 ---
 title: 'Query with SQL'
-description: 'chant query answers questions such as which stacks changed in prod this week, over the ledger.'
-needs: [plywood#20]
-draft: true
+description: 'plywood query answers questions such as which updates ran this week, over the ledger.'
 ---
 
 ```sh
-npx chant query "SELECT member, ended FROM runs WHERE kind = 'up' AND member LIKE 'shop/prod-%' AND started > now() - INTERVAL 7 DAY"
+npx plywood query "SELECT member, wave, ended, status FROM runs WHERE op = 'pulumi-up' AND started > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')"
 ```
 
-[chant query](https://intentius.io/chant/cli/query/) runs SQL over the ledger's tables, which its page lists. On plunge, the `engine_ownership` columns carry each resource's owning stack.
+`plywood query` runs [chant query](https://intentius.io/chant/cli/query/), SQLite over the ledger's tables, which its page lists. Only a `SELECT`, `WITH` or `VALUES` statement runs. On plunge the `resources` table's `engine_ownership` and `engine_owned_by` columns hold plunge's ownership verdict and the stack that owns each resource.

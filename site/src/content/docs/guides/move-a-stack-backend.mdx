@@ -1,7 +1,7 @@
 ---
 title: 'Change a stack''s backend'
 description: 'Move a stack between Pulumi Cloud and a self-managed backend with export and import, or onto plunge with adopt.'
-needs: [plywood#3, plywood#16, plunge#7]
+needs: [plunge#7]
 draft: true
 ---
 
@@ -18,19 +18,28 @@ pulumi stack init prod
 pulumi stack import --file prod.json
 ```
 
-`npx plywood export shop/prod --out ~/prod.json` takes the same export behind a gate. A second person approves the request, and then the file lands on your machine alone, outside the repository.
+`npx plywood export shop/prod --out ~/prod.json` takes the same export behind a gate. A second person approves the request with the `plywood approve <gate> --op pulumi-stack-ops --plan <digest>` line it prints, and you run the export again. The file then lands at `--out` on your machine alone, readable by you only. plywood refuses the export in CI and inside a git working tree. It never writes over a file that exists.
 
-Then set the new `backend:` for the stack in `plywood.yml`. The stack keeps its resources and outputs. Update history and Insights stay with Pulumi Cloud.
+Then set the new backend in `plywood.yml`: `stacks.<project/stack>.backend` for the one stack, or `backend` for all of them. The stack keeps its resources and outputs. Update history and Insights stay with Pulumi Cloud.
 
 ## Onto plunge
+
+```sh
+npx plywood init --engine plunge
+npx plywood move shop/prod --onto plunge
+```
+
+`plywood init --engine plunge` gives each stack on a bucket or file backend the `plunge+` form of the same URL in `plywood.yml`; with a `plywood.yml` already there, it prints the keys to set instead. plunge keeps its records beside the stock state. `Pulumi.yaml` and `Pulumi.<stack>.yaml` stay as they are. `init` prints each stack's adopt preview, which writes nothing. It also writes `plywood.adopt.op.ts`, the Op that adopts the stacks not adopted yet. A Pulumi Cloud stack gets no `plunge+` URL: move it to a bucket first, as above.
+
+`plywood move shop/prod --onto plunge` runs that Op over every stack it lists. It runs the bucket check and keeps the stock export as the back-out copy, then previews each stack and waits for an approval of the preview's digest: `plywood approve <gate> --op plywood-adopt --plan <digest>`. Run the move again after each approval, and the stack gets one record per resource and its markers.
+
+By hand, the same adoption reads an export:
 
 ```sh
 pulumi stack export --stack prod --file prod.json
 plunge stack adopt --file prod.json --stack prod --json
 ```
 
-`npx plywood move shop/prod --onto plunge` runs the same adoption for every stack `plywood init --engine plunge` set up, with each stack waiting for an approval of its preview.
-
-`adopt` classifies every resource and writes nothing. Add `--yes` to write one record per resource and its markers. A stock `pulumi stack import` of the same export moves the stack back.
+`adopt` classifies every resource and writes nothing. Add `--yes` to write the records and markers. A stock `pulumi stack import` of the same export moves the stack back.
 
 <WithPlunge claim="markers-and-records" feature="markers on each resource and a record per resource, which drive per-resource updates and drift" />

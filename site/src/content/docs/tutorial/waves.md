@@ -1,42 +1,33 @@
 ---
 title: 'Canary, then waves'
-description: 'The dev stack updates first, and the prod stacks wait behind their own gate for an approval of their preview digest.'
-needs: [plywood#11, plywood#7, chant#4541, chant#4550]
-draft: true
+description: 'The dev stack updates first, then staging, then both prod stacks, each wave under the approval of the pull request''s preview.'
 ---
 
-The example's `plywood.yml` puts the stacks in three waves:
+`plywood init` put the stacks in three waves in `.chant/op-waves/pulumi-up.spec.json`:
 
-```yaml
-waves:
-  - [shop/dev]
-  - [shop/staging]
-  - [shop/prod-east, shop/prod-west]
-gate: always
-```
+| Wave | Gate | Stacks |
+|---|---|---|
+| 1, `dev` | `wave-1` | `shop/dev`, the canary |
+| 2, `staging` | `wave-2` | `shop/staging` |
+| 3, `prod` | `wave-3` | `shop/prod-us`, `shop/prod-eu` |
 
 Approve the pull request's preview as `tutor`, then merge:
 
 ```sh
-npx plywood approve pr-1 --plan sha256:71d2...
+npx plywood approve up --plan jcs1-sha256:71d2...
 ```
 
-After the merge, the waves job runs:
+`plywood approve up` finds the pull request from the digest. After the merge, the waves job runs the waves in order. Each wave previews its stacks on the merged commit, and when the approved preview covers those plans the wave updates under it. The job log says so for each wave:
 
-1. `shop/dev`, the canary, updates.
-2. `shop/staging` waits behind gate `wave-2` and posts its digest on the merged pull request.
-3. You approve wave 2, and staging updates.
-4. Both prod stacks wait behind `wave-3`, and one approval releases both.
-
-```sh
-npx plywood approve wave-2 --plan sha256:0a6f...
-npx plywood approve wave-3 --plan sha256:e41b...
+```text
+wave 1 (dev) applies under the pull request's approval of jcs1-sha256:71d2... at up, which covers its plans
 ```
 
-Check the result on floci:
+A wave whose plans the approval does not cover waits at its own gate, and the job prints the line that approves it, such as `plywood approve wave-2 --plan <digest>`. A later wave never starts before the one ahead of it finishes.
+
+Check the result on floci, from the clone with the bench's settings in your shell:
 
 ```sh
-aws --endpoint-url http://localhost:4566 sqs get-queue-attributes \
-  --queue-url http://localhost:4566/000000000000/plc-prod-east-events \
-  --attribute-names MessageRetentionPeriod
+url=$(pulumi stack output eventsQueueUrl --stack prod-us)
+aws sqs get-queue-attributes --queue-url "$url" --attribute-names MessageRetentionPeriod
 ```

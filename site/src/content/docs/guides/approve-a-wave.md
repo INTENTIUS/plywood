@@ -1,24 +1,22 @@
 ---
 title: 'Approve a wave'
 description: 'plywood approve records an approval of one preview digest, and the wave''s next job updates the stacks it covers.'
-needs: [plywood#7, chant#4541, chant#4550]
-draft: true
 ---
 
-A waiting wave posts its gate and digest on the merged pull request:
+A waiting wave's job stops with exit code 3 and prints its gate, its digest and the line that approves it:
 
 ```text
-wave-2 waits: shop/staging, sha256:0a6f...
+plywood: wave-2 waits for an approval. Approve the digest chant printed with 'plywood approve wave-2 --plan <digest>', then run plywood up --wave 2 again.
 ```
 
-Read the preview in the note, then approve that digest:
+With `notify` set, the chat channel hears it too. Read the preview, then approve that digest:
 
 ```sh
 npx plywood approve wave-2 --plan sha256:0a6f...
 ```
 
-plywood records it as a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/), and chant's [gate decision](https://intentius.io/chant/guide/decision-points/) reads it. The wave's next job then updates the stacks. Each approval counts once, for that digest only.
+At a terminal plywood shows the plan and asks for the target's name before it records anything. `--yes` skips the question. plywood records the approval as a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/), and chant's [gate decision](https://intentius.io/chant/guide/decision-points/) reads it. The scheduled resume job then starts the wave; `npx plywood resume --wave 2` or `npx plywood up --wave 2` starts it at once. Each approval counts once, for that digest only.
 
 ## Signed approvals
 
-With `approval: sealed`, add `--sign`. The approval then needs an SSH key listed in `.chant/allowed_signers`, and CI jobs hold no such key.
+With `approval: sealed`, add `--sign`. The approval then needs an SSH key listed in `.chant/allowed_signers` at base, and CI jobs hold no such key.

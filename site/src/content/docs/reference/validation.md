@@ -11,6 +11,4 @@ A claim is a behaviour with a recorded run. Each row names its date and commit. 
 | Claim | Recorded run | Date | Forge | Engine | Backend |
 |---|---|---|---|---|---|
 
-There are no recorded runs of plywood. The work to build plywood is [INTENTIUS/plywood#1](https://github.com/INTENTIUS/plywood/issues/1).
-
 plunge's capabilities, and the runs behind them, are on [plunge's claims page](https://intentius.io/plunge/claims/).

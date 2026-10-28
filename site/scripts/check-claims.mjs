@@ -10,8 +10,16 @@
 // branch on GitHub. A page that cannot be read fails the check: the build
 // never credits a claim it could not check.
 //
+// It also reads src/data/claims.json, plywood's own claim rows (plywood#22),
+// which e2e/claims.ts renders from the rows the bench on chant's e2e harness
+// recorded (e2e-claims/v1). The build fails on a row with no run commit or
+// date, a row whose scan was not CLEAN, and a row whose scenario or claim is
+// not one of e2e/scenarios. Nobody writes a row by hand.
+//
 //   node scripts/check-claims.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PLUNGE_CLAIMS_DATA, PLUNGE_CLAIM_IDS } from '../src/data/plunge-claims.ts';
 const RECORDED = new Set(PLUNGE_CLAIMS_DATA.filter((c) => c.row !== undefined).map((c) => c.id));
 import { docPages } from '../src/lib/pages.mjs';
@@ -56,6 +64,34 @@ if (page !== undefined) {
 	}
 }
 
+// plywood's own rows, rendered from the harness's ledger records.
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SCENARIOS = join(REPO, 'e2e', 'scenarios');
+const scenarioClaims = new Map(
+	readdirSync(SCENARIOS)
+		.filter((f) => f.endsWith('.json'))
+		.map((f) => JSON.parse(readFileSync(join(SCENARIOS, f), 'utf8')))
+		.map((s) => [s.id, s.claim]),
+);
+const OWN = 'src/data/claims.json';
+let own;
+try {
+	own = JSON.parse(readFileSync(join(REPO, 'site', OWN), 'utf8'));
+} catch (e) {
+	problems.push(`${OWN} could not be read (${e.message})`);
+}
+if (own !== undefined) {
+	if (own.product !== 'plywood' || own.contract !== 1 || !Array.isArray(own.rows)) problems.push(`${OWN} is not plywood's e2e-claims/v1 document`);
+	for (const [i, r] of (Array.isArray(own.rows) ? own.rows : []).entries()) {
+		const at = `${OWN} rows[${i}] (${r?.scenario ?? '?'})`;
+		if (!/^[0-9a-f]{40}$/.test(r?.productCommit ?? '')) problems.push(`${at}: no run commit (productCommit)`);
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(r?.date ?? '')) problems.push(`${at}: no run date`);
+		if (r?.safeRun !== 'CLEAN') problems.push(`${at}: its run's no-real-cloud scan is not CLEAN`);
+		if (!scenarioClaims.has(r?.scenario)) problems.push(`${at}: no scenario ${r?.scenario} in e2e/scenarios`);
+		else if (scenarioClaims.get(r.scenario) !== r.claim) problems.push(`${at}: claim ${r.claim} is not ${scenarioClaims.get(r.scenario)}, the scenario's`);
+	}
+}
+
 for (const p of problems) console.error(`claims: ${p}`);
 if (problems.length) process.exit(1);
-console.log(`claims: ${PLUNGE_CLAIMS_DATA.length} plunge claims, ${PLUNGE_CLAIMS_DATA.filter((c) => c.row).length} with a recorded run on plunge's page`);
+console.log(`claims: ${PLUNGE_CLAIMS_DATA.length} plunge claims, ${PLUNGE_CLAIMS_DATA.filter((c) => c.row).length} with a recorded run on plunge's page; ${own?.rows?.length ?? 0} plywood rows from the harness`);

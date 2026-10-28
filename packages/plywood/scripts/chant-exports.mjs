@@ -25,11 +25,12 @@ const CHANT = /^@intentius\/chant(?:-[a-z0-9-]+)?(?:\/.*)?$/;
 
 // chant subpaths a released chant may lack (src/exit-codes.ts,
 // src/chant-product.ts, src/control.ts, src/init/backend.ts, src/init.ts, src/identities.ts's forge-check,
-// src/estate.ts's ci-estate, src/config/policy.ts's policy-source, src/jobs.ts's parallelism), and the pulumi
+// src/estate.ts's ci-estate, src/config/policy.ts's policy-source, src/jobs.ts's parallelism, src/chant-next.ts's ci-job-guard,
+// scheduled-op-cloud, pr-merge and ci-audit), and the pulumi
 // lexicon's ci-setup (src/images.ts, chant#4592) and release-copy (src/stack-ops.ts, chant#4542). One the installed chant lacks resolves to a module
 // that throws when imported, so the bundle builds on the pin and the caller's
 // fallback takes over.
-const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|ci-product|parallelism|ci-control|bucket-check|components\/check-hooks|forge-check|ci-estate|policy-source)|chant-lexicon-pulumi\/(?:ci-setup|release-copy))$/;
+const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|ci-product|parallelism|ci-control|bucket-check|components\/check-hooks|forge-check|ci-estate|policy-source|ci-job-guard|scheduled-op-cloud|pr-merge|ci-audit)|chant-lexicon-pulumi\/(?:ci-setup|release-copy))$/;
 
 /**
  * An esbuild plugin that leaves an @intentius/chant* import external when the

@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-1
+  corpus:eventsRetentionSeconds: "3600"
+  corpus:prefix: plw-dev
+  corpus:workerCount: "3"
+encryptionsalt: v1:abc

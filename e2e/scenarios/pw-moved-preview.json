@@ -1,0 +1,48 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-moved-preview",
+  "product": "plywood",
+  "claim": "gate/moved-preview",
+  "title": "A push after the approval changes the preview, so the merged change waits at its wave's own gate",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "waves",
+      "do": "out-of-band",
+      "label": "main puts the stock prod stacks first in the waves, and plywood ci writes them again",
+      "command": ["plywood-e2e", "configure", "stock-first"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "workers", "do": "open", "branch": "e2e/moved-preview-workers", "overlay": "prod-us-workers-4", "title": "prod-us: a fourth worker queue" },
+    { "id": "workers-plan", "do": "plan", "pull": "workers", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "workers-approve", "do": "approve", "pull": "workers" },
+    {
+      "id": "again",
+      "do": "out-of-band",
+      "label": "the author pushes one more commit after the approval",
+      "command": ["plywood-e2e", "push", "e2e/moved-preview-workers", "${PLYWOOD_E2E_REPUSH:-prod-us-workers-5}"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "workers-merge", "do": "merge", "pull": "workers" },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's first wave job is on the ledger",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "waits",
+      "do": "out-of-band",
+      "label": "the wave holding prod-us waits at its own gate, and nothing applied prod-us",
+      "command": ["plywood-e2e", "waits", "pulumi-up", "prod-us"],
+      "expect": [{ "exit": 0 }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_REPUSH": "notes-line" },
+    "note": "The push after the approval adds a notes file no stack reads, so the preview and its digest stay the same, the approval covers the merge and prod-us applies: the waits check must fail."
+  }
+}

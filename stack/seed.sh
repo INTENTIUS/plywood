@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 #
-# Fill a running tutorial bench (stack/compose.yml): the backend bucket on
-# floci, the user tutor with a token, the runner's registration, and the
+# Fill a running tutorial bench (stack/compose.yml): the backend bucket and
+# plunge's record store on floci, the user tutor with a token, the runner's registration, and the
 # repository tutor/shop holding the plunge corpus's aws-ts program with the
 # stacks dev, staging, prod-us and prod-eu, initialised in the S3 backend on
 # floci and in the file:// backend under the state dir.
 #
 #   stack/seed.sh        stack/tutorial.sh up runs it after `docker compose up`
 #
-# Re-running it is safe: the bucket, the user, a token that still works, a
+# The repository itself comes from stack/seed-repo.sh, which e2e/seed.ts runs
+# too when the bench runs on chant's e2e harness (plywood#25).
+#
+# Re-running it is safe: the buckets, the user, a token that still works, a
 # runner that is online, the repository and the stacks are each kept.
 #
 # It writes $STATE/tutorial.env (export lines for the host: the file://
@@ -22,21 +25,42 @@ set -euo pipefail
 need_docker
 command -v jq >/dev/null 2>&1 || die "jq is not installed"
 command -v git >/dev/null 2>&1 || die "git is not installed"
+command -v openssl >/dev/null 2>&1 || die "openssl is not installed"
 mkdir -p "$STATE" "$STATE/logs" "$CLOUDSDK_CONFIG" "$FILE_BACKEND_DIR"
 
 wait_http "$FLOCI_URL/" "floci" 60
 wait_http "$FORGEJO_URL/api/v1/version" "Forgejo" 90
 
-# ── the backend bucket ─────────────────────────────────────────────────────
-# CreateBucket signed with the test keys (curl's SigV4). 409 means the bucket
-# is there already.
-log "creating s3://$BUCKET on floci (an existing one is kept)…"
-code="$(curl -s -o "$STATE/logs/create-bucket.xml" -w '%{http_code}' -X PUT \
-  --aws-sigv4 "aws:amz:us-east-1:s3" --user "test:test" "$FLOCI_URL/$BUCKET" || true)"
-case "$code" in
-  200|409) ;;
-  *) die "floci answered ${code:-nothing} to CreateBucket $BUCKET: $(cat "$STATE/logs/create-bucket.xml" 2>/dev/null)" ;;
-esac
+# ── the buckets ────────────────────────────────────────────────────────────
+# Signed with the test keys (curl's SigV4). 409 on CreateBucket means the
+# bucket is there already. The stock backend's bucket and plunge's record
+# store both get the settings plunge+s3:// checks on open (plunge#20, #34),
+# the ones plunge's races set (scripts/plunge-races/lib.sh secure_bucket):
+# versioning, a lifecycle rule expiring noncurrent versions after 30 days,
+# and all four public access blocks. A bare bucket is refused by plunge's
+# store, so tutorial/plunge.mdx's store works only on these.
+s3() { # method, path and query, body file (or ""), then the label
+  local args=(-s -o "$STATE/logs/s3.xml" -w '%{http_code}' -X "$1" --aws-sigv4 "aws:amz:us-east-1:s3" --user "test:test")
+  if [ -n "$3" ]; then
+    args+=(-H "Content-Type: application/xml" -H "Content-MD5: $(openssl dgst -md5 -binary "$3" | openssl base64)" --data-binary "@$3")
+  fi
+  curl "${args[@]}" "$FLOCI_URL/$2" || true
+}
+secure_bucket() { # bucket
+  local f code
+  log "creating s3://$1 on floci with versioning, a lifecycle rule and the public access blocks (an existing one is kept)…"
+  code="$(s3 PUT "$1" "" create)"
+  case "$code" in 200|409) ;; *) die "floci answered ${code:-nothing} to CreateBucket $1: $(cat "$STATE/logs/s3.xml" 2>/dev/null)" ;; esac
+  f="$STATE/logs/s3-body.xml"
+  printf '%s' '<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>' > "$f"
+  code="$(s3 PUT "$1?versioning" "$f")"; [ "$code" = 200 ] || die "floci answered ${code:-nothing} to PutBucketVersioning $1"
+  printf '%s' '<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>records-noncurrent</ID><Filter><Prefix></Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NoncurrentDays>30</NoncurrentDays></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>' > "$f"
+  code="$(s3 PUT "$1?lifecycle" "$f")"; [ "$code" = 200 ] || die "floci answered ${code:-nothing} to PutBucketLifecycleConfiguration $1"
+  printf '%s' '<PublicAccessBlockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><BlockPublicAcls>true</BlockPublicAcls><IgnorePublicAcls>true</IgnorePublicAcls><BlockPublicPolicy>true</BlockPublicPolicy><RestrictPublicBuckets>true</RestrictPublicBuckets></PublicAccessBlockConfiguration>' > "$f"
+  code="$(s3 PUT "$1?publicAccessBlock" "$f")"; [ "$code" = 200 ] || die "floci answered ${code:-nothing} to PutPublicAccessBlock $1"
+}
+secure_bucket "$BUCKET"
+secure_bucket "$PLUNGE_BUCKET"
 
 # ── the user tutor ─────────────────────────────────────────────────────────
 # An admin, since registering the runner is an admin call.
@@ -138,66 +162,7 @@ fi
 
 # ── the example repository ─────────────────────────────────────────────────
 SHOP="$STATE/$REPO_NAME"
-if [ ! -d "$SHOP/.git" ]; then
-  # The program files at PLUNGE_REF, from a local plunge checkout when it has
-  # the commit, else from a clone in the state dir.
-  src=""
-  plunge_dir="${PLYWOOD_PLUNGE_DIR:-$(cd "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)/../.." && pwd)/plunge}"
-  if git -C "$plunge_dir" cat-file -e "$PLUNGE_REF^{commit}" 2>/dev/null; then
-    src="$plunge_dir"
-  else
-    src="$STATE/plunge-src"
-    if ! git -C "$src" cat-file -e "$PLUNGE_REF^{commit}" 2>/dev/null; then
-      log "cloning $PLUNGE_URL for the aws-ts program…"
-      [ -d "$src/.git" ] || git clone -q --filter=blob:none --no-checkout "$PLUNGE_URL" "$src" >&2
-      git -C "$src" fetch -q origin "$PLUNGE_REF" >&2 || die "could not fetch plunge $PLUNGE_REF"
-    fi
-  fi
-  log "taking $CORPUS_PATH from plunge ${PLUNGE_REF:0:10} ($src)…"
-  mkdir -p "$SHOP"
-  git -C "$src" archive "$PLUNGE_REF" \
-      "$CORPUS_PATH/index.ts" "$CORPUS_PATH/package.json" "$CORPUS_PATH/package-lock.json" "$CORPUS_PATH/tsconfig.json" \
-    | tar -x -C "$SHOP" --strip-components=3
-
-  cat > "$SHOP/Pulumi.yaml" <<EOF
-name: shop
-description: The plywood tutorial's example, the aws-ts program of plunge's corpus (INTENTIUS/plunge $CORPUS_PATH at ${PLUNGE_REF:0:10})
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-    packagemanager: npm
-EOF
-  printf 'node_modules/\nbin/\n' > "$SHOP/.gitignore"
-
-  # Each stack's AWS goes to floci as a job on the bench's network sees it,
-  # with the test key pair and the skip flags that keep the provider off STS
-  # and the metadata API, as the corpus's own floci stack does.
-  for s in "${STACKS[@]}"; do
-    cat > "$SHOP/Pulumi.$s.yaml" <<EOF
-config:
-  aws:region: $(stack_region "$s")
-  aws:accessKey: test
-  aws:secretKey: test
-  aws:skipCredentialsValidation: true
-  aws:skipRequestingAccountId: true
-  aws:skipRegionValidation: true
-  aws:skipMetadataApiCheck: true
-  aws:s3UsePathStyle: true
-  aws:endpoints:
-    - ec2: ${FLOCI_NET_URL}
-      iam: ${FLOCI_NET_URL}
-      s3: ${FLOCI_NET_URL}
-      sns: ${FLOCI_NET_URL}
-      sqs: ${FLOCI_NET_URL}
-      ssm: ${FLOCI_NET_URL}
-      sts: ${FLOCI_NET_URL}
-  corpus:flociEndpoint: ${FLOCI_NET_URL}
-  corpus:prefix: plw-$s
-  corpus:workerCount: "3"
-EOF
-  done
-fi
+"$STACK_DIR/seed-repo.sh" "$SHOP"
 
 # Each stack in both backends. stack init adds the passphrase salt to the
 # stack file on first use; a stack that exists is selected and kept.
@@ -247,6 +212,7 @@ export CLOUDSDK_CONFIG=$CLOUDSDK_CONFIG
 export PLYWOOD_TUTORIAL_FORGEJO_URL=$FORGEJO_URL
 export PLYWOOD_TUTORIAL_FORGEJO_TOKEN=$TOKEN
 export PLYWOOD_TUTORIAL_S3_BACKEND='$S3_BACKEND_HOST'
+export PLYWOOD_TUTORIAL_PLUNGE_STORE='$PLUNGE_STORE_HOST'
 EOF
 mv "$tmp" "$STATE/tutorial.env"
 log "wrote $STATE/tutorial.env"

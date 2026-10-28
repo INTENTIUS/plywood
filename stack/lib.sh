@@ -45,10 +45,10 @@ stack_region() {
   esac
 }
 
-# The aws-ts program comes from plunge's corpus at this commit (plunge's main
-# when integration/ci-products was cut). Taken from PLYWOOD_PLUNGE_DIR when that
+# The aws-ts program comes from plunge's corpus at this commit: plunge's main
+# after plunge#55, whose per-resource timings the claims scenarios read. Taken from PLYWOOD_PLUNGE_DIR when that
 # checkout has the commit, else cloned from GitHub into the state dir.
-PLUNGE_REF="${PLYWOOD_TUTORIAL_PLUNGE_REF:-7ef48cb4ad23cd7fd1e3fd9cf3fadea21c3142d9}"
+PLUNGE_REF="${PLYWOOD_TUTORIAL_PLUNGE_REF:-812cfd894151027dbc22269a5a8b43fb53368ec2}"
 PLUNGE_URL="https://github.com/INTENTIUS/plunge.git"
 CORPUS_PATH="tests/plunge-corpus/aws-ts"
 
@@ -74,6 +74,10 @@ JOB_IMAGE="${PLYWOOD_TUTORIAL_JOB_IMAGE:-$(plywood_image_tag pulumi || echo ghcr
 
 # The self-managed backend: an S3 bucket on floci, path-style.
 BUCKET="plywood-tutorial-state"
+# plunge's record store (tutorial/plunge.mdx), set up the way plunge#34 asks.
+PLUNGE_BUCKET="plywood-tutorial-plunge"
+PLUNGE_STORE_NET="plunge+s3://${PLUNGE_BUCKET}?region=us-east-1&endpoint=${FLOCI_NET_URL}&s3ForcePathStyle=true"
+PLUNGE_STORE_HOST="plunge+s3://${PLUNGE_BUCKET}?region=us-east-1&endpoint=${FLOCI_URL}&s3ForcePathStyle=true"
 S3_BACKEND_NET="s3://${BUCKET}?region=us-east-1&endpoint=${FLOCI_NET_URL}&use_path_style=true"
 S3_BACKEND_HOST="s3://${BUCKET}?region=us-east-1&endpoint=${FLOCI_URL}&use_path_style=true"
 FILE_BACKEND_DIR="$STATE/backend"

@@ -2,8 +2,9 @@
 #
 # The tutorial bench: a local Forgejo with a runner, the floci AWS emulator,
 # and the repository tutor/shop holding the plunge corpus's aws-ts program
-# with stacks dev, staging, prod-us and prod-eu. The tutorial pages and the
-# claims runs (plywood#22) use it.
+# with stacks dev, staging, prod-us and prod-eu. The tutorial pages use it.
+# The claims scenarios (plywood#22) run on chant's e2e harness instead (e2e/,
+# `just e2e`); this bench is the one that works on a chant without it.
 #
 #   stack/tutorial.sh up                     start the bench and seed it (just tutorial-up)
 #   stack/tutorial.sh down                   remove its containers, network and volumes (just tutorial-down)
@@ -36,6 +37,7 @@ up() {
   Forgejo   $FORGEJO_URL   user $TUTOR_USER, password $TUTOR_PW, repository $TUTOR_USER/$REPO_NAME
   floci     $FLOCI_URL   the AWS API every stack talks to (keys test/test)
   bucket    s3://$BUCKET on floci   the self-managed backend
+  store     s3://$PLUNGE_BUCKET on floci   plunge's record store
 
   Stacks: ${STACKS[*]}
   Host env: source $STATE/tutorial.env

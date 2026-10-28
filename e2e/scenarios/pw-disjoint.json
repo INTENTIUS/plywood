@@ -1,0 +1,52 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-disjoint",
+  "product": "plywood",
+  "claim": "plunge/disjoint-updates",
+  "title": "Two pull requests that change different resources of one plunge stack update together",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    { "id": "events", "do": "open", "branch": "e2e/disjoint-events", "overlay": "dev-events-7200", "title": "dev: keep events for two hours" },
+    { "id": "workers", "do": "open-concurrent", "branch": "e2e/disjoint-workers", "overlay": "dev-workers-4", "title": "dev: a fourth worker queue" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "workers-plan", "do": "plan", "pull": "workers", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
+    { "id": "workers-approve", "do": "approve", "pull": "workers" },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
+    { "id": "workers-merge", "do": "merge", "pull": "workers" },
+    {
+      "id": "both-updates",
+      "do": "out-of-band",
+      "label": "both merges' update jobs are on the ledger",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "2"],
+      "expect": [{ "exit": 0 }, { "ledger": { "op": "pulumi-up", "status": "ok", "count": 2 } }]
+    },
+    {
+      "id": "together",
+      "do": "out-of-band",
+      "label": "one update wrote events, the other worker-3, and the two overlapped (plunge's timings)",
+      "command": ["plywood-e2e", "disjoint", "pulumi-up", "dev", "events", "worker-3"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "no-lock",
+      "do": "out-of-band",
+      "label": "no lock-like key appeared in plunge's record store while they ran",
+      "command": ["plywood-e2e", "locks-seen"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "markers",
+      "do": "out-of-band",
+      "label": "the new queue carries plunge's markers",
+      "command": ["plywood-e2e", "markers", "dev", "worker-3"],
+      "expect": [{ "exit": 0 }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_BASE_OVERLAY": "stack-grain" },
+    "note": "main takes locks.grain: stack before the pull requests open, so plywood locks the whole dev stack: the second update is held or runs after the first, and the together check must fail."
+  }
+}

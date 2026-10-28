@@ -121,6 +121,28 @@
           },
           "uniqueItems": true,
           "description": "What an open pull request needs before /plywood up updates it. All four when absent. Only with when: pull-request."
+        },
+        "merge": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "auto"
+          ],
+          "default": "manual",
+          "description": "auto merges the pull request once its update before merge applied. Only with when: pull-request."
+        },
+        "merge_token_env": {
+          "type": "string",
+          "description": "The variable holding the token the merge uses: a secret on GitHub and Forgejo, a protected variable on GitLab. Needed with merge: auto."
+        },
+        "merge_method": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "squash",
+            "rebase"
+          ],
+          "description": "merge, squash or rebase. The forge's default when absent."
         }
       }
     },
@@ -633,6 +655,22 @@
             "type": "string"
           },
           "description": "The stacks the job reads, by name or project/* glob. Every stack when absent."
+        },
+        "audit_log": {
+          "description": "aws or aws:<region>, or a stack glob to one: the CloudTrail plywood drift reads to name who changed each drifted attribute.",
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^aws(?::[a-z0-9-]+)?$"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^aws(?::[a-z0-9-]+)?$"
+              }
+            }
+          ]
         }
       }
     },
@@ -651,6 +689,48 @@
           ],
           "default": "issue",
           "description": "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only."
+        },
+        "wave_refused": {
+          "type": "string",
+          "enum": [
+            "diff",
+            "off"
+          ],
+          "default": "diff",
+          "description": "diff: a refused wave posts the diff against the approved preview; off: nothing."
+        },
+        "apply_failed": {
+          "type": "string",
+          "enum": [
+            "triage",
+            "off"
+          ],
+          "default": "triage",
+          "description": "triage: a failed update posts the stacks and resources that failed, with the error; off: nothing."
+        },
+        "description": {
+          "type": "string",
+          "enum": [
+            "off",
+            "check"
+          ],
+          "default": "off",
+          "description": "check: flag a pull request whose description leaves out what its preview deletes or replaces. Needs decide."
+        }
+      }
+    },
+    "decide": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The decide service respond.description: check asks.",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "description": "A decide.backends entry of chant.config, read at the target branch."
+        },
+        "model": {
+          "type": "string",
+          "description": "The pinned model id."
         }
       }
     },

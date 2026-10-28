@@ -135,7 +135,6 @@ export const ROOMS: Room[] = [
 			'Two merged pull requests on separate resources of one stack update at once, since nothing locks the stack',
 			'A saved plan carries the version of each record it read, and up refuses a record that moved',
 			'plunge drift checks a single resource against the cloud',
-			'Every resource carries plunge-stack and plunge-urn markers, and behold reads ownership from them',
 		],
 		differs: ['plunge keeps no stack history; bucket versioning keeps earlier versions of each record.'],
 		first: { label: 'Choose pulumi or plunge', href: '/guides/choose-an-engine/' },

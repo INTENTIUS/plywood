@@ -1,0 +1,28 @@
+---
+// The draft pages and the issues each waits on, for reference/development.mdx,
+// read from the docs collection so the list moves with the front matter. A
+// production build leaves the drafts out, so each row links its source file.
+import { getCollection } from 'astro:content';
+
+const REPO = 'https://github.com/INTENTIUS/plywood/blob/main/site/';
+const ISSUE = /^(chant|plunge|plywood)#(\d+)$/;
+const issueUrl = (need: string) => {
+	const m = ISSUE.exec(need);
+	return m ? `https://github.com/INTENTIUS/${m[1]}/issues/${m[2]}` : undefined;
+};
+const drafts = (await getCollection('docs'))
+	.filter((d) => d.data.draft)
+	.sort((a, b) => a.id.localeCompare(b.id));
+---
+<table>
+	<thead><tr><th>Draft page</th><th>Source</th><th>Needs</th></tr></thead>
+	<tbody>
+		{drafts.map((d) => (
+			<tr>
+				<td>{d.data.title}</td>
+				<td>{d.filePath ? <a href={`${REPO}${d.filePath}`}><code>{d.id}</code></a> : <code>{d.id}</code>}</td>
+				<td>{d.data.needs.map((n, i) => <>{i > 0 && ', '}{issueUrl(n) ? <a href={issueUrl(n)}>{n}</a> : n}</>)}</td>
+			</tr>
+		))}
+	</tbody>
+</table>

@@ -1,0 +1,50 @@
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: The stack the action runs on
+        required: false
+        type: string
+        default: ''
+      action:
+        description: The action to run, by its name
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  action:
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.action != '') || (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/plywood action '))
+    runs-on: docker
+    container: node:22
+    concurrency:
+      group: chant-action-production
+      cancel-in-progress: false
+    steps:
+      - name: Check out the target branch's commit
+        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: <chant's engine install>
+      - name: Run the requested action under its gated request
+        env:
+          CHANT_ACTION_COMMENT: '${{ github.event.comment.body }}'
+          CHANT_ACTION_MEMBER: '${{ github.event.inputs.stack }}'
+          CHANT_ACTION: '${{ github.event.inputs.action }}'
+          PR_NUMBER: '${{ github.event.issue.number }}'
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: |
+          set +e
+          npx --no-install plywood action --from-event
+          code="$?"
+          if [ "$code" -eq 3 ]; then echo "The action waits for an approval."; exit 0; fi
+          exit "$code"

@@ -13,12 +13,18 @@
  * With the mapping, the rest of the stacks wave by environment as when
  * `waves` is absent, and a wave whose stacks read each other is cut so the
  * stack read updates first.
+ *
+ * A stack's `actions` (plywood#39) are its day-2 actions: each a name, the
+ * URN of a `command:` resource in the stack, and a description. `plywood
+ * action <stack> <name>` replaces that resource under a gated request
+ * (src/actions.ts). The check here is plywood's own and works on any chant.
  */
 import { GATES } from "./approval";
 import { BACKEND_SCHEMA, error, isObject, mapping, oneOf, onlyKeys, stringList, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 import type { ChantGatePolicy } from "../chant-config";
 
-export const STACK_KEYS = ["dir", "paths", "gate", "backend"] as const;
+export const STACK_KEYS = ["dir", "paths", "gate", "backend", "actions"] as const;
+export const ACTION_KEYS = ["name", "urn", "description"] as const;
 export const WAVES_KEYS = ["canary", "after"] as const;
 const STACK_NAME = /^[^/\s]+\/[^/\s]+$/;
 
@@ -27,6 +33,51 @@ export interface StackSettings {
   paths?: string[];
   gate?: ChantGatePolicy;
   backend?: string;
+  actions?: StackAction[];
+}
+
+/** One of a stack's day-2 actions: the `command:` resource whose replacement runs it. */
+export interface StackAction {
+  name: string;
+  urn: string;
+  description?: string;
+}
+
+/** An action's name, as chant's request subject takes it (`action:<stack>:<name>`). */
+export const ACTION_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$/;
+
+/** The resource types an action may name: the command provider's. */
+export const ACTION_TYPE_PREFIX = "command:";
+
+/** The stack and the resource type a Pulumi URN names, or undefined when it is not one. */
+export function parseUrn(urn: string): { stack: string; project: string; type: string } | undefined {
+  if (!urn.startsWith("urn:pulumi:")) return undefined;
+  const parts = urn.slice("urn:pulumi:".length).split("::");
+  if (parts.length < 4 || parts.slice(0, 4).some((p) => p === "")) return undefined;
+  return { stack: parts[0]!, project: parts[1]!, type: parts[2]!.split("$").at(-1)! };
+}
+
+/** What is wrong with `urn` as an action of `stackKey` (`project/stack`), or undefined. */
+export function actionUrnProblem(stackKey: string, urn: string): string | undefined {
+  const parsed = parseUrn(urn);
+  if (!parsed) return `is not a resource URN (urn:pulumi:<stack>::<project>::<type>::<name>)`;
+  const stack = stackKey.split("/").at(-1);
+  if (parsed.stack !== stack) return `names stack ${parsed.stack}, and the action is under ${stackKey}`;
+  if (!parsed.type.startsWith(ACTION_TYPE_PREFIX)) {
+    return `is a ${parsed.type}, and an action is a command resource (command:local:Command or command:remote:Command), whose replacement runs it`;
+  }
+  return undefined;
+}
+
+/** The actions plywood.yml declares for the stack `key`. */
+export function actionsOf(doc: RawConfig, key: string): StackAction[] {
+  const a = stacksOf(doc)[key]?.actions;
+  return Array.isArray(a) ? a : [];
+}
+
+/** Whether any stack declares an action. */
+export function hasActions(doc: RawConfig): boolean {
+  return Object.keys(stacksOf(doc)).some((k) => actionsOf(doc, k).length > 0);
 }
 
 /** `waves` as a mapping: the canary stacks and the hand-written order. */
@@ -61,6 +112,20 @@ export const stacks: ConfigGroup = {
           paths: { type: "array", items: { type: "string" }, description: "Paths whose change previews the stack, beside its directory." },
           gate: { type: "string", enum: ["always", "on-destructive", "never"], description: "The stack's gate, in place of the top-level gate." },
           backend: BACKEND_SCHEMA,
+          actions: {
+            type: "array",
+            description: "The stack's day-2 actions, each run by plywood action <stack> <name> under a second person's approval.",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "urn"],
+              properties: {
+                name: { type: "string", pattern: ACTION_NAME.source, description: "The action's name, unique in the stack." },
+                urn: { type: "string", pattern: "^urn:pulumi:", description: "The URN of a command:local:Command or command:remote:Command resource in the stack, replaced to run the action." },
+                description: { type: "string", description: "What the action does, for people and agents." },
+              },
+            },
+          },
         },
       },
     },
@@ -98,6 +163,7 @@ export const stacks: ConfigGroup = {
       if (s.dir !== undefined && typeof s.dir !== "string") out.push(error(`${key}.dir`, "must be a string"));
       if (s.backend !== undefined && typeof s.backend !== "string") out.push(error(`${key}.backend`, "must be a URL string"));
       out.push(...stringList(s.paths, `${key}.paths`), ...oneOf(s.gate, GATES, `${key}.gate`));
+      if (s.actions !== undefined) out.push(...actionProblems(name, s.actions, `${key}.actions`));
     }
     if (isObject(doc.waves)) {
       out.push(...wavesMappingProblems(doc.waves, isObject(doc.stacks) ? listed : undefined));
@@ -134,6 +200,31 @@ export const stacks: ConfigGroup = {
     if (after && Object.keys(after).length) out.pipeline.after = Object.fromEntries(Object.entries(after).map(([k, v]) => [k, [...v]]));
   },
 };
+
+/** The problems with a stack's `actions`: the keys, the names, and each URN's stack and type. */
+function actionProblems(stackKey: string, actions: unknown, key: string): ConfigProblem[] {
+  if (!Array.isArray(actions)) return [error(key, "must be a list of actions, each with a name and a urn")];
+  const out: ConfigProblem[] = [];
+  const seen = new Map<string, number>();
+  actions.forEach((a: unknown, i) => {
+    const at = `${key}[${i}]`;
+    if (!isObject(a)) {
+      out.push(error(at, "must be a mapping with a name and a urn"));
+      return;
+    }
+    out.push(...onlyKeys(a, ACTION_KEYS, at));
+    if (typeof a.name !== "string" || !ACTION_NAME.test(a.name)) out.push(error(`${at}.name`, "must be a name of letters, digits, _, . and -"));
+    else if (seen.has(a.name)) out.push(error(`${at}.name`, `${a.name} is the name of actions[${seen.get(a.name)}] too; each action's name is unique in its stack`));
+    else seen.set(a.name, i);
+    if (typeof a.urn !== "string") out.push(error(`${at}.urn`, "must be the URN of a command resource in the stack"));
+    else {
+      const problem = actionUrnProblem(stackKey, a.urn);
+      if (problem) out.push(error(`${at}.urn`, `${a.urn} ${problem}`));
+    }
+    if (a.description !== undefined && typeof a.description !== "string") out.push(error(`${at}.description`, "must be a string"));
+  });
+  return out;
+}
 
 /** The problems with `waves` as a mapping. `listed` is set when plywood.yml lists its stacks, so each name can be checked. */
 function wavesMappingProblems(w: Record<string, unknown>, listed: Record<string, StackSettings> | undefined): ConfigProblem[] {

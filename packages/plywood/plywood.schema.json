@@ -40,6 +40,34 @@
           "backend": {
             "type": "string",
             "description": "The backend URL. A plunge+ URL (plunge+file://, plunge+s3://) picks the plunge engine."
+          },
+          "actions": {
+            "type": "array",
+            "description": "The stack's day-2 actions, each run by plywood action <stack> <name> under a second person's approval.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "urn"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$",
+                  "description": "The action's name, unique in the stack."
+                },
+                "urn": {
+                  "type": "string",
+                  "pattern": "^urn:pulumi:",
+                  "description": "The URN of a command:local:Command or command:remote:Command resource in the stack, replaced to run the action."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "What the action does, for people and agents."
+                }
+              }
+            }
           }
         }
       }

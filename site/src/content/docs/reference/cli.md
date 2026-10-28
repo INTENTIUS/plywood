@@ -47,6 +47,7 @@ Each one is a request on the workspace ledger and runs once a second person appr
 | `plywood cancel <stack> [--lock <id>]` | releases a stuck stack lock; on a `file://` backend it reads the id |
 | `plywood move <urn>... --from <stack> --to <stack>` | moves resources between stacks; both stacks then preview no change |
 | `plywood rollback <stack> [--digest <d>]` or `plywood rollback --release <name> --env <env>` | previews a release's program, then updates behind its gate |
+| `plywood action <stack> <name> [--anew]` | runs an action `plywood.yml` declares under the stack's `actions` by replacing its command resource; `--anew` asks again for an action that has run |
 
 ## Ledger
 

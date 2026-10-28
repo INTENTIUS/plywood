@@ -23,6 +23,13 @@
  * runs plywood ci), so their waves never wait on staging, which plunge
  * reads only after pw-adopt.
  *
+ * | scenario  | claim                | what the BREAK arm changes                                  |
+ * |-----------|----------------------|-------------------------------------------------------------|
+ * | pw-action | action/gated-replace | a resource reads the command's output, so two are replaced  |
+ *
+ * pw-action (plywood#39) has its claim and no scenario file yet: the shop
+ * program has no command resource and the job image no command provider.
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -46,6 +53,7 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-moved-preview": "gate/moved-preview",
   "pw-canary": "wave/canary",
   "pw-drift": "drift/issue",
+  "pw-action": "action/gated-replace",
 };
 
 /** The scenario files in `dir`, by id. */

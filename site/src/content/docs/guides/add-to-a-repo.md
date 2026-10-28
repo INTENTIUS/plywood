@@ -17,7 +17,7 @@ npx plywood init
 4. Renders the pipeline for the forge your `origin` remote names: `.github/workflows/plywood.yml`, `.gitlab-ci.yml` or `.forgejo/workflows/plywood.yml`, and the wave jobs beside it.
 5. Prints the secrets and settings left for you to add.
 
-It also writes `chant.workspace.json`, `chant.config.ts` and `plywood.component.ts`, which chant reads. Commit them with the rest.
+It also writes `chant.workspace.json`, `chant.config.ts`, `plywood.component.ts` and `ops/pulumi-up.op.ts`, which chant reads. The last is the `pulumi-up` Op the waves run under; run by hand with `npx chant run pulumi-up`, it previews each stack in wave order. Commit them with the rest.
 
 The pipeline is chant's [pull request CI](https://intentius.io/chant/guide/pull-request-ci/) with plywood's words on its notes, statuses and comments.
 

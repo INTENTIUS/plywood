@@ -82,7 +82,7 @@ import {
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
-import { WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
+import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
 import { chantNext } from "./chant-next";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
@@ -398,7 +398,11 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
         spec = undefined;
       }
     }
-    if (spec && stacks.length > 0) files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
+    if (spec && stacks.length > 0) {
+      files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
+      // plywood#22: the Op the spec names, which chant's waves generator discovers from a *.op.ts file.
+      files.push(put(root, UP_OP_FILE, upOpFile(spec), opts.dryRun));
+    }
     if (spec) files.push(...(await workflowStep(chant, root, doc, settings, forge.kind, opts, stacks.length > 0 ? spec : undefined, table, io)));
   }
 

@@ -12,6 +12,12 @@
  *      so it is written beside the workflow and committed with it.
  *   2. chant's op-waves generator (`run --generate <forge> --spec <file>`)
  *      writes the waves workflow.
+ *   2a. Before the generator runs, `ops/pulumi-up.op.ts` is written from
+ *      the spec (plywood#22): chant's generator refuses a spec whose Op it
+ *      cannot discover from a `*.op.ts` file, and chant ships no `pulumi-up`
+ *      Op. The wave jobs plan and apply through the spec's step, so the Op's
+ *      own phases are what `chant run pulumi-up` does by hand: a preview of
+ *      each stack in wave order, which changes nothing.
  *   3. On a chant before chant#4607, each job line chant wrote as
  *      `chant run wave ...` becomes the line productPipelineJobs gave, with
  *      plywood's bin. From chant#4607 the generator writes the words' bin in
@@ -23,7 +29,7 @@ import { dirname, join } from "node:path";
 import { hasChant4607, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
-import { PRODUCT, type ProductWordsInput } from "./words";
+import { OP_NAME, PRODUCT, type ProductWordsInput } from "./words";
 
 /** Where chant's op-waves generator writes for each forge (chant run-generate.ts `DEFAULT_OP_PIPELINE_DIRS`). */
 export const WAVES_OUTPUT_DIR: Readonly<Record<ForgeKind, string>> = {
@@ -34,6 +40,78 @@ export const WAVES_OUTPUT_DIR: Readonly<Record<ForgeKind, string>> = {
 
 /** The waves part of productPipelineJobs: the spec with plywood's names, its file, and a job per wave. */
 export type WaveJobs = NonNullable<ProductPipelineJobs["waves"]>;
+
+/** The Op the waves spec names, in the file chant's Op discovery reads (a `*.op.ts` beside chant.config.ts). */
+export const UP_OP_FILE = "ops/pulumi-up.op.ts";
+
+interface SpecRun {
+  target: string;
+  input?: { dir?: unknown; stack?: unknown; member?: unknown; engine?: unknown };
+}
+
+/** A step id from a wave and a run's target: lower case, `-` for anything else. */
+function stepId(wave: string, target: string): string {
+  return `${wave}-${target}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/**
+ * `ops/pulumi-up.op.ts` for a waves spec: the Op the spec names, with a phase
+ * per wave and in it a `pulumiPreview` of each run's stack, from the same
+ * input the spec's `pulumi-up` step gets (member, dir, stack, engine).
+ */
+export function upOpFile(spec: unknown): string {
+  const s = (spec ?? {}) as { op?: unknown; waves?: Array<{ name?: unknown; runs?: SpecRun[] }> };
+  const op = typeof s.op === "string" && s.op !== "" ? s.op : OP_NAME;
+  const taken = new Set<string>();
+  const phases: string[] = [];
+  for (const [i, w] of (s.waves ?? []).entries()) {
+    const name = typeof w.name === "string" && w.name !== "" ? w.name : `wave-${i + 1}`;
+    const steps: string[] = [];
+    for (const run of w.runs ?? []) {
+      const input = run.input ?? {};
+      if (typeof input.member !== "string" || typeof input.dir !== "string") continue;
+      let id = stepId(name, run.target);
+      for (let n = 2; taken.has(id); n++) id = `${stepId(name, run.target)}-${n}`;
+      taken.add(id);
+      const opts = [
+        `dir: ${JSON.stringify(input.dir)}`,
+        ...(typeof input.stack === "string" ? [`stack: ${JSON.stringify(input.stack)}`] : []),
+        ...(input.engine === "pulumi" || input.engine === "plunge" ? [`engine: ${JSON.stringify(input.engine)}`] : []),
+        `id: ${JSON.stringify(id)}`,
+      ];
+      steps.push(`pulumiPreviewStep(${JSON.stringify(input.member)}, { ${opts.join(", ")} })`);
+    }
+    if (steps.length > 0) phases.push(`    phase(${JSON.stringify(name)}, [${steps.join(", ")}]),`);
+  }
+  return [
+    `// Written by '${PRODUCT} init' and '${PRODUCT} ci' from .chant/op-waves/${OP_NAME}.spec.json, and written again on each run: edit plywood.yml, not this file.`,
+    `// The waves workflow runs under this Op's name: each wave job previews and updates its stacks through the spec's`,
+    `// pulumi-up step and records the runs under ${op}. chant's generator needs the Op to exist. Run by hand`,
+    `// (npx chant run ${op}), it previews each stack in wave order and changes nothing.`,
+    `import { Op, phase } from "@intentius/chant/op";`,
+    `import { pulumiPreviewStep } from "@intentius/chant-lexicon-pulumi";`,
+    "",
+    "export default Op({",
+    `  name: ${JSON.stringify(op)},`,
+    `  overview: "The stacks ${PRODUCT}'s waves update on merge, previewed in wave order",`,
+    `  labels: { Surface: "${PRODUCT}-up" },`,
+    "  phases: [",
+    ...phases,
+    "  ],",
+    "});",
+    "",
+  ].join("\n");
+}
+
+/** Write `ops/pulumi-up.op.ts` for `spec` under `cwd`; true when the file changed. */
+export function writeUpOp(cwd: string, spec: unknown): boolean {
+  const path = join(cwd, UP_OP_FILE);
+  const text = upOpFile(spec);
+  if (existsSync(path) && readFileSync(path, "utf8") === text) return false;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text);
+  return true;
+}
 
 /** Each wave job's line as chant's generator writes it, and the line with plywood's bin. */
 export function binLines(waves: Pick<WaveJobs, "jobs">, bin: string): Array<{ chant: string; product: string }> {
@@ -85,6 +163,8 @@ export async function writeWaveJobs(
     writeFileSync(specPath, specText);
     io.err(`${PRODUCT} ci: wrote ${waves.specFile} with plywood's op and gates; commit it with the workflow`);
   }
+  // plywood#22: chant's generator discovers the Op the spec names from a *.op.ts file, so it is written first.
+  if (writeUpOp(io.cwd, waves.spec)) io.err(`${PRODUCT} ci: wrote ${UP_OP_FILE}, the Op the waves spec names; commit it with the workflow`);
   const outDir = WAVES_OUTPUT_DIR[forge];
   const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", waves.specFile, "--output", outDir], words);
   if (code !== table.done) return code;

@@ -223,6 +223,15 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       return table.failed;
     }
     const { jobs } = plan;
+    // The control repo (plywood#18): with chant#4617 the waves spec takes plywood.yml's control, and chant's
+    // generator adds the job that tells the control repo how the waves ended. Before it, a job of your own does.
+    const { wavesControl } = await import("./control");
+    const control = jobs.waves ? await wavesControl(io.cwd) : ({ none: true } as const);
+    if ("error" in control) {
+      io.err(`${PRODUCT}: control: ${control.error}`);
+      return table.failed;
+    }
+    const waveJobs = jobs.waves && "control" in control ? { ...jobs.waves, spec: { ...(jobs.waves.spec as Record<string, unknown>), control: control.control } } : jobs.waves;
     const summary = {
       forge,
       env,
@@ -233,6 +242,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       ...(jobs.applyBeforeMerge ? { applyBeforeMerge: jobs.applyBeforeMerge.command } : {}),
       comments: jobs.comments,
       ...(jobs.waves ? { waves: { specFile: jobs.waves.specFile, jobs: jobs.waves.jobs.map((j) => j.command.join(" ")) } } : {}),
+      ...("control" in control ? { control: control.repo } : {}),
     };
     if (json && dryRun) io.out(JSON.stringify({ command: "ci", ok: true, exitCode: table.done, dryRun, ...summary }));
     else if (!json) {
@@ -244,15 +254,15 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       for (const [command, line] of Object.entries(jobs.comments)) io.err(`  comment   ${line} (${command})`);
       for (const job of summary.waves?.jobs ?? []) io.err(`  wave      ${job}`);
     }
-    // The control repo (plywood#18): chant's op waves take no control option yet, so the waves workflow sends no dispatch.
-    if (config.doc.control !== undefined && !json) io.err(`  control   the waves workflow sends no dispatch yet; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
+    if (!json && "control" in control) io.err(`  control   after the last wave, tells ${control.repo} how the waves ended`);
+    else if (!json && "missing" in control) io.err(`  control   the waves workflow sends no dispatch: ${control.missing}; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
     if (dryRun) return table.done;
     // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
     const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });
     if (!json && written.kept.length) io.err(`  kept your own jobs: ${written.kept.join(", ")}`);
     if (json) io.out(JSON.stringify({ command: "ci", ok: written.code === 0, exitCode: written.code, dryRun, ...summary, status: written.status, kept: written.kept }));
     if (written.code !== table.done) return written.code;
-    const wavesCode = jobs.waves ? await writeWaveJobs(chant, forge, jobs.waves, plan.words, table, io) : table.done;
+    const wavesCode = waveJobs ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io) : table.done;
     if (wavesCode !== table.done) return wavesCode;
     // The scheduled drift jobs, when plywood.yml sets drift.schedule (plywood#8).
     const driftCode = await writeDriftJobs(chant, forge, config.doc, plan.words, table, io);

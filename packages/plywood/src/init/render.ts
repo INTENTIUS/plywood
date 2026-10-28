@@ -204,3 +204,10 @@ export function workspaceDeclaration(existing: Record<string, unknown> | undefin
   if (Object.keys(ci).length > 0) doc.ci = ci;
   return doc;
 }
+
+/** The member a workspace declaration gives the project in `dir`. */
+export function memberOfDir(doc: Record<string, unknown> | undefined, dir: string): string | undefined {
+  const members = doc && Array.isArray(doc.members) ? (doc.members as Array<Record<string, unknown>>) : [];
+  const m = members.find((x) => x.dir === dir || (dir === "." && x.dir === undefined));
+  return typeof m?.name === "string" ? m.name : undefined;
+}

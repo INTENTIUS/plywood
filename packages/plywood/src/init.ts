@@ -23,10 +23,15 @@
  *                         the waves a merge updates in (chant#4550)
  *   the workflow          chant's generator output with plywood's words,
  *                         keeping the team's own jobs (src/init/workflow.ts)
+ *   plywood.adopt.op.ts   with a plunge+ backend, chant's PulumiAdoptOp over
+ *                         the stacks not adopted yet (src/init/adopt.ts)
  *
  * A `.pre-commit-config.yaml` becomes a check hook (chant#4556). An S3, GCS
  * or Azure backend gets chant's bucket check (chant#4558), and each missing
- * setting's fix is printed. A workflow that runs pulumi/actions is named,
+ * setting's fix is printed. `--engine plunge` gives each stack
+ * `plunge+<same url>` in plywood.yml (src/init/engine.ts), and each stack on
+ * a plunge+ backend gets its `plunge stack adopt` preview printed, which
+ * writes nothing (chant#4562). A workflow that runs pulumi/actions is named,
  * and left alone. Approval is always the pull request's preview (plywood's
  * `pull-request` preset of chant#4550 ruling B); a preset picks when updates
  * run and when a wave waits.
@@ -39,6 +44,7 @@
  * and `--from <workflow>` add a step rather than change one.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { emitYAMLEntry } from "@intentius/chant/yaml";
 import { dirname, join } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
@@ -52,13 +58,15 @@ import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
 import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, needsBucketCheckMessage, type BucketReport } from "./init/backend";
-import { detect, repoName, type Detected } from "./init/detect";
+import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
+import { detect, repoName, slug, type Detected } from "./init/detect";
 import { engineStep, INIT_ENGINES, type InitEngine } from "./init/engine";
 import { DEFAULT_PRESET, gateFlag, PRESETS, PRESET_NAMES, preCommitHook, presetByName, type PresetName } from "./init/presets";
 import {
   chantConfigTs,
   componentsFile,
   jsonText,
+  memberOfDir,
   plywoodYml,
   PULUMI_LEXICON,
   waveRunner,
@@ -107,6 +115,8 @@ export interface InitResult {
   todo: string[];
   notes: string[];
   buckets: BucketReport[];
+  /** Each `plunge+` stack's adopt preview (src/init/adopt.ts). */
+  adopt: AdoptPreview[];
 }
 
 /** The workspace declaration file, the chant project and the component file init writes. */
@@ -193,6 +203,7 @@ export async function newConfigKeys(detected: Detected, opts: InitOptions, io: I
   const engine = engineStep({ engine: opts.engine, detected, env: io.env });
   Object.assign(keys, engine.keys);
   notes.push(...engine.notes);
+  const engineBackends = engine.keys.backend !== undefined || engine.keys.stacks !== undefined;
 
   let forge: { kind: ForgeKind; because: string };
   if (opts.forge) {
@@ -210,7 +221,7 @@ export async function newConfigKeys(detected: Detected, opts: InitOptions, io: I
 
   // A backend only init's environment names: the jobs do not see that environment.
   const fromEnv = io.env.PULUMI_BACKEND_URL?.trim();
-  if (fromEnv && detected.projects.some((p) => !p.backendUrl)) {
+  if (fromEnv && !engineBackends && detected.projects.some((p) => !p.backendUrl)) {
     keys.backend = fromEnv;
     notes.push(`backend ${fromEnv} came from PULUMI_BACKEND_URL; it is in plywood.yml so the jobs use it too`);
   }
@@ -273,8 +284,9 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const notes: string[] = [];
   const todo: string[] = [];
   const buckets: BucketReport[] = [];
+  const adopt: AdoptPreview[] = [];
   const fail = (message: string, forge = { kind: "github" as ForgeKind, because: "" }): InitResult => ({
-    ok: false, exitCode: table.failed, files, stacks: [], waves: [], forge, todo, notes: [...notes, message], buckets,
+    ok: false, exitCode: table.failed, files, stacks: [], waves: [], forge, todo, notes: [...notes, message], buckets, adopt,
   });
 
   if (detected.projects.length === 0) return fail(`no Pulumi.yaml under ${root}; plywood init sets up a repository that has a Pulumi program`);
@@ -291,8 +303,10 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
       return fail((e as Error).message);
     }
     files.push({ file: kept, status: "kept" });
-    const ignored = [opts.preset && "--preset", opts.gate && "--gate", opts.engine && "--engine"].filter(Boolean);
+    const onPlunge = opts.engine === "plunge" && engineOf(config.doc)?.engine === "plunge";
+    const ignored = [opts.preset && "--preset", opts.gate && "--gate", opts.engine && !onPlunge && "--engine"].filter(Boolean);
     if (ignored.length) notes.push(`${kept} is kept as it is, so ${ignored.join(", ")} changed nothing; set the keys there`);
+    if (opts.engine === "plunge" && !onPlunge) notes.push(...keptPlungeLines(kept, detected, io.env));
     forge = forgeFor(config.doc, detected, opts);
   } else {
     const made = await newConfigKeys(detected, opts, io);
@@ -312,7 +326,8 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const waves = wavesOf(stacks, settings.pipeline.waves);
 
   // The member picture and the chant project.
-  files.push(declarationStep(root, detected, settings, opts.dryRun));
+  const declaration = declarationStep(root, detected, settings, opts.dryRun);
+  files.push(declaration.file);
   if (existsSync(join(root, CHANT_CONFIG_FILE))) {
     const text = readFileSync(join(root, CHANT_CONFIG_FILE), "utf8");
     if (!/["']pulumi["']/.test(text)) {
@@ -341,6 +356,9 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   // The bucket each self-managed stack keeps its state in.
   if (opts.bucketCheck) notes.push(...(await bucketStep(detected, doc, io.env, buckets)));
 
+  // The adopt preview for each stack on a plunge+ backend, and the Op that adopts them.
+  adopt.push(...(await adoptStep(root, detected, doc, io.env, declaration.doc, opts.dryRun, files, notes, todo)));
+
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
   const failed = files.find((f) => f.status === "failed");
   return {
@@ -353,13 +371,14 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     todo,
     notes,
     buckets,
+    adopt,
   };
 }
 
 /** chant.workspace.json: written when absent, merged when there, left alone as .jsonc (it is the person's). */
-function declarationStep(root: string, detected: Detected, settings: ChantSettings, dryRun: boolean): InitFile {
+function declarationStep(root: string, detected: Detected, settings: ChantSettings, dryRun: boolean): { file: InitFile; doc?: Record<string, unknown> } {
   if (existsSync(join(root, "chant.workspace.jsonc"))) {
-    return { file: "chant.workspace.jsonc", status: "kept", note: `add a member of kind pulumi for each of ${detected.projects.map((p) => p.dir).join(", ")}, and pin ${PULUMI_LEXICON}@${CHANT_PIN}` };
+    return { file: { file: "chant.workspace.jsonc", status: "kept", note: `add a member of kind pulumi for each of ${detected.projects.map((p) => p.dir).join(", ")}, and pin ${PULUMI_LEXICON}@${CHANT_PIN}` } };
   }
   let existing: Record<string, unknown> | undefined;
   const file = join(root, DECLARATION_FILE);
@@ -369,12 +388,12 @@ function declarationStep(root: string, detected: Detected, settings: ChantSettin
       if (!isObject(parsed)) throw new Error("not an object");
       existing = parsed;
     } catch (e) {
-      return { file: DECLARATION_FILE, status: "failed", note: `is not JSON init can merge into (${(e as Error).message})` };
+      return { file: { file: DECLARATION_FILE, status: "failed", note: `is not JSON init can merge into (${(e as Error).message})` } };
     }
   }
   const doc = workspaceDeclaration(existing, { name: repoName(root), projects: detected.projects, ci: settings.ci, lexiconVersion: CHANT_PIN });
-  if (existing && JSON.stringify(existing) === JSON.stringify(doc)) return { file: DECLARATION_FILE, status: "unchanged" };
-  return put(root, DECLARATION_FILE, jsonText(doc), dryRun);
+  if (existing && JSON.stringify(existing) === JSON.stringify(doc)) return { file: { file: DECLARATION_FILE, status: "unchanged" }, doc };
+  return { file: put(root, DECLARATION_FILE, jsonText(doc), dryRun), doc };
 }
 
 /** `.pre-commit-config.yaml` as a check hook, so plywood check runs the team's hooks at the base commit. */
@@ -474,12 +493,62 @@ async function bucketStep(detected: Detected, doc: RawConfig, env: NodeJS.Proces
   return lines;
 }
 
+/**
+ * The adopt previews for the stacks plywood.yml puts on a `plunge+` backend,
+ * and plywood.adopt.op.ts for the ones not adopted yet (src/init/adopt.ts).
+ */
+async function adoptStep(
+  root: string,
+  detected: Detected,
+  doc: RawConfig,
+  env: NodeJS.ProcessEnv,
+  declaration: Record<string, unknown> | undefined,
+  dryRun: boolean,
+  files: InitFile[],
+  notes: string[],
+  todo: string[],
+): Promise<AdoptPreview[]> {
+  const listed = configuredStacks(doc);
+  const all = typeof doc.backend === "string" ? doc.backend : undefined;
+  const targets: Array<{ key: string; project: string; projectDir: string; dir: string; stack: string; url: string }> = [];
+  for (const s of detected.stacks) {
+    const project = detected.projects.find((p) => p.dir === s.dir && p.name === s.project) ?? { backendUrl: undefined };
+    const own = listed[s.key];
+    const b = backendOf(project, { ...(own?.backend ? { stack: own.backend } : {}), ...(all ? { all } : {}) }, env);
+    if (b.url && /^plunge\+/.test(b.url)) targets.push({ key: s.key, project: s.project, projectDir: s.dir, dir: own?.dir ?? s.dir, stack: s.stack, url: b.url });
+  }
+  if (targets.length === 0) return [];
+  const chant = await chantAdopt();
+  const previews = await adoptPreviews(targets, chant, root);
+  notes.push(...adoptLines(previews, chant));
+  if (!chant?.hasOp) {
+    files.push({ file: ADOPT_OP_FILE, status: "skipped", note: `the adopt Op needs @intentius/chant-lexicon-pulumi >= the release after 0.124.54 (chant#4562's PulumiAdoptOp). This plywood was built with chant ${BUILT_CHANT}` });
+    return previews;
+  }
+  const left = stacksToAdopt(targets, previews);
+  if (left.length === 0) {
+    if (existsSync(join(root, ADOPT_OP_FILE))) files.push({ file: ADOPT_OP_FILE, status: "kept", note: "every stack is adopted; delete it" });
+    return previews;
+  }
+  const rows = left.map((t) => ({ member: memberOfDir(declaration, t.projectDir) ?? slug(t.project), dir: t.dir, stack: t.stack, url: t.url }));
+  files.push(put(root, ADOPT_OP_FILE, adoptOpFile(rows), dryRun));
+  todo.push(...adoptTodo(rows));
+  return previews;
+}
+
+/** With a kept plywood.yml, the keys `--engine plunge` would set, for the person to add. */
+function keptPlungeLines(kept: string, detected: Detected, env: NodeJS.ProcessEnv): string[] {
+  const step = engineStep({ engine: "plunge", detected, env });
+  const entries = Object.entries(step.keys);
+  if (entries.length === 0) return step.notes;
+  const yaml = entries.map(([k, v]) => emitYAMLEntry(k, v)).join("\n").split("\n").filter((l) => l !== "");
+  return [...step.notes, `To move to plunge, set these keys in ${kept}:`, ...yaml.map((l) => `    ${l}`)];
+}
+
 /** The secrets and settings left for the person. */
 function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: NodeJS.ProcessEnv): string[] {
+  // The pulumi lexicon comes with plywood: it is plywood's second runtime dependency, at the chant pin (plywood#9, ruling A1).
   const out: string[] = [];
-  const pkg = join(detected.root, "package.json");
-  const pkgText = existsSync(pkg) ? readFileSync(pkg, "utf8") : "";
-  if (!pkgText.includes(`"${PULUMI_LEXICON}"`)) out.push(`npm i -D ${PULUMI_LEXICON}@${CHANT_PIN}, the chant lexicon that previews and updates Pulumi stacks`);
   const all = typeof doc.backend === "string" ? doc.backend : undefined;
   const cloud = detected.projects.some((p) => isPulumiCloud(backendOf(p, all ? { all } : {}, env).url));
   const where = forge === "gitlab" ? "CI/CD variables" : "repository secrets";

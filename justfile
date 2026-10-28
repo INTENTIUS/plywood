@@ -21,10 +21,11 @@ build:
 test:
     npm test
 
-# Build, then hold the package to its shape: one runtime dependency
-# (@intentius/chant at the exact pin), a bundle that imports only Node's own
-# modules and chant subpaths the installed chant serves as compiled JS, and a
-# packed tarball under 2048 KB.
+# Build, then hold the package to its shape: two runtime dependencies
+# (@intentius/chant at the exact pin, @intentius/chant-lexicon-pulumi at the
+# same version), a bundle that imports only Node's own modules and subpaths
+# of those two that the installed packages serve as compiled JS, and a packed
+# tarball under 2048 KB.
 bundle-check: build
     npm run bundle-check -w @intentius/plywood
 

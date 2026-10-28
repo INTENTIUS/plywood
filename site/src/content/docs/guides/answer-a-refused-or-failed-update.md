@@ -27,4 +27,4 @@ decide:
 
 The check reads `chant.config.ts` at the target branch, so a pull request cannot change the service. It only comments and never gates an update.
 
-The waves workflow reads `wave_refused` and `apply_failed` from the waves spec `plywood ci` writes. The pull request's own jobs keep the defaults. `plywood ci` prints a line for each key they do not take.
+The waves workflow reads `wave_refused` and `apply_failed` from the waves spec `plywood ci` writes, and `plywood ci` puts all three keys on the pull request's own jobs too. `decide` reaches those jobs only with `description: check`; set without it, `plywood check` warns and `plywood ci` leaves it off. With an older chant the pull request's jobs keep the defaults, and `plywood ci` prints a line for each key they do not take.

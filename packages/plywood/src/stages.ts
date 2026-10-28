@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
-import { chantNext, hasChantApprovalStatus, hasChantRespond, type ChantNext } from "./chant-next";
+import { chantNext, hasChantApprovalStatus, hasChantPrLoopFlags, hasChantRespond, type ChantNext } from "./chant-next";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -392,7 +392,7 @@ export function workflowPlan(
     // plywood#29: runners, env, pass and parallelism on the pull request jobs, with chant#4625 (src/jobs.ts).
     ...(opts.prJobs?.options ?? {}),
     ...(staleNotes ? { staleNotes: true } : {}),
-    ...respond,
+    ...respond.options,
     ...(applyMerge ? { applyMerge } : {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
@@ -400,6 +400,7 @@ export function workflowPlan(
     "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
     ...(shape.applyBeforeMerge ? ["--apply-before-merge", ...requires] : []),
     ...(applyMerge ? applyMergeArgv(applyMerge) : []),
+    ...respond.argv,
     ...(previewComment ? ["--preview-comment"] : []),
     ...(staleNotes ? ["--stale-notes"] : []),
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
@@ -422,28 +423,68 @@ export function applyMergeArgv(m: { tokenEnv: string; method?: string }): string
   return ["--merge", "auto", "--merge-token-env", m.tokenEnv, ...(m.method ? ["--merge-method", m.method] : [])];
 }
 
+/** chant's responses at their defaults (`CI_RESPOND_DEFAULTS`), in chant's event order; `--respond` lists only the others. */
+export const CHANT_RESPOND_DEFAULTS: Readonly<Record<string, string>> = Object.freeze({ "wave-refused": "diff", "apply-failed": "triage", description: "off" });
+
+/** What plywood ci says when the decide service is set and respond.description is not check. */
+export const DECIDE_LEFT_OFF = "decide is set and respond.description is not check, so plywood leaves the decide service off the pull request jobs";
+
 /**
  * chant's `respond` and `decide` for plywood.yml's respond keys (chant#4629),
- * on a chant that has them. chant puts the waves' part on the waves spec,
- * which plywood writes; the pull request jobs keep chant's defaults, since
- * `build --pr-loop` takes no responses, and `notes` says which keys that
- * leaves out.
+ * on a chant that has them, and the `build --pr-loop` flags that carry them
+ * into the pull request jobs. chant puts the waves' part on the waves spec,
+ * which plywood writes. With `PR_LOOP_BUILD_FLAGS_FLOOR` the build takes
+ * `--respond <list>` and, only with `description=check`, `--decide-backend`
+ * and `--decide-model`; chant refuses the decide flags without the check, so
+ * plywood leaves them off then and says so, as its config check warns.
+ * Before the floor the pull request jobs keep chant's defaults, and `notes`
+ * says which keys that leaves out.
  */
-export function respondOptions(chant: ChantProduct, pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string } }, applyBeforeMerge: boolean, notes: string[]): { respond?: Record<string, string>; decide?: { backend: string; model: string } } {
+export function respondOptions(
+  chant: ChantProduct,
+  pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string } },
+  applyBeforeMerge: boolean,
+  notes: string[],
+): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string } }; argv: string[] } {
   const r = pipeline.respond;
-  if (!r || Object.keys(r).length === 0) return {};
+  if (pipeline.decide && r?.description !== "check") notes.push(DECIDE_LEFT_OFF);
+  if (!r || Object.keys(r).length === 0) return { options: {}, argv: [] };
   const keys = Object.keys(r).map((e) => e.replace("-", "_"));
   if (!hasChantRespond(chant)) {
     notes.push(`respond.${keys.join(", respond.")} ${keys.length === 1 ? "needs" : "need"} chant's responses to pipeline events (chant#4629), which this chant lacks; chant's defaults hold`);
-    return {};
+    return { options: {}, argv: [] };
   }
+  const responses = { ...r };
+  const check = responses.description === "check";
+  const decide = check ? pipeline.decide : undefined;
+  if (check && !decide) {
+    // chant refuses description=check without its service; plywood's config check makes this an error first.
+    delete responses.description;
+    notes.push("respond.description is check and decide names no backend and model, so the description check is left off");
+  }
+  const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}) };
+  if (hasChantPrLoopFlags(chant)) return { options, argv: respondArgv(responses, decide) };
   const prSide = [
-    ...(r.description === "check" ? ["respond.description"] : []),
-    ...(applyBeforeMerge && r["apply-failed"] === "off" ? ["respond.apply_failed"] : []),
-    ...(applyBeforeMerge && r["wave-refused"] === "off" ? ["respond.wave_refused"] : []),
+    ...(responses.description === "check" ? ["respond.description"] : []),
+    ...(applyBeforeMerge && responses["apply-failed"] === "off" ? ["respond.apply_failed"] : []),
+    ...(applyBeforeMerge && responses["wave-refused"] === "off" ? ["respond.wave_refused"] : []),
   ];
   if (prSide.length) notes.push(`${prSide.join(", ")} ${prSide.length === 1 ? "reaches" : "reach"} no pull request job yet: chant's build --pr-loop writes no responses into them, so the note and the update before merge keep chant's defaults; the waves workflow takes wave_refused and apply_failed`);
-  return { respond: { ...r }, ...(pipeline.decide ? { decide: { ...pipeline.decide } } : {}) };
+  return { options, argv: [] };
+}
+
+/**
+ * `--respond <list>` for the responses away from chant's defaults, and the
+ * decide flags with `description=check` only (chant's `prLoopFlagsProblem`
+ * refuses them otherwise).
+ */
+export function respondArgv(responses: Readonly<Record<string, string>>, decide: { backend: string; model: string } | undefined): string[] {
+  const list = Object.keys(CHANT_RESPOND_DEFAULTS)
+    .filter((e) => responses[e] !== undefined && responses[e] !== CHANT_RESPOND_DEFAULTS[e])
+    .map((e) => `${e}=${responses[e]}`)
+    .join(",");
+  const check = responses.description === "check" && decide !== undefined;
+  return [...(list ? ["--respond", list] : []), ...(check ? ["--decide-backend", decide.backend, "--decide-model", decide.model] : [])];
 }
 
 /**

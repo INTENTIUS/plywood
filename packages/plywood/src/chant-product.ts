@@ -105,6 +105,12 @@ export interface ChantProduct {
   PR_PREVIEW_FLOOR?: string;
   /** Present when chant has the responses to pipeline events (chant#4629). */
   CI_RESPOND_FLOOR?: string;
+  /**
+   * Present when `chant build --pr-loop` writes `--respond`, `--decide-backend`
+   * and `--decide-model` into the pull request jobs, and refuses the decide
+   * flags without `--respond description=check` (chant#4629, #4636).
+   */
+  PR_LOOP_BUILD_FLAGS_FLOOR?: string;
   /** Present when chant's op-waves generators post `<product>/approval` under a pr-review wave (chant#4630). */
   APPROVAL_STATUS_FLOOR?: string;
 }

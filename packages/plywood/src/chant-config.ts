@@ -69,6 +69,8 @@ export interface ChantMemberSettings {
   engineVersion?: string;
   /** The engine binary for a stack pinned to a release other than the one on PATH (src/images.ts `engineBin`). */
   engineBin?: string;
+  /** Where that release is installed (src/images.ts `ENGINE_ROOT`), the pulumi-up step's `engineRoot` (chant#4592). */
+  engineRoot?: string;
 }
 
 /** One runner: a label, every label of a list, or a GitHub runner group with labels its runners also carry. */

@@ -229,9 +229,16 @@ export async function newConfigKeys(detected: Detected, opts: InitOptions, io: I
   return { keys, notes, forge };
 }
 
-/** The stacks init settles: each one found, with plywood.yml's settings for it laid over, then any plywood.yml lists that init did not find. */
-export function initStacks(detected: Detected, doc: RawConfig): InitStack[] {
+/**
+ * The stacks init settles: each one found, with plywood.yml's settings for it
+ * laid over, then any plywood.yml lists that init did not find. A member of
+ * chant's settings pinned to a release off PATH gives its stack
+ * `engineVersion` and `engineRoot` (src/config/images.ts), so the step runs
+ * the release its install line put there.
+ */
+export function initStacks(detected: Detected, doc: RawConfig, members: readonly ChantSettings["members"][number][] = []): InitStack[] {
   const listed = configuredStacks(doc);
+  const pinned = new Map(members.filter((m) => m.engineBin && m.engineVersion).map((m) => [m.name, m]));
   const out: InitStack[] = [];
   const seen = new Set<string>();
   const add = (key: string, project: string, stack: string, dir: string): void => {
@@ -240,12 +247,14 @@ export function initStacks(detected: Detected, doc: RawConfig): InitStack[] {
     const engine = engineOf(doc, backend)?.engine;
     const stackDir = own.dir ?? dir;
     const packs = packsForStack(policyPacksOf(doc), stackDir);
+    const pin = pinned.get(key);
     out.push({
       key,
       project,
       stack,
       dir: stackDir,
       ...(engine ? { engine } : {}),
+      ...(pin ? { engineVersion: pin.engineVersion!, ...(pin.engineRoot ? { engineRoot: pin.engineRoot } : {}) } : {}),
       ...(own.gate ? { gate: own.gate } : {}),
       ...(packs.length ? { policyPacks: packs } : {}),
     });
@@ -326,7 +335,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   if (problems.length) return fail(problems.map((p) => `${kept}: ${p.key} ${p.message}`).join("\n"), forge);
   const doc = config.doc;
   const settings: ChantSettings = toChantSettings(config);
-  const stacks = initStacks(detected, doc);
+  const stacks = initStacks(detected, doc, settings.members);
   const waves = wavesOf(stacks, settings.pipeline.waves);
 
   // The member picture and the chant project.

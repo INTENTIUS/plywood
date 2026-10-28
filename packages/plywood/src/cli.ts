@@ -15,6 +15,7 @@ import { exitCodes, type ExitTable } from "./exit-codes";
 import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
+import { useChantInstallLines } from "./images";
 import { approve, override, up } from "./up";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
@@ -93,6 +94,8 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     emit({ command: "version", ok: true, exitCode: table.done, version: VERSION, exitCodes: source }, VERSION);
     return table.done;
   }
+  // chant's verified install lines, when the installed pulumi lexicon has them (chant#4592); the config translation is synchronous.
+  await useChantInstallLines();
   if (verb === "config") return config(args.slice(1), table, emit);
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   if (verb === "init") {

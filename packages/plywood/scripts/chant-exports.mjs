@@ -24,10 +24,11 @@ export function chantRuntimeTarget(specifier) {
 const CHANT = /^@intentius\/chant(?:-[a-z0-9-]+)?(?:\/.*)?$/;
 
 // chant subpaths a released chant may lack (src/exit-codes.ts,
-// src/chant-product.ts, src/init/backend.ts, src/init.ts). One the installed chant lacks resolves to a module
+// src/chant-product.ts, src/init/backend.ts, src/init.ts), and the pulumi
+// lexicon's ci-setup (src/images.ts, chant#4592). One the installed chant lacks resolves to a module
 // that throws when imported, so the bundle builds on the pin and the caller's
 // fallback takes over.
-const CHANT_NEXT = /^@intentius\/chant\/(exit-codes|ci-product|bucket-check|components\/check-hooks)$/;
+const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|ci-product|bucket-check|components\/check-hooks)|chant-lexicon-pulumi\/ci-setup)$/;
 
 /**
  * An esbuild plugin that leaves an @intentius/chant* import external when the

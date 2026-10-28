@@ -12,10 +12,12 @@
  * Each stack's engine comes from the engine group, which runs first; a stack
  * with none set installs Pulumi, the engine chant picks without a plunge
  * backend. The version most stacks of an engine run is linked onto PATH; a
- * stack pinned to another gets its binary's path as `engineBin`. The
- * install lines are src/images.ts's and check the release checksums.
+ * stack pinned to another gets its binary's path as `engineBin`, and
+ * `engineVersion` with `engineRoot` for its pulumi-up step (chant#4592). The
+ * install lines are src/images.ts's (chant's when the installed lexicon has
+ * them) and check the release checksums.
  */
-import { DIGEST, imageFor, imageReference, installLines, engineBin, parsePlugin, PLUGIN, TOOL_VERSIONS, type EngineName, type EnginePin } from "../images";
+import { DIGEST, ENGINE_ROOT, imageFor, imageReference, installLines, engineBin, parsePlugin, PLUGIN, TOOL_VERSIONS, type EngineName, type EnginePin } from "../images";
 import type { ChantRunner } from "../chant-config";
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type JsonSchema, type RawConfig } from "./types";
 
@@ -196,6 +198,7 @@ export const images: ConfigGroup = {
       if (doc[engine] !== undefined) m.engineVersion = version;
       if (version !== linked[engine]) {
         m.engineBin = engineBin(engine, version);
+        m.engineRoot = ENGINE_ROOT;
         pins.push({ engine, version, linked: false });
       }
     }

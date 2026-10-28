@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { helpText, main, type Io } from "../src/cli";
-import { FALLBACK_EXIT, exitCodes, isExitTable } from "../src/exit-codes";
+import { FALLBACK_EXIT, exitCodes, isExitTable, withMisplaced } from "../src/exit-codes";
 import { VERBS } from "../src/words";
 import { setChantProductForTests } from "../src/chant-product";
 
@@ -56,8 +56,16 @@ describe("plywood CLI", () => {
 });
 
 describe("exit codes", () => {
-  it("falls back to the table ruled on chant#4553", () => {
-    expect(FALLBACK_EXIT).toEqual({ done: 0, failed: 1, drift: 2, waiting: 3, moved: 4, held: 5, superseded: 6, denied: 7, declined: 8 });
+  it("falls back to the table ruled on chant#4553, with chant#4624's misplaced", () => {
+    expect(FALLBACK_EXIT).toEqual({ done: 0, failed: 1, drift: 2, waiting: 3, moved: 4, held: 5, superseded: 6, denied: 7, declined: 8, misplaced: 9 });
+  });
+
+  it("takes a chant table without misplaced and passes 9 through for it (chant#4624)", () => {
+    const { misplaced: _, ...before } = FALLBACK_EXIT;
+    expect(isExitTable(before)).toBe(true);
+    expect(withMisplaced(before as never).misplaced).toBe(9);
+    expect(withMisplaced({ ...FALLBACK_EXIT, misplaced: 19 }).misplaced).toBe(19);
+    expect(isExitTable({ ...FALLBACK_EXIT, misplaced: "9" })).toBe(false);
   });
 
   it("uses chant's table when chant has one, else the fallback", async () => {
@@ -65,6 +73,7 @@ describe("exit codes", () => {
     expect(isExitTable(table)).toBe(true);
     if (source === "fallback") expect(table).toBe(FALLBACK_EXIT);
     else expect(table.moved).not.toBe(table.waiting);
+    expect(table.misplaced).toBe(9);
   });
 
   it("refuses a table missing a code", () => {

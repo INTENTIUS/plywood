@@ -113,6 +113,10 @@ export interface ChantProduct {
   PR_LOOP_BUILD_FLAGS_FLOOR?: string;
   /** Present when chant's op-waves generators post `<product>/approval` under a pr-review wave (chant#4630). */
   APPROVAL_STATUS_FLOOR?: string;
+  /** Present when that status also follows `pull-request` waves, the pull request's own approval (chant#4630 ruling). */
+  APPROVAL_STATUS_PULL_REQUEST_FLOOR?: string;
+  /** Whether an op waves spec gets the approval status jobs: a `pr-review` or `pull-request` wave (chant#4630). */
+  opWavesPostsApprovalStatus?(spec: unknown): boolean;
 }
 
 /**

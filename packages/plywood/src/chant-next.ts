@@ -14,6 +14,10 @@
  *                                 `@intentius/chant/pr-post`)
  *   scheduledOpCloud  chant#4631  cloud identities, and an update job, on
  *                                 a scheduled Op (`@intentius/chant/scheduled-op-cloud`)
+ *   updateContentsWrite chant#4631 ruling: `update.permissions` may raise
+ *                                 `contents` to write; detected by handing
+ *                                 `assertScheduledOpCloud` a probe spec that
+ *                                 asks for it
  *   applyMerge        chant#4636  `pr-apply --merge auto` (`@intentius/chant/pr-merge`)
  *
  * The responses (chant#4629), the build's flags for them and the merge
@@ -34,10 +38,31 @@ export interface ChantNext {
   planFlags: boolean;
   staleNotes: boolean;
   scheduledOpCloud: boolean;
+  updateContentsWrite: boolean;
   applyMerge: boolean;
 }
 
-const NONE: ChantNext = { checkJob: false, planFlags: false, staleNotes: false, scheduledOpCloud: false, applyMerge: false };
+const NONE: ChantNext = { checkJob: false, planFlags: false, staleNotes: false, scheduledOpCloud: false, updateContentsWrite: false, applyMerge: false };
+
+/** A drift Op whose update asks for `contents: write`; a chant before the chant#4631 ruling refuses it. */
+export const CONTENTS_WRITE_PROBE = {
+  name: "plywood-probe",
+  trigger: { kind: "cron", schedule: "0 6 * * *" },
+  findingMode: "issue",
+  update: { command: "true", permissions: { contents: "write" } },
+} as const;
+
+/** Whether `assertScheduledOpCloud` passes the probe; false when it refuses it or is missing. */
+export async function acceptsContentsWrite(load: () => Promise<unknown>): Promise<boolean> {
+  try {
+    const m = (await load()) as { assertScheduledOpCloud?: (spec: unknown) => void };
+    if (typeof m.assertScheduledOpCloud !== "function") return false;
+    m.assertScheduledOpCloud(structuredClone(CONTENTS_WRITE_PROBE));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function has(load: () => Promise<unknown>, name: string, type: "function" | "object" = "function"): Promise<boolean> {
   try {
@@ -59,6 +84,8 @@ export function chantNext(): Promise<ChantNext> {
     staleNotes: await has(() => import("@intentius/chant/pr-post"), "markStaleNotes"),
     // @ts-ignore: the subpath is missing from chant 0.124.55 (chant#4631).
     scheduledOpCloud: await has(() => import("@intentius/chant/scheduled-op-cloud"), "assertScheduledOpCloud"),
+    // @ts-ignore: the subpath is missing from chant 0.124.55 (chant#4631).
+    updateContentsWrite: await acceptsContentsWrite(() => import("@intentius/chant/scheduled-op-cloud")),
     // @ts-ignore: the subpath is missing from chant 0.124.55 (chant#4636).
     applyMerge: await has(() => import("@intentius/chant/pr-merge"), "mergeAfterApply"),
   }))();
@@ -87,6 +114,11 @@ export function hasChantPrLoopFlags(chant: Pick<ChantProduct, "PR_LOOP_BUILD_FLA
 /** Whether the installed chant has chant#4630's approval status, `<product>/approval` on a pull request's head. */
 export function hasChantApprovalStatus(chant: Pick<ChantProduct, "APPROVAL_STATUS_FLOOR"> | undefined): boolean {
   return typeof chant?.APPROVAL_STATUS_FLOOR === "string";
+}
+
+/** Whether the installed chant posts that status for `pull-request` waves too, which are plywood's (chant#4630 ruling). */
+export function hasChantPullRequestApprovalStatus(chant: Pick<ChantProduct, "APPROVAL_STATUS_PULL_REQUEST_FLOOR"> | undefined): boolean {
+  return typeof chant?.APPROVAL_STATUS_PULL_REQUEST_FLOOR === "string";
 }
 
 /** One drifted attribute and who changed it (chant `Attribution`, `@intentius/chant/ci-audit`). */

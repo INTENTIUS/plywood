@@ -36,6 +36,8 @@ export interface ProductPipelineJobs {
   applyBeforeMerge?: { jobName: string; command: string };
   comments: Partial<Record<ChantCommand, string>>;
   waves?: { spec: unknown; specFile: string; jobs: Array<{ command: string[] }> };
+  /** The agent's Op spec for `/plywood agent` (chant#4616), when the options ask for the agent. */
+  agent?: { comment: string; name: string; spec: Record<string, unknown> };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */
@@ -47,6 +49,8 @@ export interface ProductPipelineOptions {
   waves?: unknown;
   /** The checks the apply-before-merge job asks (chant#4607); a chant before it ignores the option. */
   applyRequires?: string[];
+  /** The agent's settings (chant#4616 `ProductAgentOptions`); a chant before it ignores the option. */
+  agent?: boolean | Record<string, unknown>;
 }
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
@@ -61,6 +65,10 @@ export interface ChantProduct {
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
   productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;
+  /** Present when chant has the agent job and the scheduled Op spec's `agent` and `runner` (chant#4616). */
+  CI_AGENT_FLOOR?: string;
+  /** The `agent` of a scheduled drift Op (chant#4616). */
+  productDriftAgent?(words: ProductWordsInput | ProductWords, op: string, options?: Record<string, unknown>): Record<string, unknown>;
   /** Present when chant's notify has the relay and `chant notify relay` (chant#4611). */
   NOTIFY_RELAY_FLOOR?: string;
   /** chant's relay server (chant#4611); its presence says `notify relay` runs in process. */

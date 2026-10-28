@@ -36,6 +36,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
+import { driftOpFields, hasChantAgent } from "./agent-jobs";
 import type { ChantProduct, ForgeKind } from "./chant-product";
 import { driftResponseOf, driftSettingsOf, driftStacksOf, DRIFT_RESPONSES, type DriftResponse } from "./config/drift";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -209,7 +210,12 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
       }
     }
     if (respond === "pull-request" && results.some((r) => r.drifted > 0)) {
-      io.err(`${PRODUCT} drift: respond.drift is pull-request; no chant job runs the drift agent (agent.drift) yet, so this run kept the issue only`);
+      // chant#4616: the drift agent is a job of its own after this one, which runs on the drift exit code.
+      io.err(
+        hasChantAgent(chant)
+          ? `${PRODUCT} drift: respond.drift is pull-request; in CI the agent job after this one opens or updates the pull request (agent.drift)`
+          : `${PRODUCT} drift: respond.drift is pull-request; this chant has no agent job (chant#4616), so this run kept the issue only`,
+      );
     }
 
     const drifted = results.filter((r) => r.drifted > 0).map((r) => r.stack);
@@ -292,13 +298,15 @@ export function driftOpFile(doc: RawConfig, stacks: readonly string[], schedule:
 }
 
 /** chant's scheduled Op spec (`ScheduledOpSpec[]` and `ComponentPipelineOptions`) for the drift jobs. */
-export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly string[], schedule: string): { ops: unknown[]; options: Record<string, unknown> } {
+export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly string[], schedule: string, chant?: ChantProduct): { ops: unknown[]; options: Record<string, unknown> } {
   const respond = driftResponseOf(doc);
-  const findingMode = respond === "none" ? "report" : respond === "pull-request" ? (forge === "gitlab" ? "merge-request" : "pull-request") : "issue";
+  // With chant's agent job (chant#4616) the drift run keeps the issue and the agent job opens the pull request.
+  const agentJob = hasChantAgent(chant) && respond === "pull-request";
+  const findingMode = respond === "none" ? "report" : respond === "pull-request" && !agentJob ? (forge === "gitlab" ? "merge-request" : "pull-request") : "issue";
   const pipeline = toChantSettings({ doc }).pipeline;
   const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
   return {
-    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode })),
+    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond) })),
     options: {
       runCommand: [...BIN.split(/\s+/), "drift", "--op", "{name}", "--forge", forge],
       beforeScript: [SNAPSHOTS_FETCH, ...(engine.beforeScript ?? [])],
@@ -332,7 +340,7 @@ export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc:
     return table.done;
   }
   if (writeIfChanged(io.cwd, DRIFT_OP_FILE, driftOpFile(doc, settings.stacks, settings.schedule))) io.err(`${PRODUCT} ci: wrote ${DRIFT_OP_FILE}; commit it with the workflow`);
-  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
+  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
   const outDir = OP_OUTPUT_DIR[forge];
   const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", DRIFT_SPEC_FILE, "--output", outDir], words);
   if (code !== table.done) return code;

@@ -32,6 +32,7 @@ import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { writeWaveJobs } from "./waves-workflow";
 import { writeDriftJobs } from "./drift";
 import { writeReviewJobs } from "./agents";
+import { writeAgentJobs } from "./agent-jobs";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
 export interface StageIo {
@@ -257,7 +258,10 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const driftCode = await writeDriftJobs(chant, forge, config.doc, plan.words, table, io);
     if (driftCode !== table.done) return driftCode;
     // The review agent's jobs, when plywood.yml sets review (plywood#19).
-    return writeReviewJobs(chant, forge, config.doc, plan.words, table, io);
+    const reviewCode = await writeReviewJobs(chant, forge, config.doc, plan.words, table, io);
+    if (reviewCode !== table.done) return reviewCode;
+    // The agent's jobs, when plywood.yml sets agent.comment (plywood#19, chant#4616).
+    return writeAgentJobs(chant, forge, env, config.doc, plan.words, table, io);
   });
 }
 

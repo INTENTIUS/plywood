@@ -264,7 +264,7 @@ function tarball(version, pass, fail) {
   if (!step("npm run build", "npm", ["run", "build"])) return;
   const check = step("bundle-check", "npm", ["run", "bundle-check", "-w", NAME]);
   if (!check) return;
-  pass(`bundle-check: ${check.stdout.trim().split("\n").filter((l) => l.trim()).slice(-1)[0].trim()}`);
+  pass(`${check.stdout.trim().split("\n").filter((l) => l.trim()).slice(-1)[0].trim()}`);
   mkdirSync(PACK_DIR, { recursive: true });
   const packed = step("npm pack", "npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", PACK_DIR], PKG_DIR);
   if (!packed) return;

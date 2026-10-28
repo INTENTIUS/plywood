@@ -137,7 +137,8 @@ describe("Dockerfiles", () => {
     expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.1.0/plunge-v0.1.0-checksums.txt");
     expect(text).toContain(PINNED_SHA256["plunge-v0.1.0-linux-arm64.tar.gz"]);
     expect(text).toMatch(/^FROM node:22-bookworm-slim@sha256:[0-9a-f]{64}$/m);
-    expect(text).not.toMatch(/curl[^\n]*\nFROM node/);
+    // Each download is checked in the same RUN line, before the node stage copies it.
+    for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");
   });
 
   it("fails the fetch on a tampered checksums file", () => {

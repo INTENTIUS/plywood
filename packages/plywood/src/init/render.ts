@@ -38,6 +38,12 @@ export interface InitStack {
   lockGrain?: "resource" | "target";
   /** CrossGuard packs the stack's preview and update run, relative to its directory (plywood.yml `policy.packs`). */
   policyPacks?: PolicyPack[];
+  /**
+   * The stack's backend URL: plywood.yml's `stacks.<key>.backend`, else its
+   * top-level `backend` (plywood#22). The step hands it to every engine
+   * command as `PULUMI_BACKEND_URL` (chant's `PulumiUpStepInput.backend`).
+   */
+  backend?: string;
 }
 
 /** plywood.yml's text: the template's header and the keys, in the order given. */
@@ -77,6 +83,7 @@ export function stepInput(s: InitStack): Record<string, unknown> {
     stack: s.stack,
     member: s.project,
     ...(s.engine ? { engine: s.engine } : {}),
+    ...(s.backend ? { backend: s.backend } : {}),
     ...(s.engineVersion ? { engineVersion: s.engineVersion, ...(s.engineRoot ? { engineRoot: s.engineRoot } : {}) } : {}),
     ...(s.lockGrain ? { lockGrain: s.lockGrain } : {}),
     ...(s.policyPacks?.length ? { policyPacks: s.policyPacks } : {}),

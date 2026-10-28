@@ -21,6 +21,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { toChantSettings } from "./chant-config";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -224,12 +225,25 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     } catch (e) {
       return usage(`.chant/op-waves/${OP_NAME}.spec.json: ${(e as Error).message}`, table, io);
     }
+    // plywood#29: env, pass, parallelism and environments on the waves, and on the pull request jobs with chant#4625.
+    const pipeline = toChantSettings(config).pipeline;
+    const { prJobsFor, hasChant4625, withJobSettings } = await import("./jobs");
+    const prJobs = await prJobsFor(pipeline);
+    for (const note of prJobs.notes) io.err(`${PRODUCT}: ${note}`);
+    if (waves !== undefined && pipeline.jobs) {
+      try {
+        waves = withJobSettings(waves as Record<string, unknown>, pipeline.jobs, forge, { parallelism: await hasChant4625() });
+      } catch (e) {
+        io.err(`${PRODUCT}: ${(e as Error).message}`);
+        return table.failed;
+      }
+    }
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const noteControl = await noteControlTarget(config.doc, io.cwd);
     let plan: WorkflowPlan;
     try {
-      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks, ...(noteControl ? { control: noteControl } : {}) });
+      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks, prJobs, ...(noteControl ? { control: noteControl } : {}) });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;
@@ -307,7 +321,15 @@ export interface WorkflowPlan {
  * against the jobs and throws when they disagree. `extra` goes on the build
  * line (`--image`, `--before-script`, from src/images.ts).
  */
-export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, env: string, waves: unknown, extra: string[] = [], opts: { reviewStacks?: boolean; control?: unknown } = {}): WorkflowPlan {
+export function workflowPlan(
+  chant: ChantProduct,
+  doc: RawConfig,
+  forge: ForgeKind,
+  env: string,
+  waves: unknown,
+  extra: string[] = [],
+  opts: { reviewStacks?: boolean; control?: unknown; prJobs?: { options: Record<string, unknown>; flags: string[] } } = {},
+): WorkflowPlan {
   const shape = pipelineShape(doc, forge, waves);
   const words = wordsForJobs(shape.jobs);
   // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
@@ -323,6 +345,8 @@ export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKi
     ...(previewComment ? { previewComment: true } : {}),
     // chant#4619: the note job's read of the control repo comes back as post.control.
     ...(opts.control !== undefined ? { control: { target: opts.control } } : {}),
+    // plywood#29: runners, env, pass and parallelism on the pull request jobs, with chant#4625 (src/jobs.ts).
+    ...(opts.prJobs?.options ?? {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
   const argv = [
@@ -331,6 +355,7 @@ export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKi
     ...(previewComment ? ["--preview-comment"] : []),
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
     ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
+    ...(opts.prJobs?.flags ?? []),
     ...extra,
   ];
   return { jobs, words, prWords, argv };

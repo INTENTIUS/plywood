@@ -37,6 +37,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
 import { driftOpFields, hasChantAgent } from "./agent-jobs";
+import type { JobSettings } from "./config/jobs";
+import { environmentFor, jobVariables } from "./jobs";
 import type { ChantProduct, ForgeKind } from "./chant-product";
 import { driftResponseOf, driftSettingsOf, driftStacksOf, DRIFT_RESPONSES, type DriftResponse } from "./config/drift";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -306,13 +308,21 @@ export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly s
   const pipeline = toChantSettings({ doc }).pipeline;
   const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
   return {
-    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond) })),
+    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...driftJobFields(forge, pipeline.jobs, s) })),
     options: {
       runCommand: [...BIN.split(/\s+/), "drift", "--op", "{name}", "--forge", forge],
       beforeScript: [SNAPSHOTS_FETCH, ...(engine.beforeScript ?? [])],
       ...(engine.image ? { image: engine.image } : {}),
     },
   };
+}
+
+/** plywood.yml's env, pass and environments on one stack's drift Op (plywood#29): its variables and forge environment. */
+export function driftJobFields(forge: ForgeKind, jobs: JobSettings | undefined, stack: string): Record<string, unknown> {
+  if (!jobs) return {};
+  const variables = jobVariables(forge, jobs);
+  const environment = forge === "forgejo" ? undefined : environmentFor(stack, jobs);
+  return { ...(Object.keys(variables).length ? { variables } : {}), ...(environment ? { environment: { ...environment } } : {}) };
 }
 
 /** Where chant's Op generator writes for each forge (chant run-generate.ts `DEFAULT_OP_PIPELINE_DIRS`). */

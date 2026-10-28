@@ -26,6 +26,7 @@
 import { GROUPS, type PlywoodConfig } from "./config/index";
 import type { AgentSettings, ReviewSettings } from "./config/agents";
 import type { DriftSettings } from "./config/drift";
+import type { JobSettings } from "./config/jobs";
 import type { ChantIdentitySettings } from "./config/identity";
 import type { ChantNotifyConfig } from "./config/observe";
 import type { ChantPolicySettings, PolicyPack } from "./config/policy";
@@ -121,6 +122,8 @@ export interface ChantPipelineSettings {
   review?: ReviewSettings;
   /** The agents' settings and spend limit (plywood#19). */
   agent?: AgentSettings;
+  /** `env`, `pass`, `parallelism` and `environments` (plywood#29): src/jobs.ts puts them on the jobs. */
+  jobs?: JobSettings;
 }
 
 /** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */

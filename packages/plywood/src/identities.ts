@@ -22,6 +22,8 @@
  * pin) gets the message the command printed before chant#4608 and chant's
  * `failed` code.
  */
+import type { JobSettings } from "./config/jobs";
+import { environmentFor } from "./jobs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { targetGlobMatch } from "@intentius/chant/ci-identity";
@@ -144,6 +146,8 @@ export interface ChantContractPipeline {
   identity: unknown;
   member?: string;
   applyRunner?: { labels: string[]; group?: string };
+  /** The forge environment the up jobs run in (plywood.yml `environments`, plywood#29). */
+  forgeEnvironment?: string;
 }
 
 /** What plywood calls from `@intentius/chant/forge-check` and `resolveCloudIdentity` from ci-identity. */
@@ -214,12 +218,22 @@ export function upRunner(runner: ChantRunner | undefined): { labels: string[]; g
 }
 
 /** One pipeline per workspace member that some rule covers in `env`, as chant's generated pipelines name them. */
-export function contractPipelines(fc: Pick<ChantForgeCheck, "resolveCloudIdentity">, cloud: unknown, env: string, members: readonly string[], runner?: ChantRunner): ChantContractPipeline[] {
+export function contractPipelines(
+  fc: Pick<ChantForgeCheck, "resolveCloudIdentity">,
+  cloud: unknown,
+  env: string,
+  members: readonly string[],
+  runner?: ChantRunner,
+  jobs?: Pick<JobSettings, "environments">,
+): ChantContractPipeline[] {
   const applyRunner = upRunner(runner);
   const list: (string | undefined)[] = members.length ? [...members] : [undefined];
   return list.flatMap((member) => {
     const identity = fc.resolveCloudIdentity(cloud, env, member);
-    return identity ? [{ name: member ? `${member}/${env}` : env, identity, ...(member ? { member } : {}), ...(applyRunner ? { applyRunner } : {}) }] : [];
+    const name = member ? `${member}/${env}` : env;
+    // plywood#29: the up job's forge environment, from plywood.yml's environments, matched on <member>/<env>.
+    const forgeEnvironment = jobs ? environmentFor(name, jobs)?.name : undefined;
+    return identity ? [{ name, identity, ...(member ? { member } : {}), ...(applyRunner ? { applyRunner } : {}), ...(forgeEnvironment ? { forgeEnvironment } : {}) }] : [];
   });
 }
 
@@ -274,7 +288,7 @@ export async function forgeCheck(args: string[], json: boolean, table: ExitTable
   }
   const env = flags["--env"] ?? "production";
   const cloud = settings.ci.identity?.cloud;
-  const pipelines = contractPipelines(fc, cloud, env, workspaceMembers(dirname(path)), settings.pipeline.runner);
+  const pipelines = contractPipelines(fc, cloud, env, workspaceMembers(dirname(path)), settings.pipeline.runner, settings.pipeline.jobs);
   const result = await fc.forgeCheck(
     {
       target,

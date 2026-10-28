@@ -35,7 +35,8 @@ drift: { schedule: "0 6 * * *" }
 | `locks.when` | `preview` | `preview`, from the first preview, or `up`, from an update before merge or a `/plywood lock` comment |
 | `locks.grain` | `resource` | `resource` or `stack` |
 | `policy` | none | `rego` directory and CrossGuard `packs` |
-| `drift` | off | `schedule`, a cron line |
+| `drift` | off | `schedule`, a cron line, and `stacks`, the stacks the drift job reads |
+| `respond.drift` | `issue` | `issue`, `pull-request`, `up` or `none`: what a drift job does about a drifted stack |
 | `identity` | none | `preview` and `up` identities |
 | `review_stacks` | off | `template` and `name` |
 | `notify`, `telemetry`, `review`, `agent`, `control` | off | see their guides |

@@ -24,6 +24,7 @@
  * Each config group writes its own part (src/config/<group>.ts).
  */
 import { GROUPS, type PlywoodConfig } from "./config/index";
+import type { DriftSettings } from "./config/drift";
 import type { ChantIdentitySettings } from "./config/identity";
 import type { ChantNotifyConfig } from "./config/observe";
 import type { ChantPolicySettings, PolicyPack } from "./config/policy";
@@ -107,6 +108,8 @@ export interface ChantPipelineSettings {
   policyPacks?: PolicyPack[];
   /** The waves spec's notify (chant `NotifyConfig`): the variables holding each webhook. */
   notify?: ChantNotifyConfig;
+  /** The scheduled drift check and its response (plywood#8): chant's scheduled Op jobs and `plywood drift`. */
+  drift?: DriftSettings;
 }
 
 export interface ChantSettings {

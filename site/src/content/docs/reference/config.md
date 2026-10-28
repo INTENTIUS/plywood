@@ -36,7 +36,7 @@ drift: { schedule: "0 6 * * *" }
 | `locks.grain` | `resource` | `resource` or `stack` |
 | `policy` | none | `rego` directory and CrossGuard `packs` |
 | `drift` | off | `schedule`, a cron line, and `stacks`, the stacks the drift job reads |
-| `respond.drift` | `issue` | `issue`, `pull-request`, `up` or `none`: what a drift job does about a drifted stack |
+| `respond.drift` | `issue` | `issue`, `pull-request`, `up` or `none`: the drift job's answer to a drifted stack |
 | `identity` | none | `preview` and `up` identities |
 | `review_stacks` | off | `template` and `name` |
 | `control` | off | the control repo, as `host/owner/name` or a mapping with `repo` and `op` |

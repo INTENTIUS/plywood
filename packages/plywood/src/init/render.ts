@@ -31,6 +31,9 @@ export interface InitStack {
   dir: string;
   engine?: "pulumi" | "plunge";
   gate?: ChantGatePolicy;
+  /** A release that is not the one on PATH, and where it is installed (chant#4592 `engineVersion`, `engineRoot`). */
+  engineVersion?: string;
+  engineRoot?: string;
   /** chant's lock grain (chant#4552): `resource`, or `target` for plywood's `stack`. */
   lockGrain?: "resource" | "target";
   /** CrossGuard packs the stack's preview and update run, relative to its directory (plywood.yml `policy.packs`). */
@@ -74,6 +77,7 @@ export function stepInput(s: InitStack): Record<string, unknown> {
     stack: s.stack,
     member: s.project,
     ...(s.engine ? { engine: s.engine } : {}),
+    ...(s.engineVersion ? { engineVersion: s.engineVersion, ...(s.engineRoot ? { engineRoot: s.engineRoot } : {}) } : {}),
     ...(s.lockGrain ? { lockGrain: s.lockGrain } : {}),
     ...(s.policyPacks?.length ? { policyPacks: s.policyPacks } : {}),
   };

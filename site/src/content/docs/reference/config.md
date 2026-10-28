@@ -34,6 +34,7 @@ drift: { schedule: "0 6 * * *" }
 | `policy.namespace` | every package (conftest), `main` (opa) | the Rego package to read |
 | `policy.command` | the engine's own | the argv to run in place of the engine's; `{policy}` is the rules' directory at base, `{input}` the change set |
 | `policy.source` | none | a shared rule set from another repository: `repo`, `ref` and `path` (default `policy`); `packs` are then paths inside it |
+| `policy.providers` | none | the provider packages a stack may use; `plywood init` writes them as `deny_provider_package` in `policy.rego` and as the CrossGuard pack `policy/plywood-providers` |
 | `policy.packs` | none | CrossGuard packs the preview and the update run with `--policy-pack`; mandatory violations deny, advisory ones are note lines |
 | `identity.preview`, `identity.up` | the job's own credentials | each job's identity per cloud: `aws` a role ARN, `gcp` a service account, `azure` a client id, `pulumi` a Pulumi Cloud token (`team:<name>`, `user:<login>`, `organization` or `organization:admin`) |
 | `identity.stacks` | none | stack glob to its own `preview` and `up` identities; the first glob that matches wins |

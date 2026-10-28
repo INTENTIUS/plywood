@@ -1,0 +1,31 @@
+# Written by 'plywood init' from plywood.yml's policy.providers: edit the
+# list there and run 'plywood init' again. chant's gate reads the change set
+# as input.changeSet; a resource the change creates, updates or replaces
+# whose provider package is not listed denies the preview.
+package {{namespace}}
+
+import rego.v1
+
+allowed := {{allowed}}
+
+# The provider package of a Pulumi type: aws for aws:s3/bucket:Bucket, and
+# for a provider resource (pulumi:providers:aws) the package it provides.
+package_of(t) := p if {
+	startswith(t, "pulumi:providers:")
+	p := substring(t, count("pulumi:providers:"), -1)
+}
+
+package_of(t) := p if {
+	not startswith(t, "pulumi:")
+	t != "unknown"
+	p := split(t, ":")[0]
+}
+
+deny_provider_package contains msg if {
+	some e in input.changeSet.entries
+	e.lexicon == "pulumi"
+	e.action in {"create", "update", "replace"}
+	p := package_of(e.type)
+	not p in allowed
+	msg := sprintf("%s uses the provider package %s, which policy.providers does not list", [e.address, p])
+}

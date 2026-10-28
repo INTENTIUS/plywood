@@ -248,6 +248,15 @@
             }
           }
         },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "The provider packages a stack may use, such as aws and random; component packages too. plywood init writes the allowlist as a Rego rule into policy.rego and as the CrossGuard pack policy/plywood-providers."
+        },
         "packs": {
           "type": "array",
           "description": "CrossGuard packs the preview and the update run with --policy-pack. Mandatory violations deny; advisory ones are note lines.",

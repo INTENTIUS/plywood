@@ -11,7 +11,8 @@ import { approvalOf, gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { checkConfig, ConfigError, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
 import { LATER_KEYS } from "./config/later";
-import { LOCK_GRAIN_OF, CI_LOCKS_OF, locksOf } from "./config/locks";
+import { LOCK_GRAIN_OF, CI_LOCKS_OF, lockGrainFor, locksOf } from "./config/locks";
+import { LOCK_GRAIN_WORDS } from "./words";
 import { chantPolicyOf, policyPacksOf } from "./config/policy";
 import type { RawConfig } from "./config/types";
 import { PRODUCT } from "./words";
@@ -52,7 +53,7 @@ export function configCheck(cwd: string, file?: string): ConfigCheckResult {
     gate: gateOf(doc),
     approval: approvalOf(doc),
     locksWhen: locks.when,
-    lockGrain: locks.grain,
+    lockGrain: lockGrainFor(doc, engine?.engine),
   };
   lines.push(
     `${path}: ok`,
@@ -61,7 +62,7 @@ export function configCheck(cwd: string, file?: string): ConfigCheckResult {
     `  gate         ${settings.gate}`,
     `  approval     ${settings.approval}`,
     `  locks.when   ${locks.when} (ci.locks ${CI_LOCKS_OF[locks.when]})`,
-    `  locks.grain  ${locks.grain} (ci.lockGrain ${LOCK_GRAIN_OF[locks.grain]})`,
+    `  locks.grain  ${locks.grain ? `${locks.grain} (ci.lockGrain ${LOCK_GRAIN_OF[locks.grain]})` : LOCK_GRAIN_WORDS.perEngine(engine?.engine)}`,
     `  policy       ${policyLine(doc)}`,
     ...(later.length ? [`  read as written, not yet passed to chant: ${later.join(", ")}`] : []),
   );

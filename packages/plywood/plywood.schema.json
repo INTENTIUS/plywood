@@ -143,8 +143,7 @@
             "resource",
             "stack"
           ],
-          "default": "resource",
-          "description": "resource, one lock per resource, or stack, one lock per stack."
+          "description": "resource, one lock per resource, or stack, one lock per stack. Absent, resource on plunge and stack on stock Pulumi."
         }
       }
     },

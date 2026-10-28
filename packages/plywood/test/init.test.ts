@@ -212,7 +212,7 @@ describe("golden files", () => {
       schema: 1,
       members: [{ name: "shop", dir: "infra", kind: "pulumi" }],
       pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.54" }],
-      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource" },
+      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
     });
     const components = readFileSync(join(root, "plywood.component.ts"), "utf8");
     expect(components).toContain('export const shop_dev = {"name":"shop-dev","dependsOn":[],"deploy":[{"phase":"up","steps":[{"kind":"pulumi-up","dir":"infra","stack":"dev","member":"shop"}]}]};');

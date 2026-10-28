@@ -26,6 +26,6 @@ stacks:
 
 Open one pull request that changes the `events` queue and another that changes `worker-0`. plywood locks per resource, so each pull request holds only the URNs its preview touches. Approve and merge both.
 
-<WithPlunge feature="two updates to different resources of one stack that run side by side, with no stack lock" />
+<WithPlunge claim="concurrent-updates" feature="two updates to different resources of one stack that run side by side, with no stack lock" />
 
 Each `up` applies a saved plan. The plan carries the version of each record it read, so a record another update moved makes `plunge up` refuse with exit 40. plywood reports that as chant's moved-plan code, the same code a stock stack gets for a moved preview.

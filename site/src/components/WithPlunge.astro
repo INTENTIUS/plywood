@@ -7,11 +7,13 @@ import { PLUNGE_CLAIMS } from '../data/rooms';
 interface Props {
 	/** The feature, as a clause after "the pipeline also gets". */
 	feature: string;
+	/** The claim id in src/data/plunge-claims.ts; scripts/check-claims.mjs checks it against plunge's claims page. */
+	claim: string;
 }
-const { feature } = Astro.props;
+const { feature, claim } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<aside class="pw-with-plunge not-content" aria-label="With plunge">
+<aside class="pw-with-plunge not-content" aria-label="With plunge" data-claim={claim}>
 	<p>
 		<b>With <a href={`${base}/concepts/glossary/#plunge`}>plunge</a></b>, the Pulumi fork from the team behind plywood, the pipeline also gets {feature}. Its status is on <a href={PLUNGE_CLAIMS}>plunge's claims page</a>.
 	</p>

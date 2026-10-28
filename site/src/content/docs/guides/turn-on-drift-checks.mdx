@@ -14,4 +14,4 @@ drift:
 
 The drift job runs chant's [drift detection](https://intentius.io/chant/concepts/drift-detection/) on each stack. On stock Pulumi it runs `pulumi refresh --preview-only`. Each drifted stack gets one issue that names each URN and attribute, and the issue closes once the stack matches.
 
-<WithPlunge feature="drift read by plunge drift with one provider read per resource and no program run" />
+<WithPlunge claim="drift-per-resource" feature="drift read by plunge drift with one provider read per resource and no program run" />

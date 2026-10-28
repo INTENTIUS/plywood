@@ -19,6 +19,10 @@
  *       with chant's `drift` code when any stack drifted, as pulumi/actions'
  *       expect-no-changes does, and `failed` when a read could not run.
  *
+ *       With drift.audit_log and chant's audit-log reads (chant#4632), each
+ *       drifted attribute is attributed to its writer (a known write, the
+ *       CloudTrail entry, or unattributed), in the output and the issue.
+ *
  *   plywood ci, with drift.schedule set
  *       writes ops/plywood-drift.op.ts, one chant PulumiWatchOp per stack on
  *       the schedule, and .chant/ops/plywood-drift.spec.json, then has
@@ -27,11 +31,19 @@
  *       --forge <forge>` (the spec's `runCommand`), after fetching
  *       refs/chant/snapshots, and gets the issue permission chant's
  *       `findingMode` grants. `chant run plywood-drift-<stack>` runs the
- *       same stack's PulumiWatchOp by hand.
+ *       same stack's PulumiWatchOp by hand. With chant#4631 each Op trades
+ *       for its stack's preview identity before the checkout, and under
+ *       respond.drift up the update runs in a job of its own after the
+ *       read, holding the stack's up identity (the spec's `update`), so the
+ *       read never holds the up identity and `plywood drift --op` leaves
+ *       the update to that job.
  *
  * Nothing here runs pulumi, plunge or git: chant does.
  */
 import { createHash } from "node:crypto";
+import { resolveTargetCloudIdentity } from "@intentius/chant/ci-identity";
+import { chantAudit, chantNext, type ChantAudit } from "./chant-next";
+import { globMatches } from "./config/images";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -138,6 +150,8 @@ export interface StackDrift {
   observedAt?: string;
   error?: string;
   issue?: { action: string; number?: number; url?: string };
+  /** Who changed each drifted attribute (chant#4632), one line each, with drift.audit_log. */
+  attribution?: string[];
 }
 
 /** The waves (1-based) that hold any of `stacks`; every wave when plywood.yml lists none. */
@@ -190,7 +204,8 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     const dir = mkdtempSync(join(tmpdir(), "plywood-drift-"));
     const results: StackDrift[] = [];
     try {
-      for (const stack of stacks) results.push(await readStack(chant, stack, dir, { resource: resource.value, env: envFlag.value }));
+      const attribute = await attributionFor(doc, io);
+      for (const stack of stacks) results.push(await readStack(chant, stack, dir, { resource: resource.value, env: envFlag.value, ...(attribute ? { attribute } : {}) }));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -227,7 +242,9 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
 
     const drifted = results.filter((r) => r.drifted > 0).map((r) => r.stack);
     let upCode: number | undefined;
-    if (respond === "up" && drifted.length) {
+    const updateJob = respond === "up" && drifted.length && opFlag.value !== undefined && specHasUpdate(io.cwd, opFlag.value);
+    if (updateJob) io.err(`${PRODUCT} drift: respond.drift is up; the update job after this one updates ${drifted.join(", ")} with the up identity, through each wave's gate`);
+    else if (respond === "up" && drifted.length) {
       const waves = wavesHolding(doc, drifted);
       io.err(`${PRODUCT} drift: respond.drift is up; updating ${waves === "all" ? "every wave" : `wave ${waves.join(", ")}`} for ${drifted.join(", ")}, each through its gate`);
       if (waves === "all") upCode = await up([], false, table, io);
@@ -250,6 +267,7 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
         else {
           io.out(`${r.stack}: ${r.drifted} resource${r.drifted === 1 ? "" : "s"} drifted${r.issue ? ` (issue #${r.issue.number ?? "?"} ${r.issue.action})` : ""}`);
           for (const row of r.rows) io.out(`  ${row.status.padEnd(8)} ${row.urn}${row.attributes.length ? `  ${row.attributes.join(", ")}` : ""}`);
+          for (const line of r.attribution ?? []) io.out(`  ${line}`);
         }
       }
     }
@@ -281,7 +299,7 @@ export function setDriftNotifyFetchForTests(fetch: unknown): void {
 }
 
 /** One stack's read: chant's `workspace drift`, written to a file plywood reads back. */
-async function readStack(chant: ChantProduct, stack: string, dir: string, opts: { resource?: string; env?: string }): Promise<StackDrift> {
+async function readStack(chant: ChantProduct, stack: string, dir: string, opts: { resource?: string; env?: string; attribute?: Attribute }): Promise<StackDrift> {
   const file = join(dir, `${driftOpName(stack)}.json`);
   const argv = ["workspace", "drift", "--member", stack, ...(opts.resource ? ["--resource", opts.resource] : []), ...(opts.env ? ["--env", opts.env] : []), "-o", file];
   const code = await chant.runChantInProcess(argv, PRODUCT_WORDS);
@@ -295,7 +313,58 @@ async function readStack(chant: ChantProduct, stack: string, dir: string, opts: 
     return { stack, ok: false, drifted: 0, rows: [], error: doc?.error ? `${doc.error.code}: ${doc.error.message}` : `chant workspace drift exited ${code}` };
   }
   const rows = driftRows(doc);
-  return { stack, ok: true, drifted: rows.length, rows, observedAt: observedAt(doc) };
+  const attribution = rows.length && opts.attribute ? await attributeStack(opts.attribute, stack, doc) : undefined;
+  return { stack, ok: true, drifted: rows.length, rows, observedAt: observedAt(doc), ...(attribution ? { attribution } : {}) };
+}
+
+/** chant's audit-log reads and drift.audit_log, for the attribution. */
+export interface Attribute {
+  audit: ChantAudit;
+  logs: Record<string, string>;
+}
+
+/** The attribution's reads, when plywood.yml sets drift.audit_log; on a chant without chant#4632 a line says none ran. */
+async function attributionFor(doc: RawConfig, io: StageIo): Promise<Attribute | undefined> {
+  const logs = driftSettingsOf(doc).auditLogs;
+  if (!logs) return undefined;
+  const audit = await chantAudit();
+  if (!audit) {
+    io.err(`${PRODUCT} drift: ${ATTRIBUTION_NEEDS_CHANT}`);
+    return undefined;
+  }
+  return { audit, logs };
+}
+
+/** What `plywood drift` says under drift.audit_log on a chant without chant#4632. */
+export const ATTRIBUTION_NEEDS_CHANT = "drift.audit_log is set, and the installed chant has no audit-log reads (chant#4632), so no drifted attribute was attributed";
+
+/** The audit log drift.audit_log gives `stack`: the first glob that matches it. */
+export function auditLogFor(logs: Record<string, string>, stack: string): string | undefined {
+  return Object.entries(logs).find(([glob]) => glob === "*" || glob === "**" || globMatches(glob, stack))?.[1];
+}
+
+/** One line per drifted attribute of `stack`: who changed it, as chant routes it, then chant's notes. */
+export async function attributeStack(a: Attribute, stack: string, doc: DriftDoc): Promise<string[] | undefined> {
+  const text = auditLogFor(a.logs, stack);
+  if (!text) return undefined;
+  const setting = a.audit.parseAuditLogSetting(text);
+  if ("error" in setting) return [`no attribution: ${setting.error}`];
+  try {
+    const attributed = await a.audit.attributeDrift({ records: doc.records ?? [] }, { auditLogs: { "*": setting } });
+    return [...a.audit.routeAttributions(attributed.attributions).lines, ...attributed.notes];
+  } catch (e) {
+    return [`no attribution: ${(e as Error).message}`];
+  }
+}
+
+/** Whether the drift spec gives Op `op` an update job (chant#4631), so the read leaves the update to it. */
+export function specHasUpdate(cwd: string, op: string): boolean {
+  try {
+    const spec = JSON.parse(readFileSync(join(cwd, DRIFT_SPEC_FILE), "utf8")) as { ops?: Array<{ name?: string; update?: unknown }> };
+    return (spec.ops ?? []).some((o) => o.name === op && o.update !== undefined);
+  } catch {
+    return false;
+  }
 }
 
 /** Keep the stack's one issue in line with its read. */
@@ -304,7 +373,7 @@ async function keepIssue(client: DriftForge, r: StackDrift, respond: DriftRespon
   const marker = driftIssueMarker(r.stack);
   if (r.drifted === 0) return client.trackIssue(marker, null, { closeOnClear: true, clearComment: driftClearedComment(r.stack, at) });
   const fingerprint = driftFingerprint(r.rows);
-  const body = driftIssueBody({ stack: r.stack, rows: r.rows, observedAt: at, fingerprint, ...(client.runUrl ? { runUrl: client.runUrl } : {}), respond });
+  const body = driftIssueBody({ stack: r.stack, rows: r.rows, observedAt: at, fingerprint, ...(client.runUrl ? { runUrl: client.runUrl } : {}), respond, ...(r.attribution?.length ? { attribution: r.attribution } : {}) });
   return client.trackIssue(marker, { title: driftIssueTitle(r.stack), body }, { sameWhen: fingerprint });
 }
 
@@ -329,7 +398,14 @@ export function driftOpFile(doc: RawConfig, stacks: readonly string[], schedule:
 }
 
 /** chant's scheduled Op spec (`ScheduledOpSpec[]` and `ComponentPipelineOptions`) for the drift jobs. */
-export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly string[], schedule: string, chant?: ChantProduct): { ops: unknown[]; options: Record<string, unknown> } {
+export function driftOpSpec(
+  doc: RawConfig,
+  forge: ForgeKind,
+  stacks: readonly string[],
+  schedule: string,
+  chant?: ChantProduct,
+  opts: { cloud?: boolean; env?: string } = {},
+): { ops: unknown[]; options: Record<string, unknown> } {
   const respond = driftResponseOf(doc);
   // With chant's agent job (chant#4616) the drift run keeps the issue and the agent job opens the pull request.
   const agentJob = hasChantAgent(chant) && respond === "pull-request";
@@ -337,13 +413,33 @@ export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly s
   const pipeline = toChantSettings({ doc }).pipeline;
   const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
   return {
-    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))) })),
+    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))), ...(opts.cloud ? driftCloudFields(doc, forge, s, respond, opts.env ?? "production") : {}) })),
     options: {
       runCommand: [...BIN.split(/\s+/), "drift", "--op", "{name}", "--forge", forge],
       beforeScript: [SNAPSHOTS_FETCH, ...(engine.beforeScript ?? [])],
       ...(engine.image ? { image: engine.image } : {}),
     },
   };
+}
+
+/**
+ * chant#4631 on one stack's drift Op: `cloud`, the stack's preview identity,
+ * which the read trades for before the checkout; and under respond.drift up,
+ * `update`, a job after the read that runs `plywood up` for the waves
+ * holding the stack with the stack's up identity, its forge environment and
+ * plywood.yml's env and pass. The read itself never holds the up identity.
+ */
+export function driftCloudFields(doc: RawConfig, forge: ForgeKind, stack: string, respond: DriftResponse, env: string): Record<string, unknown> {
+  const settings = toChantSettings({ doc });
+  const decl = settings.ci.identity?.cloud;
+  const ids = decl ? resolveTargetCloudIdentity(decl as never, env, stack, stack) : undefined;
+  const out: Record<string, unknown> = ids?.plan ? { cloud: ids.plan } : {};
+  if (respond !== "up") return out;
+  const waves = wavesHolding(doc, [stack]);
+  const command = waves === "all" ? `${BIN} up` : waves.map((k) => `${BIN} up --wave ${k}`).join(" && ");
+  const fields = driftJobFields(forge, settings.pipeline.jobs, stack);
+  out.update = { command, ...(ids?.apply ? { cloud: ids.apply } : {}), ...fields };
+  return out;
 }
 
 /** plywood.yml's env, pass and environments on one stack's drift Op (plywood#29): its variables and forge environment. */
@@ -389,7 +485,7 @@ function writeIfChanged(cwd: string, file: string, text: string): boolean {
  * chant's generator over them. Nothing when plywood.yml has no
  * drift.schedule.
  */
-export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc: RawConfig, words: ProductWordsInput, table: ExitTable, io: StageIo): Promise<number> {
+export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc: RawConfig, words: ProductWordsInput, table: ExitTable, io: StageIo, env = "production"): Promise<number> {
   const settings = driftSettingsOf(doc);
   if (!settings.schedule) return table.done;
   if (settings.stacks.length === 0) {
@@ -397,7 +493,7 @@ export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc:
     return table.done;
   }
   if (writeIfChanged(io.cwd, DRIFT_OP_FILE, driftOpFile(doc, settings.stacks, settings.schedule))) io.err(`${PRODUCT} ci: wrote ${DRIFT_OP_FILE}; commit it with the workflow`);
-  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
+  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant, { cloud: (await chantNext()).scheduledOpCloud, env }), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
   const outDir = OP_OUTPUT_DIR[forge];
   const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", DRIFT_SPEC_FILE, "--output", outDir], words);
   if (code !== table.done) return code;

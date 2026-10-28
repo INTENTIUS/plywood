@@ -31,14 +31,16 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { applyWhenOf } from "./config/apply";
+import { applyMergeOf, applyWhenOf } from "./config/apply";
+import { chantNext } from "./chant-next";
+import type { RawConfig } from "./config/types";
 import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
 import { hasChant4607, type ChantProduct, type PendingGateByPlan } from "./chant-product";
 import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
-import { positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
+import { APPLY_MERGE_NEEDS_CHANT, applyMergeArgv, positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
 
 /** chant's op for policy overrides (`OVERRIDE_GATE_OP`, chant op/gate-name.ts). */
@@ -302,10 +304,22 @@ async function upBeforeMerge(number: string, args: string[], json: boolean, tabl
       "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
       "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,
       ...requiresArgv(chant, config.doc),
+      ...(await mergeArgv(config.doc, io)),
       ...(json ? ["--json"] : []),
     ];
     return explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err, { pr: number });
   });
+}
+
+/** `--merge auto` for `apply.merge: auto` on a chant with chant#4636; on one without it, a line that a person merges. */
+async function mergeArgv(doc: RawConfig, io: StageIo): Promise<string[]> {
+  const merge = applyMergeOf(doc);
+  if (!merge) return [];
+  if (!(await chantNext()).applyMerge) {
+    io.err(`${PRODUCT}: ${APPLY_MERGE_NEEDS_CHANT}`);
+    return [];
+  }
+  return applyMergeArgv(merge);
 }
 
 /**

@@ -152,3 +152,65 @@ export const STACK_OP_WORDS = {
   releaseIsEnvWide: (stack: string, env: string): string =>
     `--release rolls back every stack the release records in an environment, so it takes --env, not a stack. Run '${PRODUCT} rollback --release <name> --env ${env}', or '${PRODUCT} rollback ${stack}' for this stack's previous release.`,
 } as const;
+
+/**
+ * Drift in plywood's words (plywood#8). chant reads each stack's drift
+ * (`chant workspace drift`) and keeps one tracking issue per stack through
+ * its forge client (`trackIssue`); these are the issue's marker, title and
+ * body, and the name of each stack's scheduled drift Op.
+ */
+export const DRIFT_OP_PREFIX = "plywood-drift-";
+
+/** The scheduled Op that reads `stack`'s drift: `plywood-drift-<project>-<stack>`, kebab-case. */
+export function driftOpName(stack: string): string {
+  return DRIFT_OP_PREFIX + stack.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** The hidden first line that finds a stack's drift issue again. */
+export function driftIssueMarker(stack: string): string {
+  return `<!-- plywood:drift ${stack} -->`;
+}
+
+export function driftIssueTitle(stack: string): string {
+  return `plywood: ${stack} has drifted`;
+}
+
+/** One drifted or missing resource, as the issue lists it. */
+export interface DriftRow {
+  urn: string;
+  status: string;
+  attributes: string[];
+}
+
+/** A cell that keeps the table's shape. */
+function cell(s: string): string {
+  return s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+/**
+ * The issue's body. `fingerprint` names the finding, so a run that finds the
+ * same drift leaves the issue as it is (`sameWhen`).
+ */
+export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]; observedAt: string; fingerprint: string; runUrl?: string; respond?: string }): string {
+  const { stack, rows } = input;
+  const lines = [
+    driftIssueMarker(stack),
+    `plywood's drift check read ${stack} against the cloud at ${input.observedAt} and found ${rows.length} resource${rows.length === 1 ? "" : "s"} that differ from the stack's state.`,
+    "",
+    "| URN | Status | Attributes |",
+    "|---|---|---|",
+    ...rows.map((r) => `| \`${cell(r.urn)}\` | ${r.status} | ${r.attributes.length ? r.attributes.map((a) => `\`${cell(a)}\``).join(", ") : ""} |`),
+    "",
+    `To put the cloud back to the program, merge a change to ${stack} or run \`${PRODUCT} up\`. To keep the cloud's values, change the program to match and let its preview show no changes.`,
+    ...(input.respond === "up" ? ["", `respond.drift is up, so this run also asked for an update of ${stack}'s wave; its gate decides.`] : []),
+    ...(input.runUrl ? ["", `Read by ${input.runUrl}.`] : []),
+    "",
+    `<!-- plywood:drift-fingerprint ${input.fingerprint} -->`,
+  ];
+  return lines.join("\n");
+}
+
+/** Posted on the issue when a clean run closes it. */
+export function driftClearedComment(stack: string, observedAt: string): string {
+  return `plywood's drift check at ${observedAt} found ${stack} matching its state, so this issue is closed.`;
+}

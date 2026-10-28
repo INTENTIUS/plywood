@@ -553,6 +553,42 @@
         }
       }
     },
+    "drift": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The scheduled drift check. Off when absent.",
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "description": "A five-field cron line, such as \"0 6 * * *\"; the drift job runs on it."
+        },
+        "stacks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The stacks the job reads, by name or project/* glob. Every stack when absent."
+        }
+      }
+    },
+    "respond": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What plywood does about a finding.",
+      "properties": {
+        "drift": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "pull-request",
+            "up",
+            "none"
+          ],
+          "default": "issue",
+          "description": "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only."
+        }
+      }
+    },
     "branches": {
       "type": "object",
       "additionalProperties": {
@@ -751,9 +787,6 @@
           }
         }
       ]
-    },
-    "drift": {
-      "description": "Read by a later plywood; accepted as written."
     },
     "review": {
       "description": "Read by a later plywood; accepted as written."

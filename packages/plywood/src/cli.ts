@@ -2,7 +2,7 @@
  * The plywood CLI. Each verb hands plywood's words to chant, which runs the
  * stage in process (chant#4550 ruling C). `check`, `preview` and `ci` are
  * built (src/stages.ts), and `up`, `approve` and `override` (src/up.ts);
- * `drift` says it is not built yet and exits with chant's `failed` code. `config check` reads plywood.yml
+ * and `drift` (src/drift.ts). `config check` reads plywood.yml
  * (src/config-check.ts), and `config identities` and `forge check` the
  * identities (src/identities.ts). chant's own verbs (`components`, `ci <sub>`, `run`,
  * `lock`, `unlock`) pass to chant unchanged with plywood's words, for the
@@ -14,6 +14,7 @@
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
 import { audit } from "./audit";
+import { drift } from "./drift";
 import { configIdentities, forgeCheck } from "./identities";
 import { applyTelemetry } from "./telemetry";
 import { init, type InitIo } from "./init";
@@ -65,6 +66,8 @@ export function helpText(): string {
     "  up [--wave <k>] [--decide | --share <i> | --group <name>]",
     "                                                      run the merge's waves through the pulumi-up step",
     "  up --pr <n> [--base <rev>]                          update an open pull request (apply.when: pull-request)",
+    "  drift [<stack>...] [--resource <urn>] [--forge <kind>] [--respond issue|pull-request|up|none]",
+    "                                                      read each stack against the cloud; --forge keeps one issue per stack",
     "",
     "Approvals:",
     "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>",
@@ -138,6 +141,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "cancel") return cancelStack(args.slice(1), json, table, stageIo);
   if (verb === "move") return moveStack(args.slice(1), json, table, stageIo);
   if (verb === "rollback") return rollbackStack(args.slice(1), json, table, stageIo);
+  if (verb === "drift") return drift(args.slice(1), json, table, stageIo);
   // `plywood ci` writes the workflow; `plywood ci <sub>` is chant's `ci <sub>`, as a generated job runs it.
   if (verb === "ci") {
     const sub = args[1];

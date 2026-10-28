@@ -30,6 +30,7 @@ import type { ExitTable } from "./exit-codes";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { writeWaveJobs } from "./waves-workflow";
+import { writeDriftJobs } from "./drift";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
 export interface StageIo {
@@ -242,8 +243,11 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });
     if (!json && written.kept.length) io.err(`  kept your own jobs: ${written.kept.join(", ")}`);
     if (json) io.out(JSON.stringify({ command: "ci", ok: written.code === 0, exitCode: written.code, dryRun, ...summary, status: written.status, kept: written.kept }));
-    if (written.code !== table.done || !jobs.waves) return written.code;
-    return writeWaveJobs(chant, forge, jobs.waves, plan.words, table, io);
+    if (written.code !== table.done) return written.code;
+    const wavesCode = jobs.waves ? await writeWaveJobs(chant, forge, jobs.waves, plan.words, table, io) : table.done;
+    if (wavesCode !== table.done) return wavesCode;
+    // The scheduled drift jobs, when plywood.yml sets drift.schedule (plywood#8).
+    return writeDriftJobs(chant, forge, config.doc, plan.words, table, io);
   });
 }
 

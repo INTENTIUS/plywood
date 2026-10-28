@@ -7,7 +7,7 @@ import { checkConfig, parseConfig } from "../src/config/index";
 import { engineOf } from "../src/config/engine";
 import { FALLBACK_EXIT } from "../src/exit-codes";
 import { initLines, runInit, type InitIo, type InitOptions } from "../src/init";
-import { ADOPT_OP_FILE, adoptCommand, adoptGate, adoptLines, adoptOpFile, setChantAdoptForTests, type AdoptView, type ChantAdopt } from "../src/init/adopt";
+import { ADOPT_OP_FILE, adoptCommand, adoptGate, adoptLines, adoptOpFile, setChantAdoptForTests, stacksToAdopt, type AdoptPreview, type AdoptView, type ChantAdopt } from "../src/init/adopt";
 import { setBucketCheckForTests, type BucketReport } from "../src/init/backend";
 import { MOVE_A_STACK_GUIDE, plungeKeys, plungeUrlOf } from "../src/init/engine";
 
@@ -154,6 +154,36 @@ describe("plywood init --engine plunge", () => {
     expect(op).toContain('import { PulumiAdoptOp } from "@intentius/chant-lexicon-pulumi";');
     expect(r.todo.join("\n")).toContain(adoptGate("shop", "dev", true));
     expect(r.todo.join("\n")).not.toContain("npm i -D");
+  });
+
+  it("leaves a refused stack out of the adopt Op and names plunge's refusals", async () => {
+    setChantProductForTests(undefined);
+    setChantAdoptForTests(
+      fakeAdopt((stack) =>
+        stack === "dev"
+          ? { ...wouldAdopt(stack), status: "refused", refusals: [{ code: "foreign-records", reason: "the stack already has plunge records" }] }
+          : wouldAdopt(stack),
+      ),
+    );
+    const root = repo(ON_FILE);
+    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    expect(readFileSync(join(root, ADOPT_OP_FILE), "utf8")).toBe(adoptOpFile([{ member: "shop", dir: "infra", stack: "prod", url: "plunge+file:///srv/state" }]));
+    const text = initLines(r).join("\n");
+    expect(text).toContain("shop/dev: plunge refuses to adopt it, so the adopt Op leaves it out:");
+    expect(text).toContain("foreign-records: the stack already has plunge records");
+    expect(r.todo.join("\n")).toContain(adoptGate("shop", "prod", true));
+  });
+
+  it("writes no adopt Op when every stack is refused or adopted", () => {
+    const stacks = [{ key: "a/dev" }, { key: "a/prod" }, { key: "a/qa" }];
+    const view = (status: string) => ({ ...wouldAdopt("x"), status }) as AdoptPreview["view"];
+    expect(
+      stacksToAdopt(stacks, [
+        { key: "a/dev", backend: "b", command: "x", view: view("refused") },
+        { key: "a/prod", backend: "b", command: "y", view: view("already-adopted") },
+        { key: "a/qa", backend: "b", command: "z", error: "not run" },
+      ]),
+    ).toEqual([{ key: "a/qa" }]);
   });
 
   it("a second run writes nothing", async () => {

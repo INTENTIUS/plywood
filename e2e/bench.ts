@@ -139,10 +139,28 @@ export const JOB_IMAGE = "plywood-tutorial-job:local";
 /**
  * The Dockerfile `just e2e-image` builds, from plywood's two images by tag
  * and the binary in the build context as `plunge`. `pulumiVersion` is the
- * stock Pulumi release plywood's pulumi image carries.
+ * stock Pulumi release plywood's pulumi image carries, `plungeVersion` the
+ * plunge release its plunge image carries.
+ *
+ * The generated workflows run in this image (base/plywood.yml's `image`),
+ * and their install lines link `/usr/local/bin/plunge` to
+ * `/opt/plywood/plunge-<release>/plunge` when that file is there, so that
+ * path names the local build too. `chantTarballs`, the files `just
+ * chant-local` packed (under `chant-local/` in the build context), replace
+ * the pinned chant packages under the global plywood, so the jobs run the
+ * same chant as the host.
  */
-export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string; pulumiVersion: string }): string {
+export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string; pulumiVersion: string; plungeVersion: string; chantTarballs?: readonly string[] }): string {
   const dir = `/opt/plywood/pulumi-${o.pulumiVersion}`;
+  const release = `/opt/plywood/plunge-${o.plungeVersion}`;
+  const tarballs = o.chantTarballs ?? [];
+  const chant = tarballs.length
+    ? [
+        `COPY ${tarballs.map((t) => `chant-local/${t}`).join(" ")} /tmp/chant-local/`,
+        // npm installs the local packages in place of the pinned ones under the global plywood; --legacy-peer-deps as chant-local.sh.
+        `RUN set -e; cd "$(npm root -g)/@intentius/plywood" && npm install --no-save --omit=dev --no-audit --no-fund --legacy-peer-deps ${tarballs.map((t) => `/tmp/chant-local/${t}`).join(" ")} && grep '"version"' node_modules/@intentius/chant/package.json && plywood --version`,
+      ]
+    : [];
   return [
     "# Written by e2e/bench.ts (just e2e-image): plywood's plunge image with stock Pulumi beside it",
     "# and a local plunge build on PATH, for scenarios that read what the released plunge lacks.",
@@ -151,7 +169,8 @@ export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string
     `COPY --from=pulumi ${dir}/ ${dir}/`,
     "COPY plunge /opt/plywood/plunge-local/plunge",
     // The language hosts and plugins plunge runs come with the release beside it.
-    `RUN set -e; for f in /opt/plywood/plunge-0*/pulumi-*; do [ -e "$f" ] && ln -sf "$f" /opt/plywood/plunge-local/; done; ln -sf /opt/plywood/plunge-local/plunge /usr/local/bin/plunge; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; pulumi version`,
+    `RUN set -e; for f in /opt/plywood/plunge-0*/pulumi-*; do [ -e "$f" ] && ln -sf "$f" /opt/plywood/plunge-local/; done; ln -sf /opt/plywood/plunge-local/plunge /usr/local/bin/plunge; ln -sf /opt/plywood/plunge-local/plunge ${release}/plunge; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`,
+    ...chant,
     "",
   ].join("\n");
 }

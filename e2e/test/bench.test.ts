@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BUCKETS, FLOCI_NET, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
+import { BUCKETS, FLOCI_NET, JOB_IMAGE, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
 import { NeedsChantHarness, harness, isHarness, requireHarness, setHarnessForTests, type HarnessStackShape } from "../harness";
 import { bucketCalls, makeBucket, type Fetch } from "../secure-bucket";
 import { setYamlKeys, overlayFiles } from "../overlays";
@@ -77,13 +77,33 @@ describe("the bench's stack", () => {
   });
 
   it("builds the job image from plywood's plunge image, with stock Pulumi and a local plunge on PATH", () => {
-    const d = jobImageDockerfile({ plungeImage: "ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0", pulumiImage: "ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0", pulumiVersion: "3.272.0" });
+    const d = jobImageDockerfile({ plungeImage: "ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0", pulumiImage: "ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0", pulumiVersion: "3.272.0", plungeVersion: "0.1.0" });
     expect(d).toContain("FROM ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0 AS pulumi");
     expect(d).toContain("FROM ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0\n");
     expect(d).toContain("COPY --from=pulumi /opt/plywood/pulumi-3.272.0/ /opt/plywood/pulumi-3.272.0/");
     expect(d).toContain("COPY plunge /opt/plywood/plunge-local/plunge");
     expect(d).toMatch(/ln -sf \/opt\/plywood\/plunge-local\/plunge \/usr\/local\/bin\/plunge/);
     expect(d).toMatch(/plunge version; pulumi version/);
+    // The jobs' install line links /usr/local/bin/plunge to the release's path, which names the local build too.
+    expect(d).toContain("ln -sf /opt/plywood/plunge-local/plunge /opt/plywood/plunge-0.1.0/plunge");
+    expect(d).not.toContain("chant-local");
+  });
+
+  it("puts the local chant's tarballs under the global plywood when chant-local packed them", () => {
+    const d = jobImageDockerfile({
+      plungeImage: "p",
+      pulumiImage: "q",
+      pulumiVersion: "3.272.0",
+      plungeVersion: "0.1.0",
+      chantTarballs: ["intentius-chant.tgz", "intentius-chant-lexicon-pulumi.tgz"],
+    });
+    expect(d).toContain("COPY chant-local/intentius-chant.tgz chant-local/intentius-chant-lexicon-pulumi.tgz /tmp/chant-local/");
+    expect(d).toContain('cd "$(npm root -g)/@intentius/plywood" && npm install --no-save --omit=dev --no-audit --no-fund --legacy-peer-deps /tmp/chant-local/intentius-chant.tgz /tmp/chant-local/intentius-chant-lexicon-pulumi.tgz');
+  });
+
+  it("the bench's plywood.yml runs every generated job in the job image", () => {
+    const yml = readFileSync(join(ROOT, "e2e", "scenarios", "base", "plywood.yml"), "utf8");
+    expect(yml).toMatch(new RegExp(`^image: ${JOB_IMAGE.replace(/[.]/g, "\\.")}$`, "m"));
   });
 });
 

@@ -21,7 +21,7 @@
  * credential, a file:// Pulumi backend, no update check) and its log is
  * scanned before a row is recorded.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FLOCI_NET, JOB_IMAGE, ORG, PROJECT, REPO, REPORT_URL, BUCKETS, benchStack, engineEnv, hostUrls, jobImageDockerfile, stateDir } from "./bench";
@@ -98,17 +98,35 @@ async function buildImage(plungeBin: string | undefined): Promise<number> {
   const ctx = join(stateDir(ROOT), "job-image");
   mkdirSync(ctx, { recursive: true });
   copyFileSync(plungeBin, join(ctx, "plunge"));
+  // With `just chant-local` installed, the jobs get the same local chant as the host.
+  const chantTarballs = localChantTarballs();
+  if (chantTarballs.length) {
+    mkdirSync(join(ctx, "chant-local"), { recursive: true });
+    for (const t of chantTarballs) copyFileSync(join(ROOT, ".chant-local", t), join(ctx, "chant-local", t));
+    log(`the job image takes the local chant (${readFileSync(join(ROOT, ".chant-local", "commit"), "utf8").trim()}): ${chantTarballs.join(", ")}`);
+  }
   writeFileSync(
     join(ctx, "Dockerfile"),
     jobImageDockerfile({
       plungeImage: `ghcr.io/intentius/plywood-plunge:${version}-plunge${plunge}`,
       pulumiImage: `ghcr.io/intentius/plywood-pulumi:${version}-pulumi${pulumi}`,
       pulumiVersion: pulumi,
+      plungeVersion: plunge,
+      chantTarballs,
     }),
   );
   log(`building ${JOB_IMAGE} in ${ctx} (run 'just images' first; nothing is pushed)`);
   await sh("docker", ["build", "-t", JOB_IMAGE, ctx]);
   return 0;
+}
+
+/** The tarballs `just chant-local` packed, when node_modules holds that build (its chantLocal mark); none on the pin. */
+function localChantTarballs(): string[] {
+  const dir = join(ROOT, ".chant-local");
+  const core = join(ROOT, "node_modules", "@intentius", "chant", "package.json");
+  if (!existsSync(join(dir, "commit")) || !existsSync(core)) return [];
+  if (!(JSON.parse(readFileSync(core, "utf8")) as { chantLocal?: string }).chantLocal) return [];
+  return readdirSync(dir).filter((f) => f.endsWith(".tgz")).sort();
 }
 
 function seedContext(h: HarnessModule, safe: InstanceType<HarnessModule["SafeRun"]>): SeedContext {

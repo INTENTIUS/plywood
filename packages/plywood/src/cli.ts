@@ -16,6 +16,7 @@ import { exitCodes, type ExitTable } from "./exit-codes";
 import { audit } from "./audit";
 import { drift } from "./drift";
 import { configIdentities, forgeCheck } from "./identities";
+import { control } from "./control";
 import { applyTelemetry } from "./telemetry";
 import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
@@ -86,6 +87,14 @@ export function helpText(): string {
     "                                                      the workspace ledger's rows, as chant ledger reads them",
     "  query \"<sql>\"                                      SQL over the ledger's tables (chant query)",
     "",
+    "Control repo:",
+    "  control init [--forge <kind>]                       in the control repo: the workflow that runs each repository's dependents",
+    "  control put <host/owner/name>|defaults [--approver <glob>=<role>[:<n>]]... [--pin <tool>=<v>]... [--file <yml>]",
+    "                                                      one entry's approvers and pins, on the control repo's ledger",
+    "  control import <yml> | list | retire <host/owner/name>",
+    "  control reconcile [--apply] [--project <key>]       each repository's plywood.yml from its entry, as a pull request",
+    "  control dispatch [--sha <sha>]                      tell plywood.yml's control repo this commit applied",
+    "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
     "  config identities [--file <path>] [--env <env>]",
@@ -127,6 +136,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
   if (verb === "config") return config(args.slice(1), table, emit);
   if (verb === "forge") return forgeCheck(args.slice(1), json, table, stageIo);
+  if (verb === "control") return control(args.slice(1), json, table, stageIo);
   if (verb === "init") {
     const interactive = !json && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true && process.stderr.isTTY === true;
     const initIo: InitIo = interactive ? { ...stageIo, ask: askOnTerminal } : stageIo;

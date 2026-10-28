@@ -238,6 +238,8 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       for (const [command, line] of Object.entries(jobs.comments)) io.err(`  comment   ${line} (${command})`);
       for (const job of summary.waves?.jobs ?? []) io.err(`  wave      ${job}`);
     }
+    // The control repo (plywood#18): chant's op waves take no control option yet, so the waves workflow sends no dispatch.
+    if (config.doc.control !== undefined && !json) io.err(`  control   the waves workflow sends no dispatch yet; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
     if (dryRun) return table.done;
     // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
     const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });

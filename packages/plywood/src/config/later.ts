@@ -10,7 +10,6 @@ import type { ConfigGroup } from "./types";
 export const LATER_KEYS: Readonly<Record<string, string>> = {
   review: "plywood#19",
   agent: "plywood#19",
-  control: "plywood#18",
   env: "plywood#5",
   pass: "plywood#5",
   parallelism: "plywood#5",

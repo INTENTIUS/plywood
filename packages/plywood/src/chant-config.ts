@@ -93,6 +93,12 @@ export interface ChantPipelineSettings {
   /** An approval by the pull request's author never counts. */
   excludeAuthor?: boolean;
   waves?: string[][];
+  /** The stacks that update first, in a wave of their own (plywood.yml `waves.canary`, plywood#18). */
+  canary?: string[];
+  /** Each stack to the stacks it updates after, beside its StackReferences (plywood.yml `waves.after`). */
+  after?: Record<string, string[]>;
+  /** The control repo this repository tells after each update on merge (plywood.yml `control`, chant#4568's `ControlSettingsInput`). */
+  control?: ChantControlSettings;
   /** What an open pull request needs before `/plywood up` updates it. */
   applyRequires?: string[];
   /** The review stack name pattern; `{number}` is the pull request's number. */
@@ -110,6 +116,20 @@ export interface ChantPipelineSettings {
   notify?: ChantNotifyConfig;
   /** The scheduled drift check and its response (plywood#8): chant's scheduled Op jobs and `plywood drift`. */
   drift?: DriftSettings;
+}
+
+/** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */
+export interface ChantControlSettings {
+  /** The control repo as a project key, `<host>/<owner>/<name>`. */
+  repo: string;
+  forge?: "github" | "gitlab" | "forgejo";
+  /** The Op the control repo runs on this repository's dependents. */
+  op: string;
+  member?: string;
+  tokenSecret?: string;
+  readTokenSecret?: string;
+  ref?: string;
+  apiBase?: string;
 }
 
 export interface ChantSettings {

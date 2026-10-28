@@ -45,15 +45,43 @@
       }
     },
     "waves": {
-      "type": "array",
-      "description": "Lists of stacks, updated in order; the first wave is the canary. One wave per environment when absent.",
-      "items": {
-        "type": "array",
-        "items": {
-          "type": "string"
+      "description": "Lists of stacks, updated in order, the first wave the canary; or canary and after. One wave per environment when absent.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
         },
-        "minItems": 1
-      }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "canary": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "The stacks that update first, in a wave of their own."
+            },
+            "after": {
+              "type": "object",
+              "description": "Each stack to the stacks it updates after, beside the order its StackReferences give.",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "engine": {
       "type": "string",
@@ -788,13 +816,64 @@
         }
       ]
     },
+    "control": {
+      "description": "The control repo this repository tells after each update on merge: its project key or URL, or a mapping.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "The control repo, as host/owner/name or its https URL."
+            },
+            "op": {
+              "type": "string",
+              "description": "The Op the control repo runs on this repository's dependents. Default pulumi-up."
+            },
+            "member": {
+              "type": "string",
+              "description": "This repository's name in the control repo's workspace. Default the repository's name."
+            },
+            "forge": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab",
+                "forgejo"
+              ],
+              "description": "The control repo's forge, when its host does not say."
+            },
+            "token_secret": {
+              "type": "string",
+              "description": "The secret holding the dispatch token. Default CHANT_CONTROL_TOKEN."
+            },
+            "read_token_secret": {
+              "type": "string",
+              "description": "The secret holding a read-only token for the control repo. Default CHANT_CONTROL_READ_TOKEN."
+            },
+            "ref": {
+              "type": "string",
+              "description": "The branch a GitLab or Forgejo dispatch runs on. Default main."
+            },
+            "api_base": {
+              "type": "string",
+              "description": "The forge's REST base, when the host's usual one is not it."
+            }
+          }
+        }
+      ]
+    },
     "review": {
       "description": "Read by a later plywood; accepted as written."
     },
     "agent": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "control": {
       "description": "Read by a later plywood; accepted as written."
     },
     "env": {

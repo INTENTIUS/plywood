@@ -81,6 +81,7 @@ import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, type StageIo } from "./stages";
+import { orderLines, orderWaves, stackOrder } from "./stack-order";
 import { template } from "./templates";
 import { OP_NAME, PRODUCT, PRODUCT_WORDS } from "./words";
 
@@ -338,7 +339,11 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const doc = config.doc;
   const settings: ChantSettings = toChantSettings(config);
   const stacks = initStacks(detected, doc, settings.members);
-  const waves = wavesOf(stacks, settings.pipeline.waves);
+  // The merge's waves: the canary first, each wave cut by StackReferences and waves.after (plywood#18).
+  const order = await stackOrder(root, stacks, settings.pipeline.after);
+  const ordered = orderWaves(wavesOf(stacks, settings.pipeline.waves), order.edges, settings.pipeline.canary);
+  const waves = ordered.waves;
+  if (order.edges.length || order.outside.length || ordered.unmet.length || (!order.reads && stacks.length > 1)) notes.push(...orderLines(order, ordered.unmet));
 
   // The member picture and the chant project.
   const declaration = declarationStep(root, detected, settings, opts.dryRun);
@@ -349,7 +354,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
       files.push({ file: CHANT_CONFIG_FILE, status: "kept", note: 'add "pulumi" to its lexicons so chant previews and updates the stacks' });
     } else files.push({ file: CHANT_CONFIG_FILE, status: "kept" });
   } else files.push(put(root, CHANT_CONFIG_FILE, chantConfigTs(), opts.dryRun));
-  files.push(put(root, COMPONENTS_FILE, componentsFile(stacks), opts.dryRun));
+  files.push(put(root, COMPONENTS_FILE, componentsFile(stacks, settings.pipeline.after), opts.dryRun));
 
   // What the repository already runs.
   if (detected.preCommit) files.push(await preCommitStep(root, detected.preCommit, opts.dryRun));
@@ -363,7 +368,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     const message = needsChantMessage("Writing the waves spec and the workflow");
     files.push({ file: WAVES_SPEC_FILE, status: "skipped", note: message }, { file: WORKFLOW_FILE[forge.kind], status: "skipped", note: "needs the same chant" });
   } else {
-    const spec = wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch);
+    const spec = wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves);
     if (stacks.length > 0) files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
     files.push(...(await workflowStep(chant, root, doc, settings, forge.kind, opts, stacks.length > 0 ? spec : undefined, table, io)));
   }
@@ -429,11 +434,11 @@ async function preCommitStep(root: string, config: string, dryRun: boolean): Pro
 }
 
 /** The waves spec with chant's names filled (chant `productWavesSpec`), else as plywood builds it. */
-function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string): Record<string, unknown> {
+function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>): Record<string, unknown> {
   const runner = waveRunner(chantPipelineOptions(settings.pipeline, false).runner);
   const base = wavesSpec({
     stacks,
-    ...(settings.pipeline.waves ? { waves: settings.pipeline.waves } : {}),
+    ordered,
     gate: gateOf(doc),
     branch,
     ...(runner !== undefined ? { runner } : {}),

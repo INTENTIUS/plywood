@@ -26,7 +26,7 @@ drift: { schedule: "0 6 * * *" }
 | `engine` | `pulumi` | `pulumi` or `plunge`; a `plunge+` backend URL also picks plunge |
 | `backend` | the stack's own | the backend URL, per stack or for all |
 | `stacks` | found by `init` | each stack as `project/stack`, with `dir`, `paths`, `gate` |
-| `waves` | one per environment | lists of stacks; the first wave is the canary |
+| `waves` | one per environment | lists of stacks, the first wave the canary; or `canary` and `after` |
 | `gate` | `on-destructive` | `always`, `on-destructive` or `never` |
 | `approval` | `ledger` | `ledger`, `sealed` or `pr-review` |
 | `approval_rules` | none | role and quorum per stack glob |
@@ -39,7 +39,8 @@ drift: { schedule: "0 6 * * *" }
 | `respond.drift` | `issue` | `issue`, `pull-request`, `up` or `none`: what a drift job does about a drifted stack |
 | `identity` | none | `preview` and `up` identities |
 | `review_stacks` | off | `template` and `name` |
-| `notify`, `telemetry`, `review`, `agent`, `control` | off | see their guides |
+| `control` | off | the control repo, as `host/owner/name` or a mapping with `repo` and `op` |
+| `notify`, `telemetry`, `review`, `agent` | off | see their guides |
 | `pulumi`, `plunge` | the image's | CLI version pins |
 
 plywood turns each key into chant's workspace settings, so `plywood.yml` holds no chant key. A `ci.` key there is refused with the name of the plywood key that sets it.

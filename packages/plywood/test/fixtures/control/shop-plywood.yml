@@ -1,0 +1,5 @@
+stacks:
+  shop/dev: { dir: infra }
+  shop/prod-east: { dir: infra }
+gate: always
+control: github.com/acme/infra-control

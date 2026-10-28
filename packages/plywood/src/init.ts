@@ -82,7 +82,7 @@ import {
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
-import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
+import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, wavesEngine, wavesSpecText, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
 import { chantNext } from "./chant-next";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
@@ -399,7 +399,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
       }
     }
     if (spec && stacks.length > 0) {
-      files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
+      files.push(put(root, WAVES_SPEC_FILE, wavesSpecText(spec, wavesEngine(settings.pipeline)), opts.dryRun));
       // plywood#22: the Op the spec names, which chant's waves generator discovers from a *.op.ts file.
       files.push(put(root, UP_OP_FILE, upOpFile(spec), opts.dryRun));
     }
@@ -546,7 +546,7 @@ async function workflowStep(
   ];
   const out: InitFile[] = [{ file: output, status: written.status, ...(notes.length ? { note: notes.join("; ") } : {}) }];
   if (plan.jobs.waves) {
-    const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root });
+    const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root }, wavesEngine(settings.pipeline));
     if (code !== table.done) out.push({ file: WAVES_OUTPUT_DIR[forge], status: "failed", note: `the waves workflow: chant exited ${code}` });
   }
   return out;

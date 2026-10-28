@@ -13,6 +13,7 @@ import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } 
 import { template } from "../src/templates";
 import { PRODUCT_WORDS } from "../src/words";
 import { setupPrompt } from "../../../site/src/prompts";
+import { unwrapWavesSpec } from "../src/waves-workflow";
 
 const GENERATED = [
   "name: plywood",
@@ -193,7 +194,12 @@ describe("golden files", () => {
     ]);
     expect(readFileSync(join(root, "plywood.yml"), "utf8")).toBe(plywoodYml({}));
     expect(checkConfig(parseConfig(readFileSync(join(root, "plywood.yml"), "utf8"))).filter((p) => p.severity === "error")).toEqual([]);
-    expect(JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"))).toEqual({
+    // plywood#22: the file carries the waves jobs' install lines for chant's generator beside the spec.
+    const file = JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"));
+    expect(Object.keys(file)).toEqual(["waves", "options"]);
+    expect(file.options.beforeScript.length).toBeGreaterThan(0);
+    expect(file.options.image).toBeUndefined();
+    expect(unwrapWavesSpec(file)).toEqual({
       name: "pulumi-up",
       op: "pulumi-up",
       gate: "up",
@@ -280,7 +286,7 @@ describe("golden files", () => {
     expect(yml).toContain("apply:\n  when: pull-request");
     expect(yml).toContain("gate: always");
     expect(yml).toContain("backend: file:///tmp/state");
-    const spec = JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"));
+    const spec = unwrapWavesSpec(JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"))) as { waves: Array<{ gate: string }> };
     expect(spec.waves.every((w: { gate: string }) => w.gate === "always")).toBe(true);
   });
 });

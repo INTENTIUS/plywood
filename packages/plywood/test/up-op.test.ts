@@ -12,7 +12,10 @@ import { describe, expect, it } from "vitest";
 import type { ChantProduct } from "../src/chant-product";
 import { CHANT_SPECIFIER, chantResolveHook } from "../src/chant-resolve";
 import { FALLBACK_EXIT } from "../src/exit-codes";
-import { UP_OP_FILE, upOpFile, writeUpOp, writeWaveJobs } from "../src/waves-workflow";
+import { UP_OP_FILE, unwrapWavesSpec, upOpFile, wavesEngine, wavesSpecText, writeUpOp, writeWaveJobs } from "../src/waves-workflow";
+import { parseOpWavesSpec } from "@intentius/chant/op";
+import { readUpSpec } from "../src/up";
+import { readWavesSpec } from "../src/stages";
 import { PRODUCT_WORDS } from "../src/words";
 
 const SPEC = {
@@ -65,6 +68,52 @@ describe("the pulumi-up Op file", () => {
     expect(code).toBe(FALLBACK_EXIT.done);
     expect(seen).toBe(upOpFile(SPEC));
     expect(err.join("\n")).toContain(`wrote ${UP_OP_FILE}`);
+  });
+});
+
+describe("the waves jobs' image and install lines (plywood#22)", () => {
+  const engine = { image: "plywood-tutorial-job:local", beforeScript: ["install pulumi", "install plunge"] };
+
+  it("wraps the spec with chant's options when there is an image or a line, and leaves it bare otherwise", () => {
+    expect(JSON.parse(wavesSpecText(SPEC, engine))).toEqual({ waves: SPEC, options: engine });
+    expect(JSON.parse(wavesSpecText(SPEC, { beforeScript: [] }))).toEqual(SPEC);
+    expect(JSON.parse(wavesSpecText(SPEC))).toEqual(SPEC);
+    expect(unwrapWavesSpec(JSON.parse(wavesSpecText(SPEC, engine)))).toEqual(SPEC);
+    expect(unwrapWavesSpec(SPEC)).toEqual(SPEC);
+  });
+
+  it("takes plywood.yml's image and the engines' install lines, as the review and drift jobs do", () => {
+    expect(wavesEngine({ image: "img@sha256:" + "a".repeat(64), engineSetup: ["l1"] })).toEqual({ image: "img@sha256:" + "a".repeat(64), beforeScript: ["l1"] });
+    expect(wavesEngine({ engineSetup: ["l1"] })).toEqual({ beforeScript: ["l1"] });
+    expect(wavesEngine({})).toEqual({});
+  });
+
+  it("chant's spec reader, the one its generator and wave jobs use, reads the wrapped file", () => {
+    expect(parseOpWavesSpec(wavesSpecText(SPEC, engine), "test")).toMatchObject({ name: "pulumi-up", waves: [{ name: "dev" }, { name: "prod" }] });
+  });
+
+  it("writeWaveJobs writes the wrapped file chant's generator reads, and plywood's own readers unwrap it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "plywood-up-op-"));
+    let atGenerate: string | undefined;
+    const chant = {
+      runChantInProcess: async (argv: string[]) => {
+        atGenerate = readFileSync(join(root, argv[argv.indexOf("--spec") + 1]!), "utf8");
+        const file = join(root, argv[argv.indexOf("--output") + 1]!, "pulumi-up.yml");
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, `# chant run --generate forgejo --spec .chant/op-waves/pulumi-up.spec.json\njobs: {}\n`);
+        return 0;
+      },
+    } as unknown as ChantProduct;
+    const waves = { spec: SPEC, specFile: ".chant/op-waves/pulumi-up.spec.json", jobs: [] };
+    const io = { cwd: root, env: {}, out: () => {}, err: () => {} };
+    expect(await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, FALLBACK_EXIT, io, engine)).toBe(FALLBACK_EXIT.done);
+    expect(JSON.parse(atGenerate!)).toEqual({ waves: SPEC, options: engine });
+    expect(readWavesSpec(root)).toEqual(SPEC);
+    expect(readUpSpec(root)).toMatchObject({ name: "pulumi-up", step: { kind: "pulumi-up" } });
+    // The same spec and engine a second time writes nothing new.
+    const before = readFileSync(join(root, waves.specFile), "utf8");
+    await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, FALLBACK_EXIT, io, engine);
+    expect(readFileSync(join(root, waves.specFile), "utf8")).toBe(before);
   });
 });
 

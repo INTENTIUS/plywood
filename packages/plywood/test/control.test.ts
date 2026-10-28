@@ -12,6 +12,7 @@ import {
   setChantControlForTests,
   settingsFromFlags,
   validateControlSettings,
+  wavesControl,
   type ChantControl,
 } from "../src/control";
 import { FALLBACK_EXIT } from "../src/exit-codes";
@@ -143,5 +144,30 @@ describe("plywood control without chant#4568", () => {
     writeFileSync(join(dir, "plywood.yml"), "control: github.com/acme/infra-control\n");
     expect(await control(["dispatch", "--sha", "0123abcd"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.done);
     expect(chant.dispatched).toEqual([expect.objectContaining({ op: "pulumi-up", sha: "0123abcd" })]);
+  });
+});
+
+describe("the waves spec's control (chant#4617)", () => {
+  const repo = (text: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "plywood-waves-control-"));
+    writeFileSync(join(dir, "plywood.yml"), text);
+    return dir;
+  };
+
+  it("carries plywood.yml's control with the member resolved, when chant's op waves take it", async () => {
+    setChantControlForTests(Object.assign(fakeChant(), { recordControlAppliedFromEnv: async () => ({}) }));
+    const dir = repo("control:\n  repo: github.com/acme/infra-control\n  token_secret: PLYWOOD_CONTROL_TOKEN\n");
+    const got = await wavesControl(dir);
+    expect(got).toEqual({ control: { repo: "github.com/acme/infra-control", op: "pulumi-up", member: expect.any(String), tokenSecret: "PLYWOOD_CONTROL_TOKEN" }, repo: "github.com/acme/infra-control" });
+  });
+
+  it("says chant lacks it on a chant before chant#4617, so plywood ci keeps the dispatch advice", async () => {
+    setChantControlForTests(fakeChant());
+    expect(await wavesControl(repo("control: github.com/acme/infra-control\n"))).toEqual({ missing: expect.stringContaining("chant#4617") });
+  });
+
+  it("is none without a control key", async () => {
+    setChantControlForTests(fakeChant());
+    expect(await wavesControl(repo("gate: always\n"))).toEqual({ none: true });
   });
 });

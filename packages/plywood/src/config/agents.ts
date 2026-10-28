@@ -20,6 +20,12 @@
  *                          drifted stack (respond.drift: pull-request)
  *   agent.command, agent.key_env, agent.timeout   as for review
  *   agent.max_runs         the most agent runs per day, the spend limit
+ *   agent.token_env        the secret (GitHub, Forgejo) or protected variable
+ *                          (GitLab) holding the token the push job pushes
+ *                          the agent's branch with. A GitHub push with the
+ *                          job token starts no workflow, so the agent's
+ *                          commit is not previewed until a token of a user
+ *                          or app pushes it
  *     -> pipeline.agent, and chant's agent job (chant#4616, src/agent-jobs.ts):
  *        `plywood ci` writes the comment agent's jobs and puts the drift
  *        agent on each scheduled drift Op, on a chant that has the job
@@ -29,7 +35,7 @@ import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProble
 export const DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY";
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const REVIEW_KEYS = ["instructions", "command", "key_env", "timeout"] as const;
-const AGENT_KEYS = ["comment", "drift", "command", "key_env", "timeout", "max_runs"] as const;
+const AGENT_KEYS = ["comment", "drift", "command", "key_env", "timeout", "max_runs", "token_env"] as const;
 
 /** What the review Op's step takes (chant `ReviewAgentArgs`). */
 export interface ReviewSettings {
@@ -46,6 +52,8 @@ export interface AgentSettings {
   keyEnv: string;
   timeout?: number;
   maxRuns?: number;
+  /** The push job's token variable (chant `OpAgentSpec.tokenEnv`). Absent: chant's default, the job token on GitHub and Forgejo. */
+  tokenEnv?: string;
 }
 
 /** The review settings, or undefined when `review` is off. */
@@ -71,6 +79,7 @@ export function agentOf(doc: RawConfig): AgentSettings | undefined {
     keyEnv: typeof a.key_env === "string" ? a.key_env : DEFAULT_KEY_ENV,
     ...(typeof a.timeout === "number" ? { timeout: a.timeout } : {}),
     ...(typeof a.max_runs === "number" ? { maxRuns: a.max_runs } : {}),
+    ...(typeof a.token_env === "string" ? { tokenEnv: a.token_env } : {}),
   };
 }
 
@@ -113,6 +122,10 @@ export const agents: ConfigGroup = {
         drift: { type: "boolean", default: false, description: "Open a pull request that fixes a drifted stack (respond.drift: pull-request)." },
         ...modelSchema,
         max_runs: { type: "integer", minimum: 1, description: "The most agent runs per day." },
+        token_env: {
+          type: "string",
+          description: "The secret (GitHub, Forgejo) or protected variable (GitLab) holding the token the push job pushes the agent's branch with. Default: the job token on GitHub and Forgejo, CHANT_FORGE_TOKEN on GitLab. A GitHub push with the job token starts no workflow, so the agent's commit gets no preview.",
+        },
       },
     },
   },
@@ -129,6 +142,7 @@ export const agents: ConfigGroup = {
       else {
         out.push(...onlyKeys(a, AGENT_KEYS, "agent"), ...modelKeys(a, "agent"));
         for (const k of ["comment", "drift"] as const) if (a[k] !== undefined && typeof a[k] !== "boolean") out.push(error(`agent.${k}`, "is true or false"));
+        if (a.token_env !== undefined && (typeof a.token_env !== "string" || !VARIABLE.test(a.token_env))) out.push(error("agent.token_env", "names the secret holding the push token, such as PLYWOOD_AGENT_TOKEN; the token itself never goes in plywood.yml"));
         if (a.max_runs !== undefined && (typeof a.max_runs !== "number" || !Number.isInteger(a.max_runs) || a.max_runs < 1)) out.push(error("agent.max_runs", "is a whole number of runs per day, 1 or more"));
         if ((a.comment === true || a.drift === true) && a.max_runs === undefined) out.push(warning("agent.max_runs", "is not set, so nothing limits how often an agent runs"));
         if (a.drift === true && !(isObject(doc.respond) && doc.respond.drift === "pull-request")) out.push(warning("agent.drift", "is true and respond.drift is not pull-request, so no drift run starts the agent"));

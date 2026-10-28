@@ -23,7 +23,7 @@ Every command takes `--json`, which prints one JSON object on stdout in place of
 | Command | Does |
 |---|---|
 | `plywood check [--base <rev>] [<target>...]` | checks `plywood.yml`, then runs the check hooks at the base commit |
-| `plywood preview [<stack>] [--base <rev>] [--pr <n>] [--forge <kind>]` | previews the stacks the change reaches; `--forge` posts the note |
+| `plywood preview [<stack>] [--base <rev>] [--pr <n>] [--forge <kind>] [--target <urn>]... [--target-dependents] [--refresh]` | previews the stacks the change reaches; `--forge` posts the note; `--target` narrows the preview to resources and `--target-dependents` adds their dependents; `--refresh` reads the cloud first |
 | `plywood tips [<id>]` | prints the tips a preview can name, or the one named |
 | `plywood up [--wave <k>] [--decide \| --share <i> \| --group <name>]` | runs the merge's waves through the `pulumi-up` step |
 | `plywood up --pr <n> [--base <rev>]` | updates an open pull request, with `apply.when: pull-request` |
@@ -55,6 +55,7 @@ Each one is a request on the workspace ledger and runs once a second person appr
 |---|---|
 | `plywood audit [approvals\|updates\|runs\|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...` | prints the workspace ledger's rows |
 | `plywood query "<sql>"` | runs SQL over the ledger's tables |
+| `plywood audit-log unrecorded --audit-log aws[:<region>] --op pulumi-up --since <time>` | lists the cloud writes since a time that no recorded update made, from CloudTrail; exits 2 when it finds one |
 | `plywood estate [--report-url <url>] [--prefix <p>] [--fail-overdue]` | writes the estate page, with overdue drift checks and delivery metrics |
 | `plywood notify relay` | receives Approve clicks from Slack and Teams and records them |
 

@@ -41,6 +41,8 @@ export interface ProductPipelineJobs {
   agent?: { comment: string; name: string; spec: Record<string, unknown> };
   /** The `/plywood preview` comment's jobs (chant#4620), with `previewComment`. */
   preview?: { jobName: string; noteJobName: string; comment: string };
+  /** The stale marking's job (chant#4628), with `staleNotes`. */
+  stale?: { command: string; env: Record<string, string> };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */
@@ -63,6 +65,14 @@ export interface ProductPipelineOptions {
   variables?: Record<string, string>;
   secrets?: Record<string, string>;
   parallelism?: number;
+  /** The note carries its target commit, and a push to the target branch marks older notes stale (chant#4628); a chant before it ignores the option. */
+  staleNotes?: boolean;
+  /** The responses to a refused wave, a failed apply and the description (chant#4629), by chant's event names; a chant before it ignores the option. */
+  respond?: Record<string, string>;
+  /** The decide service the description check asks (chant#4629). */
+  decide?: { backend: string; model: string };
+  /** Merge the pull request once its update before merge applied (chant#4636); a chant before it ignores the option. */
+  applyMerge?: { tokenEnv: string; method?: string };
 }
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
@@ -93,6 +103,10 @@ export interface ChantProduct {
   prCommentPreviewJob?: (...args: unknown[]) => unknown;
   /** Present when chant has the comment preview and `pr-plan --target` (chant#4620). */
   PR_PREVIEW_FLOOR?: string;
+  /** Present when chant has the responses to pipeline events (chant#4629). */
+  CI_RESPOND_FLOOR?: string;
+  /** Present when chant's op-waves generators post `<product>/approval` under a pr-review wave (chant#4630). */
+  APPROVAL_STATUS_FLOOR?: string;
 }
 
 /**

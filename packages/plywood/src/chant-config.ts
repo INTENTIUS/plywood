@@ -124,6 +124,12 @@ export interface ChantPipelineSettings {
   agent?: AgentSettings;
   /** `env`, `pass`, `parallelism` and `environments` (plywood#29): src/jobs.ts puts them on the jobs. */
   jobs?: JobSettings;
+  /** `respond.wave_refused`, `apply_failed` and `description` by chant's event names (chant#4629 `CiResponses`). */
+  respond?: Record<string, string>;
+  /** `decide`, for `respond.description: check` (chant#4629). */
+  decide?: { backend: string; model: string };
+  /** `apply.merge: auto` with its token variable and method (chant#4636 `applyMerge`). */
+  applyMerge?: { tokenEnv: string; method?: "merge" | "squash" | "rebase" };
 }
 
 /** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */

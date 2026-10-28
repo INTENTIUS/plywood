@@ -206,7 +206,7 @@ function cell(s: string): string {
  * The issue's body. `fingerprint` names the finding, so a run that finds the
  * same drift leaves the issue as it is (`sameWhen`).
  */
-export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]; observedAt: string; fingerprint: string; runUrl?: string; respond?: string }): string {
+export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]; observedAt: string; fingerprint: string; runUrl?: string; respond?: string; attribution?: readonly string[] }): string {
   const { stack, rows } = input;
   const lines = [
     driftIssueMarker(stack),
@@ -216,6 +216,7 @@ export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]
     "|---|---|---|",
     ...rows.map((r) => `| \`${cell(r.urn)}\` | ${r.status} | ${r.attributes.length ? r.attributes.map((a) => `\`${cell(a)}\``).join(", ") : ""} |`),
     "",
+    ...(input.attribution?.length ? ["Who changed each attribute, from the known writes and the audit log:", "", ...input.attribution, ""] : []),
     `To put the cloud back to the program, merge a change to ${stack} or run \`${PRODUCT} up\`. To keep the cloud's values, change the program to match and let its preview show no changes.`,
     ...(input.respond === "up" ? ["", `respond.drift is up, so this run also asked for an update of ${stack}'s wave; its gate decides.`] : []),
     ...(input.runUrl ? ["", `Read by ${input.runUrl}.`] : []),

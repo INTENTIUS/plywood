@@ -58,10 +58,14 @@ images platform="" checksums="": build
         -f "images/plywood-$engine/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool" .
     done
 
-# Render .github/workflows/ci.yml from ci/ci.ts. CI fails when the committed
-# file differs from the render.
+# Render .github/workflows/ci.yml from ci/ci.ts and publish.yml from
+# publish/publish.ts, and chant-ci-green.yml from chant.workspace.json's
+# ci.green with the pinned chant (its tick runs that chant through npx). CI
+# fails when a committed file differs from the render.
 ci:
     npx chant build ci -o .github/workflows/ci.yml --format yaml
+    npx chant build publish -o .github/workflows/publish.yml --format yaml
+    npx chant ci workflow --token-secret CI_GREEN_TOKEN
 
 # The tutorial bench (stack/): a local Forgejo with a runner and the floci AWS
 # emulator, with the repository tutor/shop holding the plunge corpus's aws-ts
@@ -88,6 +92,22 @@ tutorial-preview stack="dev" backend="file":
 # Fail if a real-cloud or Pulumi Cloud URL appears in the bench's logs.
 tutorial-scan:
     stack/tutorial.sh scan
+
+# Release steps (AGENTS.md, Releasing). Each checks before it writes, and
+# `--dry-run` on `release` runs every check and changes nothing.
+#   just release-bump 0.1.0        the version in the package, the lock file and the Dockerfiles
+#   just release 0.1.0 [--dry-run] [--commit <sha>] [--branch <b>] [--skip-green]
+#                                  checks the version, the tag, npm and the packed tarball, then
+#                                  tags the green commit v0.1.0 and pushes the tag
+#   just record-digests [<run id>] this version's image digests from GHCR into image-digests.json
+release-bump version:
+    node scripts/release.mjs bump {{version}}
+
+release version *flags:
+    node scripts/release.mjs tag {{version}} {{flags}}
+
+record-digests run="":
+    node scripts/release.mjs digests {{ if run == "" { "" } else { "--run " + run } }}
 
 # Install the site's dependencies from its lock file.
 site-install:

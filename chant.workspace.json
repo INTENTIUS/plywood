@@ -1,0 +1,17 @@
+{
+  "name": "plywood",
+  "schema": 1,
+  "minReader": "0.108.0",
+  "members": [],
+  "ci": {
+    "green": {
+      "branch": "main",
+      "window": "24h",
+      "phases": {
+        "package": ["package"],
+        "site": ["site"]
+      },
+      "require": ["package", "site"]
+    }
+  }
+}

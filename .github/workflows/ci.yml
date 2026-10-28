@@ -35,10 +35,12 @@ jobs:
         run: npm run build
       - name: Bundle check
         run: npm run bundle-check -w @intentius/plywood
-      - name: Workflow matches ci/ci.ts
+      - name: Workflows match their declarations
         run: |
           npx chant build ci -o .github/workflows/ci.yml --format yaml
-          git diff --exit-code -- .github/workflows/ci.yml
+          npx chant build publish -o .github/workflows/publish.yml --format yaml
+          npx chant ci workflow --token-secret CI_GREEN_TOKEN
+          git diff --exit-code -- .github/workflows
   site:
     name: site
     runs-on: ubuntu-latest

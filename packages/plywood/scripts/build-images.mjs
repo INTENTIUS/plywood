@@ -2,6 +2,8 @@
 // from src/images.ts, which holds the engine pins and their checksums.
 //   node scripts/build-images.mjs           (npm run images) writes the files
 //   node scripts/build-images.mjs --check   fails when a committed file differs
+//   node scripts/build-images.mjs --tags    prints `<engine> <ref>` for each image this version names,
+//                                           which the publish workflow pushes and the release records
 // Building an image is `just images`; nothing here builds or pushes one.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,10 +28,15 @@ await build({
   plugins: [chantPlugin()],
   logLevel: "warning",
 });
-const { dockerfiles } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);
+const { dockerfiles, imageFor, TOOL_VERSIONS } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);
 const files = dockerfiles();
 
-if (process.argv.includes("--check")) {
+if (process.argv.includes("--tags")) {
+  for (const engine of Object.keys(TOOL_VERSIONS)) {
+    const ref = imageFor(engine, {});
+    console.log(`${engine} ${ref.repository}:${ref.tag}`);
+  }
+} else if (process.argv.includes("--check")) {
   const differ = Object.entries(files).filter(([path, text]) => {
     try {
       return readFileSync(join(root, path), "utf8") !== text;

@@ -1,11 +1,16 @@
 import type { ChantConfig } from "@intentius/chant";
 
 /**
- * plywood's own config. The repo declares its CI workflow (ci/) with the
- * github lexicon; `just ci` renders it.
+ * plywood's own config. The repo declares its CI workflow (ci/) and its
+ * release workflow (publish/) with the github lexicon; `just ci` renders them.
  */
 export default {
   lexicons: ["github"],
+
+  // chant.workspace.json declares no members; it is there for ci.green (the
+  // ci/green tags chant-ci-green.yml writes, which `just release` reads), so
+  // chant build and lint keep building this root project alone.
+  rootOnly: true,
 
   lint: {
     rules: {

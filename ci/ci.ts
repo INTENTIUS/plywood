@@ -46,8 +46,13 @@ export const pkg = new Job({
     new Step({ name: "Build", run: "npm run build" }),
     new Step({ name: "Bundle check", run: "npm run bundle-check -w @intentius/plywood" }),
     new Step({
-      name: "Workflow matches ci/ci.ts",
-      run: "npx chant build ci -o .github/workflows/ci.yml --format yaml\ngit diff --exit-code -- .github/workflows/ci.yml",
+      name: "Workflows match their declarations",
+      run: [
+        "npx chant build ci -o .github/workflows/ci.yml --format yaml",
+        "npx chant build publish -o .github/workflows/publish.yml --format yaml",
+        "npx chant ci workflow --token-secret CI_GREEN_TOKEN",
+        "git diff --exit-code -- .github/workflows",
+      ].join("\n"),
     }),
   ],
 });

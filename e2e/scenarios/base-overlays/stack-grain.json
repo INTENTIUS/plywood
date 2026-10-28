@@ -1,0 +1,1 @@
+{ "append": { "plywood.yml": "locks:\n  grain: stack\n" } }

@@ -7,26 +7,28 @@ draft: true
 
 import WithPlunge from '../../../components/WithPlunge.astro';
 
-Install [plunge](https://intentius.io/plunge/) v0.1.0, then adopt the `dev` stack, from the clone with the bench's settings in your shell:
+Install [plunge](https://intentius.io/plunge/) v0.1.0, then adopt the `dev` stack from the clone, with the bench's settings in your shell. The bench's `tutorial.env` names plunge's record store as `PLYWOOD_TUTORIAL_PLUNGE_STORE`, with floci's port on the host:
 
 ```sh
 pulumi stack export --stack dev --file dev.json
-plunge stack adopt --file dev.json --stack dev --json
+PULUMI_BACKEND_URL="$PLYWOOD_TUTORIAL_PLUNGE_STORE" plunge stack adopt --file dev.json --stack dev --json --yes
 ```
 
-Point the stack at a `plunge+` backend in `plywood.yml`, the bench's bucket as a job sees it:
+That URL is `plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://127.0.0.1:4590&s3ForcePathStyle=true`. The bucket has versioning, a lifecycle rule for old versions and all four public access blocks, the settings plunge's store checks when it opens one.
+
+Point the stack at the same store in `plywood.yml`, with floci's address inside the bench's network, the one a job sees:
 
 ```yaml
 stacks:
   shop/dev:
-    backend: plunge+s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true
+    backend: plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true
 ```
 
 Then write the workflow again with `npx plywood ci --forge forgejo`.
 
 ## Two pull requests, one stack
 
-Open one pull request that changes the `events` queue and another that changes `worker-0`. plywood locks per resource, so each pull request holds only the URNs its preview touches. Approve and merge both.
+Open two pull requests on `Pulumi.dev.yaml`. The first sets `corpus:eventsRetentionSeconds` to 7200 and changes the `events` queue. The second sets `corpus:workerCount` to 4 and adds `worker-3`. plywood locks per resource, so each pull request holds only the URNs its preview touches. Approve and merge both.
 
 <WithPlunge claim="concurrent-updates" feature="two updates to different resources of one stack that run side by side, with no stack lock" />
 

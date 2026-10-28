@@ -6,7 +6,8 @@
 // TBD-<slug> for a gap with no issue filed. When an issue closes, take it off
 // every page; a page with none left drops `draft: true` and publishes. A
 // published page names no issue in its text (`chant#12`, `INTENTIUS/plywood#3`
-// or an issue URL): status lives in issues and release notes.
+// or an issue URL): status lives in issues and release notes. The one
+// exception is DEVELOPER_PAGE, the reference page for people changing plywood.
 //
 //   node scripts/check-needs.mjs            # the check
 //   node scripts/check-needs.mjs --list     # every need, with its pages
@@ -17,13 +18,14 @@ import { docPages } from '../src/lib/pages.mjs';
 
 const NEED = /^((chant|plunge|plywood)#\d+|TBD-[a-z0-9-]+)$/;
 const ISSUE_REF = /\b(?:INTENTIUS\/)?(?:chant|plunge|plywood|terragucci|choudoufu)#\d+\b|github\.com\/INTENTIUS\/[\w.-]+\/(?:issues|pull)\/\d+/g;
+const DEVELOPER_PAGE = 'reference/development';
 const pages = docPages();
 const problems = [];
 const byNeed = new Map();
 for (const p of pages) {
 	if (p.draft && p.needs.length === 0) problems.push(`${p.file}: draft: true with no needs`);
 	if (!p.draft && p.needs.length > 0) problems.push(`${p.file}: needs ${p.needs.join(', ')} but is not a draft`);
-	if (!p.draft) {
+	if (!p.draft && p.id !== DEVELOPER_PAGE) {
 		const body = readFileSync(p.file, 'utf8').replace(/^---\n[\s\S]*?\n---/, '');
 		for (const m of body.matchAll(ISSUE_REF)) problems.push(`${p.file}: a published page names an issue (${m[0]}); status lives in issues and release notes`);
 	}

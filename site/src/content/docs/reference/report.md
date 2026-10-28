@@ -8,7 +8,7 @@ The preview job writes `.chant/pr/pr-plan.json` and an update of a pull request 
 | Field | Holds |
 |---|---|
 | `stage` | `plan` on the pull request, `apply` for an update |
-| `op`, `gate` | the gate's op, `pr-<n>` (or `pr-<n>-<stack>` for one stack), and the gate it waits on |
+| `op`, `gate` | the gate's op, `pr-<n>` (or `pr-<n>-<stack>` for one stack), and the gate in front of the update |
 | `digest` | the change set's digest, the value an approval binds to |
 | `status` | such as `planned`, `applied`, `waiting` or `refused`, with `refusal` and `message` saying why |
 | `members` | one entry per stack in the change |

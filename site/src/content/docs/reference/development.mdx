@@ -1,0 +1,40 @@
+---
+title: 'Development'
+description: 'Links and notes for people changing plywood itself.'
+---
+
+import DraftList from '../../../components/DraftList.astro';
+
+This page is for people working on plywood itself. The rest of the site describes the published package.
+
+## Repository docs
+
+| Path | Covers |
+|---|---|
+| [CONTRIBUTING.md](https://github.com/INTENTIUS/plywood/blob/main/CONTRIBUTING.md) | where a feature belongs: chant CI core, a chant lexicon, or plywood |
+| [AGENTS.md](https://github.com/INTENTIUS/plywood/blob/main/AGENTS.md) | the repository rules, the checks to run before a change, and the release steps |
+| [justfile](https://github.com/INTENTIUS/plywood/blob/main/justfile) | every recipe, each with a comment |
+| [e2e/](https://github.com/INTENTIUS/plywood/tree/main/e2e) | the bench on chant's e2e harness that records the rows of [Claims and runs](/plywood/reference/validation/); the header of `e2e/main.ts` lists the `just e2e` commands |
+| [stack/](https://github.com/INTENTIUS/plywood/tree/main/stack) | the tutorial bench behind `just tutorial-up`: a local Forgejo, a runner and the floci emulator |
+
+Issues for plywood are on [its tracker](https://github.com/INTENTIUS/plywood/issues). chant and plunge keep their own.
+
+## The chant pin
+
+`@intentius/chant` and every chant lexicon are pinned to one exact version in `package.json` and `packages/plywood/package.json`, and `just bundle-check` holds the two together. [Versions and pins](/plywood/reference/versions-and-pins/) names the pinned release. A chant feature newer than the pin goes behind a feature-detect with a fallback; `packages/plywood/src/chant-next.ts` lists those from chant#4624 to chant#4636.
+
+To build plywood against chant from source:
+
+```sh
+just chant-local              # packs chant's origin/main from a worktree next to the chant checkout
+just chant-local ../chant     # packs that chant directory
+just chant-local --reset      # back to the pin
+```
+
+Run `--reset` before committing a lock file.
+
+## Draft pages
+
+A guide whose feature needs a newer chant or plunge than plywood pins carries `draft: true` and the issues under `needs:` in its front matter. `just site-serve` shows drafts, and a production build leaves them out. In `site/`, `node scripts/check-needs.mjs --list` prints each need with its pages. With `--closed` it names the needs whose issues have closed. A page with no needs left drops `draft: true` and publishes.
+
+<DraftList />

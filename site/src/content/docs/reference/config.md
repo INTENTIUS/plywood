@@ -27,9 +27,6 @@ drift: { schedule: "0 6 * * *" }
 | `approval_rules` | none | per stack glob, `role` or `roles` from `.chant/trust.json` and a `quorum` (default 1); read at base |
 | `apply.when` | `merge` | `merge`, or `pull-request` for `/plywood up` before merge |
 | `apply.requires` | all four | with `when: pull-request`, the conditions an open pull request meets before `/plywood up` updates it: `approved`, `mergeable`, `undiverged`, `checks` |
-| `apply.merge` | `manual` | with `when: pull-request`, `auto` merges the pull request once its update before merge is recorded; a refused merge leaves the update recorded and comments the reason |
-| `apply.merge_token_env` | none | with `merge: auto`, the variable holding the token the merge uses: a secret on GitHub and Forgejo, a protected variable on GitLab; the job's own token never merges |
-| `apply.merge_method` | the forge's default | `merge`, `squash` or `rebase` |
 | `locks.when` | `preview` | `preview`, from the first preview, or `up`, from an update before merge or a `/plywood lock` comment |
 | `locks.grain` | `resource` on plunge, `stack` on stock Pulumi | `resource` or `stack` |
 | `policy.rego` | none | the directory of Rego rules: `deny_*` denies, `hold_*` waits for a person, `warn_*` is a note line |
@@ -59,12 +56,7 @@ drift: { schedule: "0 6 * * *" }
 | `reports.url` | none | where each run's report is kept: `s3://`, `gs://`, `az://` or `file://` |
 | `drift.schedule` | off | a five-field cron line the drift job runs on |
 | `drift.stacks` | every stack | the stacks the drift job reads, by name or `project/*` glob |
-| `drift.audit_log` | off | `aws` or `aws:<region>`, or stack glob to one: the CloudTrail `plywood drift` reads for the writer of each drifted attribute |
 | `respond.drift` | `issue` | `issue`, `pull-request` (the issue and the drift agent's pull request), `up` (the issue and a gated update) or `none` |
-| `respond.wave_refused` | `diff` | `diff` comments a refused wave's change since its approved preview; `off` turns the comment off |
-| `respond.apply_failed` | `triage` | `triage` comments the failed stacks and resources with the engine's error; `off` turns the comment off |
-| `respond.description` | `off` | `check` flags a description that leaves out the preview's deletes or replaces; it never gates, and needs `decide` |
-| `decide.backend`, `decide.model` | none | the `decide.backends` entry of `chant.config.ts` the description check asks, read at the target branch, and the model it pins |
 | `review` | off | `true`, or a mapping with `instructions` (default `.chant/review.md`), `command`, `key_env` (default `ANTHROPIC_API_KEY`) and `timeout` |
 | `agent.comment` | `false` | answer `/plywood agent <ask>` on a pull request |
 | `agent.drift` | `false` | open a pull request that fixes a drifted stack |

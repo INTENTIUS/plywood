@@ -21,5 +21,3 @@ npx plywood audit approvals --where gate=wave-1
 ```sh
 npx plywood query "SELECT * FROM gates"
 ```
-
-behold is chant's console. It reads the same ledger and shows each stack's resources with their drift. [See your stacks in behold](/plywood/guides/see-your-estate-in-behold/).

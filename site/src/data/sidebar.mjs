@@ -101,6 +101,7 @@ export const SIDEBAR = [
 		page('Versions and pins', 'reference/versions-and-pins'),
 		page('Threat model', 'reference/threat-model'),
 		page('Tips', 'reference/tips'),
+		page('Development', 'reference/development'),
 	]),
 	group('Concepts', [
 		page('Glossary', 'concepts/glossary'),

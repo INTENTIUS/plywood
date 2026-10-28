@@ -7,6 +7,8 @@ draft: true
 
 import WithPlunge from '../../../components/WithPlunge.astro';
 
-<WithPlunge feature="per-resource progress during up, read from the records as each one lands" />
+<WithPlunge claim="per-resource-progress" feature="per-resource timings of each provider call and record write during up" />
 
-The `up` job's log and its trace show each resource as plunge writes its record. behold shows the same progress for every running wave.
+plunge times each provider call and each record write during `up`. In the `up` job's trace each resource gets a child span under its stack with its provider and record time. The stack's span carries the totals and the slowest call. A failed update keeps the timings of the resources it reached.
+
+The wave's run record on the ledger keeps the same spans and totals. The package's dashboard preset (`presets/dashboards/plywood.json`) has a table of plunge updates per stack and one per resource.

@@ -16,7 +16,7 @@ waves:
 gate: on-destructive
 approval: ledger
 apply: { when: merge }
-locks: { when: preview, grain: resource }
+locks: { when: preview }
 policy: { rego: policy/, packs: [policy/aws-guard] }
 drift: { schedule: "0 6 * * *" }
 ```
@@ -33,7 +33,7 @@ drift: { schedule: "0 6 * * *" }
 | `apply.when` | `merge` | `merge`, or `pull-request` for `/plywood up` before merge |
 | `apply.requires` | none | the conditions an open pull request meets before `/plywood up` updates it |
 | `locks.when` | `preview` | `preview`, from the first preview, or `up`, from an update before merge or a `/plywood lock` comment |
-| `locks.grain` | `resource` | `resource` or `stack` |
+| `locks.grain` | per engine | `resource` or `stack`; `resource` on plunge and `stack` on stock Pulumi when unset, and stock Pulumi refuses `resource` |
 | `policy` | none | `rego` directory and CrossGuard `packs` |
 | `drift` | off | `schedule`, a cron line, and `stacks`, the stacks the drift job reads |
 | `respond.drift` | `issue` | `issue`, `pull-request`, `up` or `none`: the drift job's answer to a drifted stack |

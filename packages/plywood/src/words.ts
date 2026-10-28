@@ -214,3 +214,48 @@ export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]
 export function driftClearedComment(stack: string, observedAt: string): string {
   return `plywood's drift check at ${observedAt} found ${stack} matching its state, so this issue is closed.`;
 }
+
+/**
+ * The engines in plywood's words (plywood#17): what each does at each stage,
+ * as `plywood config check` and the site's engine table say it. chant's
+ * pulumi lexicon does all of it; these are the sentences.
+ */
+export const ENGINE_WORDS = {
+  pulumi: {
+    lock: "the backend's stack lock orders updates to a stack, so plywood locks per stack",
+    up: "up previews again and checks the fresh preview against the approved one",
+    moved: "a preview that moved since its approval is refused with chant's moved code",
+    progress: "each stack's span in the up job's trace",
+  },
+  plunge: {
+    lock: "no stack lock: each record write is conditional, so plywood locks per resource and two updates to different resources of one stack run side by side",
+    up: "up applies the preview job's saved plan, stamped with the version of each record it read",
+    moved: "a saved plan whose records moved is refused with chant's moved code, the same code as a stock stack's moved preview",
+    progress: "a span per resource in the up job's trace and run record, with its provider and record times",
+  },
+} as const;
+
+/** The lock grain in plywood's words, for `plywood config check`. */
+export const LOCK_GRAIN_WORDS = {
+  perEngine: (engine: "pulumi" | "plunge" | undefined): string =>
+    engine === "plunge"
+      ? "resource, plunge's default (no ci.lockGrain; chant's pulumi lexicon sets it)"
+      : engine === "pulumi"
+        ? "stack, stock Pulumi's default (no ci.lockGrain; chant's pulumi lexicon sets it)"
+        : "per engine: resource on plunge, stack on stock Pulumi (no ci.lockGrain; chant's pulumi lexicon sets it)",
+} as const;
+
+/**
+ * The span attributes chant writes for a plunge update's timings
+ * (chant#4579, `plungeTimingTotals` and `plungeTimingSpans`), under
+ * plywood's prefix. The dashboard preset reads them.
+ */
+export const PLUNGE_TIMING_ATTRIBUTES = {
+  resources: `${PRODUCT}.plunge.resources`,
+  calls: `${PRODUCT}.plunge.calls`,
+  providerMs: `${PRODUCT}.plunge.provider_ms`,
+  recordMs: `${PRODUCT}.plunge.record_ms`,
+  failedCalls: `${PRODUCT}.plunge.failed_calls`,
+  slowestUrn: `${PRODUCT}.plunge.slowest.urn`,
+  slowestMs: `${PRODUCT}.plunge.slowest.ms`,
+} as const;

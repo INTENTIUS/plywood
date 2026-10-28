@@ -34,9 +34,9 @@ export function refusalLine(refusal: Refusal, ctx: RefusalContext = {}): string 
     case "waiting":
       return `${gate} waits for an approval. Approve the digest chant printed with '${PRODUCT} approve ${gate} --plan <digest>', then run ${again} again.`;
     case "moved":
-      return `The preview moved after it was approved, so nothing was updated. Preview again ('${PRODUCT} preview' or /${PRODUCT} preview), read the new change, and approve its digest with '${PRODUCT} approve ${PR_GATE} --plan <digest>'.`;
+      return `The preview moved after it was approved (on plunge, a record the saved plan read was written by another update), so nothing was updated. Preview again ('${PRODUCT} preview' or /${PRODUCT} preview), read the new change, and approve its digest with '${PRODUCT} approve ${PR_GATE} --plan <digest>'.`;
     case "held":
-      return `Another change holds a lock on a resource this update touches. Wait for it to finish, or release it with /${PRODUCT} unlock on the pull request that holds it, then run ${again} again.`;
+      return `Another update or pull request holds a lock on a resource this update touches, and chant named it above. A running update lets go when it ends; a pull request's lock goes with /${PRODUCT} unlock on that pull request. Then run ${again} again.`;
     case "superseded":
       return `A newer push stands in for this one, which stood down. Nothing needs doing: the newer run updates the stacks.`;
     case "denied":

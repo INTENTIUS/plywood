@@ -34,7 +34,7 @@ describe("plywood.yml", () => {
     const config = parseConfig(text);
     expect(errors(text)).toEqual([]);
     expect(toChantSettings(config)).toEqual({
-      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource", policy: { path: "policy" } },
+      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", policy: { path: "policy" } },
       members: [
         { name: "shop/dev", dir: "infra", engine: "pulumi" },
         { name: "shop/prod-east", dir: "infra", engine: "pulumi" },
@@ -46,7 +46,7 @@ describe("plywood.yml", () => {
 
   it("takes plywood's defaults with an empty file", () => {
     expect(toChantSettings(parseConfig(""))).toEqual({
-      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", lockGrain: "resource" },
+      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
       members: [],
       memberDefaults: {},
       pipeline: { gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP },

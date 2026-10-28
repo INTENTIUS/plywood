@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 RUN git config --system --add safe.directory '*' && mkdir -p /opt/plywood/pulumi-home && chmod 1777 /opt/plywood/pulumi-home
 COPY --from=fetch /out/opt/plywood/ /opt/plywood/
 RUN ln -s /opt/plywood/plunge-0.1.0/plunge /usr/local/bin/plunge && plunge version
+RUN plunge plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home
 COPY images/pack/intentius-plywood-0.0.0.tgz /tmp/intentius-plywood-0.0.0.tgz
 RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-0.0.0.tgz && rm -f /tmp/intentius-plywood-0.0.0.tgz && npm cache clean --force && plywood --version
 LABEL org.opencontainers.image.title="plywood-plunge"

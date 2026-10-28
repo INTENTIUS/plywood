@@ -31,6 +31,8 @@ A second person runs that line, since your own approval does not count. Then you
 
 A request runs once. Add `--anew` to run the action again later. It asks for a new request, which waits for a new approval.
 
+plywood's images carry the command provider in their Pulumi home, so a job in one of them replaces the resource without downloading a plugin. In an image of your own, install the provider as you do your other plugins.
+
 ## From the forge
 
 On GitHub and Forgejo, `plywood ci` adds an action job to the workflow when any stack declares an action. Start it with a comment on an issue or a pull request:

@@ -131,6 +131,8 @@ export const PLUNGE_REF = "812cfd894151027dbc22269a5a8b43fb53368ec2";
  * is a stock stack, and plunge's adopt exports it with `pulumi stack
  * export`), and a local plunge build on PATH when the released plunge lacks
  * a feature a scenario reads (plunge 0.1.0 predates plunge#55's timings).
+ * The command provider pw-action's resource needs comes with the plunge
+ * image's Pulumi home (packages/plywood/src/images.ts IMAGE_PLUGINS).
  * `just e2e-image <linux plunge binary>` builds it from
  * {@link jobImageDockerfile}. Nothing pushes it.
  */

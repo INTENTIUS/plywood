@@ -10,8 +10,8 @@ import { BASE_OVERLAYS_DIR, SCENARIOS_DIR, SCENARIO_CLAIMS, lintPlywoodScenario,
 const ROOT = join(import.meta.dirname, "..", "..");
 
 describe("plywood's scenarios", () => {
-  it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside, and plywood#39's, whose scenario waits on the bench's command resource", () => {
-    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-adopt", "pw-canary", "pw-disjoint", "pw-drift", "pw-moved-plan", "pw-moved-preview", "pw-one-note"]);
+  it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside, and plywood#39's", () => {
+    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-action", "pw-adopt", "pw-canary", "pw-disjoint", "pw-drift", "pw-moved-plan", "pw-moved-preview", "pw-one-note"]);
     expect(SCENARIO_CLAIMS).toEqual({
       "pw-disjoint": "plunge/disjoint-updates",
       "pw-moved-plan": "plunge/saved-plan-moved",
@@ -42,7 +42,7 @@ describe("plywood's scenarios", () => {
   it("lint clean through `just e2e lint` on the pinned chant", async () => {
     const out: string[] = [];
     expect(await lint(undefined, (l) => void out.push(l))).toBe(0);
-    expect(out).toHaveLength(7);
+    expect(out).toHaveLength(8);
   });
 
   it("catch a scenario that drifted from plywood's rules", () => {
@@ -74,6 +74,7 @@ describe("plywood's scenarios", () => {
     expect(readScenario("pw-moved-preview").break.env.PLYWOOD_E2E_REPUSH).toBe("notes-line");
     expect(readScenario("pw-canary").break.env.PLYWOOD_E2E_WAVES).toBe("stock-one-wave");
     expect(readScenario("pw-drift").break.env.PLYWOOD_E2E_DRIFT_RETENTION).toBe("7200");
+    expect(readScenario("pw-action").break.env.PLYWOOD_E2E_ROTATE_MARKER).toBe("rotate-marker-second");
     const lines = dryRun(readScenario("pw-canary")).join("\n");
     expect(lines).toContain("configure stock-first;");
     expect(lines).toContain("configure stock-one-wave;");

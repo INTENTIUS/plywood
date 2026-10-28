@@ -632,7 +632,7 @@ function keptPlungeLines(kept: string, detected: Detected, env: NodeJS.ProcessEn
 
 /** The secrets and settings left for the person. */
 function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: NodeJS.ProcessEnv): string[] {
-  // The pulumi lexicon comes with plywood: it is plywood's second runtime dependency, at the chant pin (plywood#9, ruling A1).
+  // The pulumi lexicon and the forge lexicons come with plywood: they are runtime dependencies at the chant pin (plywood#9 ruling A1, plywood#22).
   const out: string[] = [];
   const all = typeof doc.backend === "string" ? doc.backend : undefined;
   const cloud = detected.projects.some((p) => isPulumiCloud(backendOf(p, all ? { all } : {}, env).url));

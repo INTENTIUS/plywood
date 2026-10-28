@@ -21,11 +21,12 @@ build:
 test:
     npm test
 
-# Build, then hold the package to its shape: two runtime dependencies
-# (@intentius/chant at the exact pin, @intentius/chant-lexicon-pulumi at the
-# same version), a bundle that imports only Node's own modules and subpaths
-# of those two that the installed packages serve as compiled JS, and a packed
-# tarball under 2048 KB.
+# Build, then hold the package to its shape: runtime dependencies that are
+# exactly the @intentius packages it loads at run time, all at the chant pin
+# (@intentius/chant, the pulumi lexicon, and the forge lexicon for each forge,
+# which chant's generator loads for `plywood init` and `plywood ci`), a bundle
+# that imports only Node's own modules and subpaths of those that the
+# installed packages serve as compiled JS, and a packed tarball under 2048 KB.
 bundle-check: build
     npm run bundle-check -w @intentius/plywood
 

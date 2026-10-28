@@ -219,7 +219,7 @@ describe("plywood estate on chant#4612", () => {
     const dir = repo({ "plywood.yml": DRIFT_YML });
     expect(await estate([], false, FALLBACK_EXIT, io(dir).stageIo)).toBe(0);
     const t = io(dir);
-    expect(await estate(["--fail-overdue", "--json"], true, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
+    expect(await estate(["--fail-overdue"], true, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
     expect(JSON.parse(t.out[0]!).overdue).toEqual(overdue);
   });
 

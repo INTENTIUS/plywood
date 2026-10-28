@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type PendingGateByPlan } from "../src/chant-product";
@@ -38,11 +38,20 @@ function fakeChant(codes: number[] = [], onCall?: (argv: string[]) => void) {
     approveLine: () => "plywood approve up --plan sha256:x --sign",
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
+      writeBuildOutput(argv);
       onCall?.(argv);
       return codes.shift() ?? 0;
     },
   };
   return { api, calls };
+}
+
+/** chant build writes its --output file; plywood ci fails when none comes out. */
+function writeBuildOutput(argv: string[]): void {
+  const i = argv.indexOf("--output");
+  if (argv[0] !== "build" || i < 0) return;
+  mkdirSync(dirname(argv[i + 1]!), { recursive: true });
+  writeFileSync(argv[i + 1]!, "jobs: {}\n");
 }
 
 function io(cwd: string, env: NodeJS.ProcessEnv = {}): StageIo & { stdout: string[]; stderr: string[] } {
@@ -378,6 +387,9 @@ describe("wave jobs on chant#4607 (plywood#26)", () => {
 
 describe("records", () => {
   it("plywood makes no git writes: no module runs git or spawns a process", () => {
+    // plywood upgrade spawns npm and npx (plywood#23); control prints the push for the person to run.
+    const SPAWNS = new Set(["upgrade.ts"]);
+    const HINT = "  push it: git push origin chant/lifecycle";
     const src = fileURLToPath(new URL("../src", import.meta.url));
     const files: string[] = [];
     const walk = (d: string): void => {
@@ -388,8 +400,8 @@ describe("records", () => {
     };
     walk(src);
     for (const f of files) {
-      const text = readFileSync(f, "utf8");
-      expect(text, f).not.toMatch(/from\s+["'](node:)?child_process["']/);
+      const text = readFileSync(f, "utf8").replaceAll(HINT, "");
+      if (!SPAWNS.has(basename(f))) expect(text, f).not.toMatch(/from\s+["'](node:)?child_process["']/);
       expect(text, f).not.toMatch(/\bgit\s+(push|commit|update-ref|notes)\b/);
     }
   });

@@ -22,6 +22,7 @@ import {
   type DriftForge,
 } from "../src/drift";
 import { FALLBACK_EXIT } from "../src/exit-codes";
+import { installLine, TOOL_VERSIONS } from "../src/images";
 import type { StageIo } from "../src/stages";
 import { driftIssueMarker, driftOpName, PRODUCT_WORDS } from "../src/words";
 
@@ -129,7 +130,7 @@ describe("plywood drift", () => {
     const chant = fakeChant({ "shop/dev": DRIFTED, "shop/prod": CLEAN });
     setChantProductForTests(chant.api);
     const out = io(repo(YML));
-    const code = await drift(["--json"], true, FALLBACK_EXIT, out);
+    const code = await drift([], true, FALLBACK_EXIT, out);
     expect(code).toBe(FALLBACK_EXIT.drift);
     expect(chant.calls.map((a) => a.slice(0, 4))).toEqual([
       ["workspace", "drift", "--member", "shop/dev"],
@@ -199,7 +200,7 @@ describe("the scheduled drift jobs", () => {
     const spec = driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *");
     expect(spec.ops).toEqual([{ name: "plywood-drift-shop-dev", trigger: { kind: "cron", schedule: "0 6 * * *" }, findingMode: "issue" }]);
     expect(spec.options.runCommand).toEqual(["npx", "--no-install", "plywood", "drift", "--op", "{name}", "--forge", "github"]);
-    expect(spec.options.beforeScript).toEqual([SNAPSHOTS_FETCH]);
+    expect(spec.options.beforeScript).toEqual([SNAPSHOTS_FETCH, installLine("pulumi", TOOL_VERSIONS.pulumi)]);
   });
 
   it("has chant generate the jobs from the spec", async () => {

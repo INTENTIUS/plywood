@@ -274,7 +274,10 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords, noteControl: plan.jobs.post.control });
     if (!json && written.kept.length) io.err(`  kept your own jobs: ${written.kept.join(", ")}`);
     if (json) io.out(JSON.stringify({ command: "ci", ok: written.code === 0, exitCode: written.code, dryRun, ...summary, status: written.status, kept: written.kept }));
-    if (written.code !== table.done) return written.code;
+    if (written.code !== table.done) {
+      if (!json) io.err(`${PRODUCT} ci: chant's generator exited ${written.code} and wrote no ${output}; any file there before is back as it was`);
+      return written.code;
+    }
     const wavesCode = waveJobs ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io) : table.done;
     if (wavesCode !== table.done) return wavesCode;
     // The scheduled drift jobs, when plywood.yml sets drift.schedule (plywood#8).

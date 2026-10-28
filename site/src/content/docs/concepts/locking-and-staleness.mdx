@@ -1,18 +1,16 @@
 ---
 title: 'Locking and staleness'
-description: 'plywood locks per resource by default. Stock Pulumi orders updates to a stack with its stack lock, and plunge needs none.'
-needs: [plywood#7, plywood#17, chant#4541, chant#4550]
-draft: true
+description: 'plywood locks per resource on plunge and per stack on stock Pulumi. Stock Pulumi orders updates to a stack with its stack lock, and plunge needs none.'
 ---
 
-plywood switches on chant's [target locks](https://intentius.io/chant/guide/target-locks/), keyed by resource. A pull request holds the URNs its preview touches. It takes them at its first preview and lets go when it merges or closes. Another pull request that touches one of them waits, or is refused at once from a comment.
+plywood switches on chant's [target locks](https://intentius.io/chant/guide/target-locks/). A pull request takes its locks at its first preview and lets go when it merges or closes. Another pull request that needs one of them waits, or is refused at once from a comment. An update also holds the same keys while it runs, and lets go when it ends.
 
 | Setting | Lock key |
 |---|---|
-| `locks: resource` (default) | each URN the preview creates, updates, replaces or deletes |
-| `locks: stack` | the whole stack |
+| `locks.grain: resource` (the default on plunge) | each URN the preview creates, updates, replaces or deletes |
+| `locks.grain: stack` (the default on stock Pulumi) | the whole stack |
 
-Two pull requests that change different resources of one stack each get their preview and approval, and each can merge.
+On plunge, two pull requests that change different resources of one stack each get their preview and approval, and each can merge and update. A stack whose preview has resources that appear only during the update locks the whole stack for that update. On stock Pulumi `plywood config check` refuses `locks.grain: resource`, since the backend's stack lock orders its updates.
 
 ## Stock Pulumi
 

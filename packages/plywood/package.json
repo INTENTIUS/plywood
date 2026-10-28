@@ -1,0 +1,45 @@
+{
+  "name": "@intentius/plywood",
+  "version": "0.0.0",
+  "description": "Pull request automation for Pulumi",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/INTENTIUS/plywood.git",
+    "directory": "packages/plywood"
+  },
+  "homepage": "https://intentius.io/plywood/",
+  "bin": {
+    "plywood": "dist/plywood.mjs"
+  },
+  "files": [
+    "dist",
+    "plywood.schema.json",
+    "templates",
+    "presets",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build-cli.mjs",
+    "schema": "node scripts/build-schema.mjs",
+    "images": "node scripts/build-images.mjs",
+    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/build-images.mjs --check && node scripts/bundle-check.mjs",
+    "prepack": "node scripts/build-cli.mjs"
+  },
+  "dependencies": {
+    "@intentius/chant": "0.124.54",
+    "@intentius/chant-lexicon-pulumi": "0.124.54"
+  },
+  "devDependencies": {
+    "@intentius/chant-lexicon-forgejo": "0.124.54",
+    "@intentius/chant-lexicon-github": "0.124.54",
+    "@intentius/chant-lexicon-gitlab": "0.124.54"
+  }
+}

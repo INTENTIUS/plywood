@@ -1,13 +1,11 @@
 ---
 title: 'Choose pulumi or plunge'
 description: 'Every stage runs with stock Pulumi or with plunge. The engine table, and the features plunge adds.'
-needs: [plywood#17, chant#4541, chant#4550]
-draft: true
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Stock Pulumi is the default, and `init` never picks plunge on its own. A stack runs plunge when `plywood.yml` says `engine: plunge`, or when its backend URL starts with `plunge+`.
+Stock Pulumi is the default, and `init` never picks plunge on its own. A stack runs plunge when `plywood.yml` says `engine: plunge`, or when its backend URL starts with `plunge+`. With neither, chant reads `PULUMI_BACKEND_URL` and `Pulumi.yaml`. `plywood init --engine plunge` gives each stack on a bucket or file backend the `plunge+` form of the same URL.
 
 | | Pulumi | plunge |
 |---|---|---|
@@ -20,7 +18,7 @@ Stock Pulumi is the default, and `init` never picks plunge on its own. A stack r
 
 <Tabs syncKey="engine">
 <TabItem label="Pulumi">
-Every stage runs the Pulumi CLI your stacks use today with your own plugins.
+Every stage runs stock Pulumi at the release `pulumi:` pins (the image's when unset), with your own plugins.
 </TabItem>
 <TabItem label="plunge">
 plunge is the Pulumi fork from the team behind plywood. It runs the same programs and providers. With plunge, the pipeline also gets:

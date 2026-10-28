@@ -1,7 +1,7 @@
 ---
 title: 'Re-preview from a comment'
-description: 'A /plywood preview comment previews the pull request''s head again and replaces the note.'
-needs: [plywood#6, chant#4541, chant#4550]
+description: 'A /plywood preview comment previews the pull request''s head again and updates the note.'
+needs: [plywood#28]
 draft: true
 ---
 
@@ -11,10 +11,8 @@ Comment on the pull request:
 /plywood preview
 ```
 
-The preview job runs on the pull request's head and replaces the note in place. Name one stack to preview only that stack:
+One job previews every stack the change reaches at the pull request's head. A second job then updates the note and the `plywood/preview` status. Use it after a change outside the repository, such as a new ESC value. The comment takes no stack and no flags.
 
-```text
-/plywood preview shop/dev
-```
+The preview job holds a read token only, and drops it before your program runs. On GitHub only someone with write access to the repository can start it. Forgejo has no such check. On GitLab, a note starts nothing: run a pipeline of the target branch with the variable `CHANT_PREVIEW_PR` holding the merge request's number.
 
-Use it after a change outside the repository, such as a new ESC value. Comments come through chant's [pull request hooks](https://intentius.io/chant/guide/pull-request-hooks/).
+`plywood ci` writes the two jobs into the workflow once your chant has them. Run it again after you upgrade.

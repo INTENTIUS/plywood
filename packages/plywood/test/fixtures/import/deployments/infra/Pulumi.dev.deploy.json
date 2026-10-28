@@ -1,0 +1,5 @@
+{
+  "sourceContext": { "git": { "branch": "refs/heads/develop", "repoDir": "infra" } },
+  "gitHub": { "previewPullRequests": false, "paths": ["infra/**"] },
+  "executorContext": { "executorImage": "ghcr.io/acme/pulumi-runner:3.272.0" }
+}

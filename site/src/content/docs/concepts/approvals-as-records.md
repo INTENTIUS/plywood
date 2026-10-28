@@ -1,8 +1,6 @@
 ---
 title: 'Approvals are records'
 description: 'An approval is a row in the chant workspace ledger in your repository, bound to one preview digest.'
-needs: [plywood#7, chant#4541, chant#4550]
-draft: true
 ---
 
 `plywood approve` records a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/) on your repository's `chant/lifecycle` branch. The row holds the gate and the digest. It also names the approver and the time, and with `--sign` it carries an SSH signature.

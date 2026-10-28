@@ -1,0 +1,102 @@
+# The tutorial bench: Forgejo with a runner, and floci, on one Docker network.
+# stack/tutorial.sh drives it (`just tutorial-up`, `just tutorial-down`,
+# `just tutorial-reset`) and stack/seed.sh fills it: the backend bucket on
+# floci, the user tutor, the runner's registration and the repository
+# tutor/shop built from the plunge corpus's aws-ts program.
+#
+# Everything here is named plywood-tutorial (the compose project, the network,
+# the containers and the volumes), so the bench sits beside terragucci's stack
+# or another harness on the same machine without a clash. Host ports are off
+# the defaults for the same reason and bound to 127.0.0.1 only:
+#
+#   PLYWOOD_TUTORIAL_FORGEJO_PORT  default 3390, Forgejo's web UI and API
+#   PLYWOOD_TUTORIAL_FLOCI_PORT    default 4590, the AWS API
+#
+# Inside the network a job reaches the forge as http://forgejo:3000 and AWS as
+# http://floci:4566. The forge's public URL is its service name, because every
+# URL a job is handed (clone, API) comes from it and localhost inside a job
+# container is the job container. The host reaches the same server through the
+# published port.
+name: plywood-tutorial
+
+networks:
+  default:
+    name: plywood-tutorial
+
+volumes:
+  forgejo-data:
+    name: plywood-tutorial-forgejo-data
+  runner-data:
+    name: plywood-tutorial-runner-data
+
+services:
+  # The floci build choudoufu pins in live/floci-image, the same digest the
+  # plunge corpus records in tests/plunge-corpus/emulator-images, so the
+  # tutorial runs against the emulator the corpus baseline was recorded on.
+  floci:
+    image: ghcr.io/lex00/floci@sha256:5ec92ae8046445d62c0009590dd09f04560886e5a5ef31248cb3fcc09b2961ec
+    container_name: plywood-tutorial-floci
+    ports:
+      - "127.0.0.1:${PLYWOOD_TUTORIAL_FLOCI_PORT:-4590}:4566"
+    networks:
+      default:
+        # The AWS provider reaches S3 Control at <account-id>.<endpoint host>,
+        # and floci's account id is twelve zeros. The bucket alias lets a
+        # client that addresses the backend bucket virtual-hosted find it too.
+        aliases: [floci, 000000000000.floci, plywood-tutorial-state.floci]
+
+  # sqlite and INSTALL_LOCK skip the web installer; stack/seed.sh creates the
+  # user tutor and its token afterwards. Forgejo 15 and later, with runner
+  # 12.5 and later, serves Actions OIDC tokens to a job that asks for one.
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:16.0.5
+    container_name: plywood-tutorial-forgejo
+    environment:
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__server__DOMAIN: forgejo
+      FORGEJO__server__ROOT_URL: http://forgejo:3000/
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__SSH_PORT: "0"
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__actions__ENABLED: "true"
+      FORGEJO__repository__DEFAULT_BRANCH: main
+      FORGEJO__log__LEVEL: warn
+    ports:
+      - "127.0.0.1:${PLYWOOD_TUTORIAL_FORGEJO_PORT:-3390}:3000"
+    volumes:
+      - forgejo-data:/data
+    networks:
+      default:
+        aliases: [forgejo]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/version"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # The docker executor: it talks to the host's Docker through the socket and
+  # starts one job container per job on the plywood-tutorial network. It waits
+  # for /data/config.yml, which stack/seed.sh writes once Forgejo has issued
+  # the runner's credentials. Root, so it can use the socket Docker Desktop
+  # mounts as root:root.
+  runner:
+    image: data.forgejo.org/forgejo/runner:13.2.0
+    container_name: plywood-tutorial-runner
+    user: "0:0"
+    depends_on:
+      forgejo:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-data:/data
+    working_dir: /data
+    command:
+      - sh
+      - -c
+      - |
+        echo "waiting for /data/config.yml (written by stack/seed.sh)"
+        while [ ! -s /data/config.yml ]; do sleep 1; done
+        exec forgejo-runner daemon -c /data/config.yml
+    restart: unless-stopped

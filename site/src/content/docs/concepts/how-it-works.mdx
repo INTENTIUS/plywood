@@ -1,8 +1,6 @@
 ---
 title: 'Architecture'
 description: 'The path of a change through plywood, and the parts that belong to Pulumi and to chant.'
-needs: [plywood#6, plywood#7, chant#4541, chant#4550]
-draft: true
 ---
 
 A change moves through five steps.
@@ -10,7 +8,7 @@ A change moves through five steps.
 1. The preview job runs `pulumi preview --json` on every stack the pull request reaches.
 2. plywood groups the previews into one change set with a digest per stack and one over the set. It posts one note.
 3. A reviewer runs `plywood approve`, which records an approval of that digest.
-4. After merge, the canary stack updates first. Each later wave waits behind its own gate.
+4. The canary wave updates first after merge, and each later wave follows it. A wave whose preview no longer matches the approved digest waits at its own gate.
 5. Each step leaves a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/) in your repository.
 
 ## Who does each part

@@ -1,0 +1,4 @@
+# The images (images/*/Dockerfile) build from the repository root and install
+# the packed package (npm pack into images/pack); everything else stays out of the build context.
+*
+!images/pack/*.tgz

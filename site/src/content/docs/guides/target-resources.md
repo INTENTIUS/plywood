@@ -1,14 +1,18 @@
 ---
-title: 'Preview and update a few resources'
-description: 'Pass URNs as targets, and the approval covers exactly that narrowed preview.'
-needs: [plywood#6, chant#4541, chant#4550]
+title: 'Preview a few resources'
+description: 'Pass URNs as targets to see the preview of those resources alone.'
+needs: [plywood#28]
 draft: true
 ---
 
-Comment with one or more URNs:
+Name one or more URNs on the preview:
 
-```text
-/plywood preview --target urn:pulumi:prod::shop::aws:sqs/queue:Queue::events
+```sh
+npx plywood preview shop/prod --target urn:pulumi:prod::shop::aws:sqs/queue:Queue::events
 ```
 
-The preview passes `--target` to Pulumi, and the targets join the preview digest. An approval of that digest covers the narrowed preview only, and `up` runs with the same targets. Targeting is chant's [resource targeting](https://intentius.io/chant/guide/resource-targeting/).
+Each `--target` goes to `pulumi preview --target` for every stack the pull request reaches, or only for the stack you name. Repeat it for more resources. The note shows the narrowed preview, and its digest covers the targets, so an approval of it covers no other preview.
+
+The update on merge still previews whole stacks, so an approval of a narrowed preview does not let it through. Use a targeted preview to look at a few resources in a large stack, and approve the full preview to update. A stack whose step cannot narrow to resources is refused by name, and nothing is previewed.
+
+Targeting is chant's [resource targeting](https://intentius.io/chant/guide/resource-targeting/).

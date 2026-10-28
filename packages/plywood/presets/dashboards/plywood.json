@@ -1,0 +1,83 @@
+{
+  "title": "plywood",
+  "description": "plywood's runs from chant's OTLP traces (chant#4555), read through a Tempo data source. Span attributes carry the plywood. prefix.",
+  "uid": "plywood-runs",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": { "from": "now-7d", "to": "now" },
+  "tags": ["plywood", "pulumi", "chant"],
+  "templating": {
+    "list": [
+      { "name": "tempo", "label": "Traces", "type": "datasource", "query": "tempo" },
+      {
+        "name": "stack",
+        "label": "Stack",
+        "type": "custom",
+        "query": ".*",
+        "current": { "text": "all", "value": ".*" },
+        "description": "A regular expression over plywood.stack, such as shop/prod-.*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Runs",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ resource.service.name = \"plywood\" && span.plywood.run.id != nil }", "limit": 50 }]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Updates per stack",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ span.plywood.stack =~ \"${stack}\" && span.plywood.up.result != nil } | select(span.plywood.stack, span.plywood.engine, span.plywood.up.result, span.plywood.up.duration_s)", "limit": 100 }]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Failed updates",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ span.plywood.stack =~ \"${stack}\" && (span.plywood.up.result = \"failed\" || span.plywood.failure.code != nil) } | select(span.plywood.stack, span.plywood.failure.code, span.plywood.failure.exit_code)", "limit": 100 }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Update duration (s)",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceqlmetrics", "query": "{ span.plywood.stack =~ \"${stack}\" && span.plywood.up.duration_s != nil } | quantile_over_time(span.plywood.up.duration_s, .5, .95) by (span.plywood.stack)" }]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Waits for an approval",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ event:name = \"gate-waiting\" } | select(event.plywood.gate.op, event.gate)", "limit": 50 }]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "plunge updates per stack",
+      "description": "Stacks on plunge: the resources an update wrote, its provider and record time, and its slowest call.",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ span.plywood.stack =~ \"${stack}\" && span.plywood.plunge.resources != nil } | select(span.plywood.stack, span.plywood.plunge.resources, span.plywood.plunge.calls, span.plywood.plunge.provider_ms, span.plywood.plunge.record_ms, span.plywood.plunge.failed_calls, span.plywood.plunge.slowest.urn, span.plywood.plunge.slowest.ms)", "limit": 100 }]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "plunge updates per resource",
+      "description": "One row per resource a plunge update wrote, with its provider and record time.",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "${tempo}" },
+      "targets": [{ "refId": "A", "queryType": "traceql", "query": "{ span.plywood.plunge.calls != nil && span.plywood.plunge.resources = nil } | select(span.plywood.resource.type, span.plywood.resource.name, span.plywood.plunge.calls, span.plywood.plunge.provider_ms, span.plywood.plunge.record_ms)", "limit": 200 }]
+    }
+  ]
+}

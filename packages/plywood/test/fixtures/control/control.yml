@@ -1,0 +1,9 @@
+defaults:
+  gate: on-destructive
+  pulumi: 3.200.0
+projects:
+  github.com/acme/shop:
+    approval: pr-review
+    approval_rules:
+      "shop/prod-*": { role: sre, quorum: 2 }
+  github.com/acme/billing: {}

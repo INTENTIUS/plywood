@@ -1,10 +1,26 @@
 {
-  "name": "@intentius/plywood",
+  "name": "plywood",
   "version": "0.0.0",
-  "description": "A lifecycle kit for Pulumi and plunge stacks, built on chant. Reserved; nothing is built yet.",
+  "private": true,
+  "type": "module",
+  "description": "Pull request automation for Pulumi",
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "git+https://github.com/INTENTIUS/plywood.git" },
-  "homepage": "https://github.com/INTENTIUS/plywood",
-  "files": ["README.md", "LICENSE"],
-  "publishConfig": { "access": "public" }
+  "homepage": "https://intentius.io/plywood/",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @intentius/plywood",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@intentius/chant": "0.124.54",
+    "@intentius/chant-lexicon-github": "0.124.54",
+    "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
 }

@@ -1,31 +1,33 @@
 ---
 title: 'The same repo on plunge'
 description: 'Move one stack onto plunge, then run two pull requests that touch different resources of it.'
-needs: [plywood#11, plywood#17, chant#4541, plunge#7, chant#4553, chant#4550]
+needs: [plunge#7]
 draft: true
 ---
 
 import WithPlunge from '../../../components/WithPlunge.astro';
 
-Install [plunge](https://intentius.io/plunge/) v0.1.0, then adopt the `dev` stack:
+Install [plunge](https://intentius.io/plunge/) v0.1.0, then adopt the `dev` stack, from the clone with the bench's settings in your shell:
 
 ```sh
 pulumi stack export --stack dev --file dev.json
 plunge stack adopt --file dev.json --stack dev --json
 ```
 
-Point the stack at a `plunge+` backend in `plywood.yml`:
+Point the stack at a `plunge+` backend in `plywood.yml`, the bench's bucket as a job sees it:
 
 ```yaml
 stacks:
   shop/dev:
-    backend: plunge+s3://plywood-tutorial-state?endpoint=localhost:4566
+    backend: plunge+s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true
 ```
+
+Then write the workflow again with `npx plywood ci --forge forgejo`.
 
 ## Two pull requests, one stack
 
 Open one pull request that changes the `events` queue and another that changes `worker-0`. plywood locks per resource, so each pull request holds only the URNs its preview touches. Approve and merge both.
 
-<WithPlunge feature="two updates to different resources of one stack that run side by side, with no stack lock" />
+<WithPlunge claim="concurrent-updates" feature="two updates to different resources of one stack that run side by side, with no stack lock" />
 
 Each `up` applies a saved plan. The plan carries the version of each record it read, so a record another update moved makes `plunge up` refuse with exit 40. plywood reports that as chant's moved-plan code, the same code a stock stack gets for a moved preview.

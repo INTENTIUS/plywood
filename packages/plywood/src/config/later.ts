@@ -1,0 +1,23 @@
+/**
+ * Keys reference/config.md lists whose groups land in later plywood units.
+ * Each is accepted as written and not yet turned into chant's settings, so
+ * a plywood.yml that sets one checks clean today and keeps working once the
+ * group lands. A unit that builds one of these adds its group file under
+ * src/config/ and takes the key out of LATER_KEYS.
+ */
+import type { ConfigGroup } from "./types";
+
+export const LATER_KEYS: Readonly<Record<string, string>> = {
+  env: "plywood#5",
+  pass: "plywood#5",
+  parallelism: "plywood#5",
+  environments: "plywood#5",
+};
+
+export const later: ConfigGroup = {
+  name: "later",
+  keys: Object.keys(LATER_KEYS),
+  schema: Object.fromEntries(Object.keys(LATER_KEYS).map((k) => [k, { description: "Read by a later plywood; accepted as written." }])),
+  check: () => [],
+  translate() {},
+};

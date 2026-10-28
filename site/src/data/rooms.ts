@@ -55,7 +55,7 @@ export const ENGINES: { id: string; label: string; adds: string[]; href: string 
 			'A saved plan refuses records that moved after review',
 			'Drift read per resource, with no program run',
 		],
-		href: '/guides/choose-an-engine/#plunge',
+		href: '/guides/choose-an-engine/',
 	},
 ];
 
@@ -97,7 +97,8 @@ export const ROOMS: Room[] = [
 		lede: 'Your stacks live in Pulumi Cloud, and you want previews and updates to run from your own forge\'s pull requests.',
 		works: [
 			'State and update history stay in Pulumi Cloud next to ESC environments and Insights',
-			'Previews and updates run in your forge\'s CI, logged in with a Pulumi access token',
+			'Previews and updates run in your forge\'s CI, logged in with a Pulumi Cloud token traded from the job\'s OIDC token',
+			'Stock Pulumi resolves each stack\'s ESC environments on the Pulumi Cloud backend with that token',
 			'Pulumi Cloud\'s stack lock keeps updates to a stack in order',
 			'An approval binds the preview digest, on top of Pulumi Cloud\'s own controls',
 		],
@@ -148,7 +149,7 @@ export const ROOMS: Room[] = [
 		lede: 'You run one Pulumi project and give each environment or region its own stack.',
 		works: [
 			'Each stack is a member, and stacks form waves',
-			'The first stack in plywood.yml is the canary',
+			'The first wave in plywood.yml is the canary',
 			'A later wave holds for its own approval',
 		],
 		differs: [],
@@ -175,10 +176,10 @@ export const ROOMS: Room[] = [
 	{
 		id: 'many-repos',
 		title: 'Many repositories',
-		lede: 'Your stacks span many repositories, and one team sets policy for all of them.',
+		lede: 'Your stacks span many repositories, and one team sets the approvers for all of them.',
 		works: [
-			'A control repo holds the policy and the approvers',
-			'Each repository reads them at base, so a pull request cannot loosen its own gate',
+			'A control repo holds the approvers and the engine pins',
+			'Each repository gets its settings as a pull request, so a change to them is reviewed like any other',
 		],
 		differs: [],
 		first: { label: 'Govern many repositories', href: '/guides/govern-many-repos/' },

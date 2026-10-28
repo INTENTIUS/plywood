@@ -6,10 +6,11 @@
   "license": "Apache-2.0",
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/check-needs.mjs && astro build && node scripts/unwrap-draft-links.mjs && node scripts/check-rooms.mjs && node scripts/check-links.mjs && node scripts/check-contrast.mjs",
+    "build": "node scripts/check-needs.mjs && node scripts/check-claims.mjs && astro build && node scripts/unwrap-draft-links.mjs && node scripts/check-rooms.mjs && node scripts/check-links.mjs && node scripts/check-contrast.mjs",
     "preview": "astro preview",
     "lint:prose": "node scripts/lint-prose.mjs",
     "check:needs": "node scripts/check-needs.mjs",
+    "check:claims": "node scripts/check-claims.mjs",
     "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {

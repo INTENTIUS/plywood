@@ -1,28 +1,16 @@
 ---
 title: 'A preview that changed after review'
-description: 'Push again after an approval, and plywood refuses the old approval and names the change.'
-needs: [plywood#11, plywood#7, chant#4541, chant#4553, chant#4550]
-draft: true
+description: 'Push again after an approval, and the old approval no longer covers the waves.'
 ---
 
-Open a new pull request that sets `corpus:workerCount: "4"` on `dev`, and approve its preview.
+Open a new pull request that sets `corpus:workerCount: "4"` on `dev`, and approve its preview. The program's default is three worker queues, so the preview creates `worker-3`.
 
-Before you merge, push one more commit that also sets `corpus:workerCount: "5"`. The preview job runs again and the note now reads:
+Before you merge, push one more commit that sets `corpus:workerCount: "5"`. The preview job runs again, and the note now shows two queues to create and a new digest. The approval you gave names the old digest, so it covers neither the new preview nor the merge.
 
-```text
-plywood preview: 1 stack, 2 to create
-
-The approval of sha256:58aa... no longer covers this preview.
-Changed since it: + aws:sqs/queue:Queue worker-4
-
-Approve: plywood approve pr-2 --plan sha256:c370...
-```
-
-Merge anyway, and the canary wave refuses to update:
+Merge anyway. The canary wave previews `shop/dev` on the merged commit and finds plans the approval does not cover, so it stops before anything changes:
 
 ```text
-plywood up: refused, preview moved
-approved sha256:58aa..., previewed sha256:c370...
+wave 1 (dev): the pull request's approval does not cover it (no approval at up covers it), so it waits at its own gate wave-1
 ```
 
-Nothing reaches floci. Approve the new digest and the wave runs. [Fix a refused wave](/plywood/guides/fix-a-refused-wave/).
+Nothing reaches floci. Read the new preview, and if it is right, approve its digest with the line the job printed (`plywood approve wave-1 --plan <digest>`). Then `npx plywood resume` starts the wave jobs the approval cleared. [Fix a refused wave](/plywood/guides/fix-a-refused-wave/).

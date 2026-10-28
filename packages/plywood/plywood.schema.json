@@ -1,0 +1,986 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intentius.io/plywood/plywood.schema.json",
+  "title": "plywood.yml",
+  "description": "plywood's config. Each key wraps a chant setting; plywood sets chant's keys from it, so a ci. key is refused.",
+  "$comment": "Generated from packages/plywood/src/config by scripts/build-schema.mjs; edit the group modules, then run npm run schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "stacks": {
+      "type": "object",
+      "description": "Each stack as project/stack. plywood init finds them when the key is absent.",
+      "propertyNames": {
+        "pattern": "^[^/\\s]+\\/[^/\\s]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "The directory holding the stack's Pulumi.yaml."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths whose change previews the stack, beside its directory."
+          },
+          "gate": {
+            "type": "string",
+            "enum": [
+              "always",
+              "on-destructive",
+              "never"
+            ],
+            "description": "The stack's gate, in place of the top-level gate."
+          },
+          "backend": {
+            "type": "string",
+            "description": "The backend URL. A plunge+ URL (plunge+file://, plunge+s3://) picks the plunge engine."
+          }
+        }
+      }
+    },
+    "waves": {
+      "description": "Lists of stacks, updated in order, the first wave the canary; or canary and after. One wave per environment when absent.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "canary": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "The stacks that update first, in a wave of their own."
+            },
+            "after": {
+              "type": "object",
+              "description": "Each stack to the stacks it updates after, beside the order its StackReferences give.",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "pulumi",
+        "plunge"
+      ],
+      "description": "pulumi or plunge. Absent, a plunge+ backend picks plunge, else chant reads PULUMI_BACKEND_URL and Pulumi.yaml."
+    },
+    "backend": {
+      "type": "string",
+      "description": "The backend URL. A plunge+ URL (plunge+file://, plunge+s3://) picks the plunge engine."
+    },
+    "apply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "pull-request"
+          ],
+          "default": "merge",
+          "description": "merge, or pull-request for /plywood up before merge."
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "mergeable",
+              "undiverged",
+              "checks"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "What an open pull request needs before /plywood up updates it. All four when absent. Only with when: pull-request."
+        }
+      }
+    },
+    "locks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "string",
+          "enum": [
+            "preview",
+            "up"
+          ],
+          "default": "preview",
+          "description": "preview, from the first preview, or up, from an update before merge or a /plywood lock comment."
+        },
+        "grain": {
+          "type": "string",
+          "enum": [
+            "resource",
+            "stack"
+          ],
+          "description": "resource, one lock per resource, or stack, one lock per stack. Absent, resource on plunge and stack on stock Pulumi."
+        }
+      }
+    },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "always",
+        "on-destructive",
+        "never"
+      ],
+      "default": "on-destructive",
+      "description": "always, on-destructive or never."
+    },
+    "approval": {
+      "type": "string",
+      "enum": [
+        "ledger",
+        "sealed",
+        "pr-review"
+      ],
+      "default": "ledger",
+      "description": "ledger, sealed or pr-review."
+    },
+    "approval_rules": {
+      "type": "object",
+      "description": "Role and quorum per stack glob. Read at base.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "A role .chant/trust.json gives the approvers."
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Roles, any of which counts."
+          },
+          "quorum": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Distinct approvers the stacks need."
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Rego rules and CrossGuard policy packs in the preview job, feeding chant's gate. Read at base.",
+      "properties": {
+        "rego": {
+          "type": "string",
+          "description": "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line."
+        },
+        "engine": {
+          "type": "string",
+          "enum": [
+            "conftest",
+            "opa"
+          ],
+          "default": "conftest",
+          "description": "The result shape the rules' engine prints: conftest or opa. A hold needs opa."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "The Rego package to read. conftest: every package; opa: main."
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "argv in place of the engine's own; {policy} is the rules' directory at base, {input} the change set."
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo",
+            "ref"
+          ],
+          "description": "A shared rule set from a git ref, fetched by the job at the ref the base names (chant >= the release after 0.124.54). packs are then paths inside it.",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "The repository: https://, ssh:// or file:// URL, or git@<host>:<path>."
+            },
+            "ref": {
+              "type": "string",
+              "description": "A tag, a branch or a full commit."
+            },
+            "path": {
+              "type": "string",
+              "default": "policy",
+              "description": "The Rego directory inside the repository."
+            }
+          }
+        },
+        "packs": {
+          "type": "array",
+          "description": "CrossGuard packs the preview and the update run with --policy-pack. Mandatory violations deny; advisory ones are note lines.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The pack's directory, relative to the repository root."
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "dir"
+                ],
+                "properties": {
+                  "dir": {
+                    "type": "string",
+                    "description": "The pack's directory, relative to the repository root."
+                  },
+                  "config": {
+                    "type": "string",
+                    "description": "Its --policy-pack-config file."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The preview and up identities per cloud, for every stack and per stack glob. The preview job trades its OIDC token before the program is checked out.",
+      "properties": {
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aws": {
+              "type": "string",
+              "description": "An IAM role ARN."
+            },
+            "gcp": {
+              "type": "string",
+              "description": "A service account email."
+            },
+            "azure": {
+              "type": "string",
+              "description": "An Entra app's client id."
+            },
+            "pulumi": {
+              "type": "string",
+              "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+              "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+            }
+          },
+          "description": "The preview job's identity per cloud, for every stack."
+        },
+        "up": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aws": {
+              "type": "string",
+              "description": "An IAM role ARN."
+            },
+            "gcp": {
+              "type": "string",
+              "description": "A service account email."
+            },
+            "azure": {
+              "type": "string",
+              "description": "An Entra app's client id."
+            },
+            "pulumi": {
+              "type": "string",
+              "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+              "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+            }
+          },
+          "description": "The update job's identity per cloud, for every stack."
+        },
+        "stacks": {
+          "type": "object",
+          "description": "Stack glob (project/stack; * stays within one segment) to its own preview and up identities. The first glob that matches a stack is its.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "preview": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "aws": {
+                    "type": "string",
+                    "description": "An IAM role ARN."
+                  },
+                  "gcp": {
+                    "type": "string",
+                    "description": "A service account email."
+                  },
+                  "azure": {
+                    "type": "string",
+                    "description": "An Entra app's client id."
+                  },
+                  "pulumi": {
+                    "type": "string",
+                    "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+                    "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+                  }
+                }
+              },
+              "up": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "aws": {
+                    "type": "string",
+                    "description": "An IAM role ARN."
+                  },
+                  "gcp": {
+                    "type": "string",
+                    "description": "A service account email."
+                  },
+                  "azure": {
+                    "type": "string",
+                    "description": "An Entra app's client id."
+                  },
+                  "pulumi": {
+                    "type": "string",
+                    "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+                    "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+                  }
+                }
+              },
+              "environments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Environment globs the rule covers. Absent: every environment."
+              }
+            }
+          }
+        },
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "region": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": "string"
+            }
+          }
+        },
+        "gcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "sts_endpoint": {
+              "type": "string"
+            },
+            "iam_endpoint": {
+              "type": "string"
+            }
+          }
+        },
+        "azure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tenant_id": {
+              "type": "string"
+            },
+            "subscription_id": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "authority": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "pulumi_cloud": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "org"
+      ],
+      "description": "The Pulumi Cloud organization the stacks' state is in. With identity's pulumi tokens, each job trades for its own access token.",
+      "properties": {
+        "org": {
+          "type": "string",
+          "description": "The organization."
+        },
+        "api_url": {
+          "type": "string",
+          "description": "The Pulumi Cloud API, for a self-hosted one. Default https://api.pulumi.com."
+        },
+        "audience": {
+          "type": "string",
+          "description": "The OIDC token's audience. Default urn:pulumi:org:<org>."
+        }
+      }
+    },
+    "review_stacks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template"
+      ],
+      "description": "A stack per open pull request. Off when absent.",
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "The stack whose config a review stack starts from, as project/stack."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^pr-\\{number\\}(?:-[a-z0-9][a-z0-9-]*)?$",
+          "default": "pr-{number}",
+          "description": "The review stack's name: pr-{number}, or pr-{number}-<suffix>. Only stacks named so are destroyed."
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^\\d+[mhd]$",
+          "description": "How long a review stack lives after its last update, such as 72h. chant's default when absent."
+        }
+      }
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Chat and webhook messages when a wave waits, an update is refused or fails, or drift is found. Each value names a variable.",
+      "properties": {
+        "slack": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "webhook"
+          ],
+          "properties": {
+            "webhook": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the incoming webhook's URL."
+            }
+          }
+        },
+        "teams": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "webhook"
+          ],
+          "properties": {
+            "webhook": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the incoming webhook's URL."
+            }
+          }
+        },
+        "webhook": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "key"
+          ],
+          "description": "A generic webhook; each chant.notify/v1 event is signed with the key.",
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the webhook's URL."
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the signing key."
+            }
+          }
+        },
+        "on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "wave-waiting",
+              "up-refused",
+              "up-failed",
+              "drift"
+            ]
+          },
+          "description": "The events to send. Default: all of them."
+        },
+        "relay": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the relay key. A waiting wave's Slack and Teams messages then carry the approval that plywood notify relay records."
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One OpenTelemetry trace per run over OTLP/HTTP, with a span per stack. OTEL_* variables in the job win over these.",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "description": "The OTLP/HTTP base URL; /v1/traces is added."
+        },
+        "headers_env": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the OTLP headers, k=v,k2=v2."
+        },
+        "service_name": {
+          "type": "string",
+          "default": "plywood",
+          "description": "The trace's service.name."
+        },
+        "traces": {
+          "type": "boolean",
+          "default": true,
+          "description": "false turns traces off."
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "description": "Where each run's HTML report is kept.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "s3://<bucket>/<prefix>, gs://<bucket>/<prefix>, az://<account>/<container>/<prefix> or file://<dir>."
+        }
+      }
+    },
+    "drift": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The scheduled drift check. Off when absent.",
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "description": "A five-field cron line, such as \"0 6 * * *\"; the drift job runs on it."
+        },
+        "stacks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The stacks the job reads, by name or project/* glob. Every stack when absent."
+        }
+      }
+    },
+    "respond": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What plywood does about a finding.",
+      "properties": {
+        "drift": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "pull-request",
+            "up",
+            "none"
+          ],
+          "default": "issue",
+          "description": "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only."
+        }
+      }
+    },
+    "review": {
+      "description": "A model reviews each pull request and posts one note. It approves and gates nothing. Off when absent.",
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "instructions": {
+              "type": "string",
+              "description": "The instructions file, read from the base branch. Default .chant/review.md."
+            },
+            "command": {
+              "type": "string",
+              "description": "The model command: the prompt on stdin, the answer on stdout."
+            },
+            "key_env": {
+              "type": "string",
+              "default": "ANTHROPIC_API_KEY",
+              "description": "The variable holding the model's key, the one secret the command sees."
+            },
+            "timeout": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minutes the command may run."
+            }
+          }
+        }
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agents that act on a request: /plywood agent <ask>, and the drift agent's pull request.",
+      "properties": {
+        "comment": {
+          "type": "boolean",
+          "default": false,
+          "description": "Answer /plywood agent <ask> on a pull request."
+        },
+        "drift": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open a pull request that fixes a drifted stack (respond.drift: pull-request)."
+        },
+        "command": {
+          "type": "string",
+          "description": "The model command: the prompt on stdin, the answer on stdout."
+        },
+        "key_env": {
+          "type": "string",
+          "default": "ANTHROPIC_API_KEY",
+          "description": "The variable holding the model's key, the one secret the command sees."
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minutes the command may run."
+        },
+        "max_runs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most agent runs per day."
+        },
+        "token_env": {
+          "type": "string",
+          "description": "The secret (GitHub, Forgejo) or protected variable (GitLab) holding the token the push job pushes the agent's branch with. Default: the job token on GitHub and Forgejo, CHANT_FORGE_TOKEN on GitLab. A GitHub push with the job token starts no workflow, so the agent's commit gets no preview."
+        }
+      }
+    },
+    "branches": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Branch name to stack globs. A stack a glob matches updates from that branch alone."
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Pull request label to stack globs. A labelled pull request previews only the stacks its labels match."
+    },
+    "forge": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The forge the jobs talk to. Read from the repository's remote when absent.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab",
+            "forgejo"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "description": "The forge's base URL, for a self-hosted forge."
+        }
+      }
+    },
+    "pulumi": {
+      "description": "The Pulumi CLI release the jobs run, such as 3.272.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+          }
+        }
+      ]
+    },
+    "plunge": {
+      "description": "The plunge release the jobs run, such as 0.1.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+          }
+        }
+      ]
+    },
+    "image": {
+      "description": "The image every job runs in, in place of plywood's: a reference pinned by digest, or a map with name and the plugins a prepared image carries.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The image reference, built FROM plywood-pulumi or plywood-plunge, pinned by digest."
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?:(resource|converter|language|analyzer|tool):)?([a-z0-9][a-z0-9-]*)@(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)$"
+              },
+              "description": "Plugins the prepared image installs, as name@version or kind:name@version."
+            }
+          }
+        }
+      ]
+    },
+    "runners": {
+      "description": "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[^\\s,]+$"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "group"
+              ],
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[^\\s,]+$"
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "not": {
+            "required": [
+              "group"
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "default",
+              "preview",
+              "up",
+              "drift"
+            ]
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\s,]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "group"
+                ],
+                "properties": {
+                  "group": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[^\\s,]+$"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "control": {
+      "description": "The control repo this repository tells after each update on merge: its project key or URL, or a mapping.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "The control repo, as host/owner/name or its https URL."
+            },
+            "op": {
+              "type": "string",
+              "description": "The Op the control repo runs on this repository's dependents. Default pulumi-up."
+            },
+            "member": {
+              "type": "string",
+              "description": "This repository's name in the control repo's workspace. Default the repository's name."
+            },
+            "forge": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab",
+                "forgejo"
+              ],
+              "description": "The control repo's forge, when its host does not say."
+            },
+            "token_secret": {
+              "type": "string",
+              "description": "The secret holding the dispatch token. Default CHANT_CONTROL_TOKEN."
+            },
+            "read_token_secret": {
+              "type": "string",
+              "description": "The secret holding a read-only token for the control repo. Default CHANT_CONTROL_READ_TOKEN."
+            },
+            "ref": {
+              "type": "string",
+              "description": "The branch a GitLab or Forgejo dispatch runs on. Default main."
+            },
+            "api_base": {
+              "type": "string",
+              "description": "The forge's REST base, when the host's usual one is not it."
+            }
+          }
+        }
+      ]
+    },
+    "env": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "pass": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "parallelism": {
+      "description": "Read by a later plywood; accepted as written."
+    },
+    "environments": {
+      "description": "Read by a later plywood; accepted as written."
+    }
+  }
+}

@@ -136,6 +136,19 @@ export const CLOUD_NAMES = { aws: "AWS", gcp: "GCP", azure: "Azure", pulumi: "Pu
 /** What a stack with no identity for a cloud runs as, for `plywood config identities`. */
 export const NO_IDENTITY = "the job's own credentials (no OIDC trade)";
 
+/**
+ * Requests from templates over MCP (plywood#41). `request_from_template` is
+ * declared on `plywood mcp --propose`, and refuses every call until plywood
+ * has Pulumi templates: a template registry and catalog, and `plywood
+ * request` (plywood#40, after plywood#32). The refusal names no issue, since
+ * an agent reads it.
+ */
+export const TEMPLATE_REQUEST_WORDS = {
+  tool: "request_from_template",
+  refusal:
+    "Pulumi templates are not available yet: request_from_template opens a pull request for an app from a template once plywood has a template registry and catalog, and the plywood request command that opens the same pull request for a person. Until then it refuses every call and opens nothing. To change a stack now, open a pull request with the change.",
+} as const;
+
 /** The stack operations a gated request runs (src/stack-ops.ts, src/actions.ts). */
 export type StackOpVerb = "export" | "cancel" | "move" | "action";
 

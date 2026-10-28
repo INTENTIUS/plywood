@@ -10,6 +10,13 @@
   "limits": { "out-of-band": 900 },
   "steps": [
     {
+      "id": "adopt-op",
+      "do": "out-of-band",
+      "label": "main gets the adopt Op plywood init writes for staging on plunge's records; plywood.yml still declares staging on its stock backend",
+      "command": ["plywood-e2e", "configure", "${PLYWOOD_E2E_ADOPT:-adopt-staging}"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
       "id": "adopt-preview",
       "do": "out-of-band",
       "label": "plywood-adopt checks the bucket, exports staging and stops at its gate with the preview's digest",
@@ -29,6 +36,13 @@
       "label": "the next run adopts staging",
       "command": ["plywood-e2e", "job", "plywood", "run", "plywood-adopt"],
       "expect": [{ "exit": 0 }, { "ledger": { "op": "plywood-adopt", "status": "ok", "count": 1 } }]
+    },
+    {
+      "id": "on-plunge",
+      "do": "out-of-band",
+      "label": "with staging adopted, plywood.yml declares it on plunge's records and plywood ci writes the jobs again",
+      "command": ["plywood-e2e", "configure", "staging-on-plunge"],
+      "expect": [{ "exit": 0 }]
     },
     { "id": "events", "do": "open", "branch": "e2e/adopt-events", "overlay": "staging-events-7200", "title": "staging: keep events for two hours" },
     { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
@@ -57,7 +71,7 @@
     }
   ],
   "break": {
-    "env": { "BREAK": "1", "PLYWOOD_E2E_BASE_OVERLAY": "adopt-bare-bucket" },
-    "note": "main points staging at a bucket with no versioning, lifecycle rule or public access block, which chant's bucket check and plunge's store refuse, so plywood-adopt must not stop at its gate."
+    "env": { "BREAK": "1", "PLYWOOD_E2E_ADOPT": "adopt-bare-bucket" },
+    "note": "the adopt Op points staging at a bucket with no versioning, lifecycle rule or public access block, which chant's bucket check and plunge's store refuse, so plywood-adopt must not stop at its gate."
   }
 }

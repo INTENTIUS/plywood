@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkConfig, parseConfig } from "../../packages/plywood/src/config/index";
+import { ADOPT_OP_FILE, adoptOpFile } from "../../packages/plywood/src/init/adopt";
+import { BUCKETS, FLOCI_NET, plungeStoreUrl, s3BackendUrl } from "../bench";
 import { claimsProblems } from "../claims";
 import { harness, type Scenario } from "../harness";
 import { dryRun, lint } from "../main";
@@ -64,7 +66,7 @@ describe("plywood's scenarios", () => {
 
   it("break pw-disjoint with a stack lock and pw-adopt with a bucket plunge's store refuses", () => {
     expect(readScenario("pw-disjoint").break.env.PLYWOOD_E2E_BASE_OVERLAY).toBe("stack-grain");
-    expect(readScenario("pw-adopt").break.env.PLYWOOD_E2E_BASE_OVERLAY).toBe("adopt-bare-bucket");
+    expect(readScenario("pw-adopt").break.env.PLYWOOD_E2E_ADOPT).toBe("adopt-bare-bucket");
     expect(readScenario("pw-moved-plan").break.env.PLYWOOD_E2E_RETENTION).toBe("3600");
   });
 
@@ -108,24 +110,51 @@ describe("the shop repository's plywood.yml", () => {
     expect(checkConfig(parseConfig(base)).filter((p) => p.severity === "error")).toEqual([]);
   });
 
-  it("puts dev and staging on plunge's store, the prod stacks on stock S3, and the reports where every scenario reads them", () => {
+  it("puts dev on plunge's store, staging stock in the store's bucket, the prod stacks on stock S3, and the reports where every scenario reads them", () => {
     expect(base).toMatch(/shop\/dev:\n {4}dir: \.\n {4}backend: plunge\+s3:\/\/plywood-tutorial-plunge\?/);
-    expect(base).toMatch(/shop\/staging:\n {4}dir: \.\n {4}backend: plunge\+s3:\/\/plywood-tutorial-plunge\?/);
+    expect(base).toMatch(/shop\/staging:\n {4}dir: \.\n {4}backend: s3:\/\/plywood-tutorial-plunge\?/);
+    expect(base).toContain(`backend: ${s3BackendUrl(BUCKETS.records, FLOCI_NET)}\n`);
     expect(base).toMatch(/shop\/prod-us:\n {4}dir: \.\n {4}backend: s3:\/\/plywood-tutorial-state\?/);
     for (const id of Object.keys(scenarioFiles())) expect(base).toContain(`url: ${readScenario(id).reportUrl}`);
     expect(base).not.toMatch(/^locks:/m);
   });
 
-  it("differs in pw-adopt's BREAK base only in staging's bucket", () => {
-    const brk = (JSON.parse(readFileSync(join(BASE_OVERLAYS_DIR, "adopt-bare-bucket.json"), "utf8")) as { files: Record<string, string> }).files["plywood.yml"]!;
+  const files = (name: string) => (JSON.parse(readFileSync(join(BASE_OVERLAYS_DIR, `${name}.json`), "utf8")) as { files: Record<string, string> }).files;
+
+  it("moves staging onto plunge's records in staging-on-plunge, and differs from the base in that line only", () => {
+    const after = files("staging-on-plunge")["plywood.yml"]!;
     const a = base.split("\n");
-    const b = brk.split("\n");
+    const b = after.split("\n");
     expect(b.length).toBe(a.length);
     const diff = a.map((l, i) => (l === b[i] ? null : i)).filter((i) => i !== null);
     expect(diff).toHaveLength(1);
-    expect(b[diff[0]!]).toContain("plunge+s3://plywood-tutorial-bare?");
+    expect(b[diff[0]!]).toBe(`    backend: ${plungeStoreUrl(BUCKETS.records, FLOCI_NET)}`);
     expect(a[diff[0]! - 2]).toBe("  shop/staging:");
-    expect(checkConfig(parseConfig(brk)).filter((p) => p.severity === "error")).toEqual([]);
+    expect(checkConfig(parseConfig(after)).filter((p) => p.severity === "error")).toEqual([]);
+  });
+
+  it("lays the adopt Op plywood init writes for staging, on the record store or, for the BREAK arm, the bare bucket", () => {
+    const op = (bucket: string) => adoptOpFile([{ member: "shop", dir: ".", stack: "staging", url: plungeStoreUrl(bucket, FLOCI_NET) }]);
+    expect(files("adopt-staging")).toEqual({ [ADOPT_OP_FILE]: op(BUCKETS.records) });
+    expect(files("adopt-bare-bucket")).toEqual({ [ADOPT_OP_FILE]: op(BUCKETS.bare) });
+  });
+});
+
+describe("pw-adopt", () => {
+  const s = readScenario("pw-adopt");
+  const ids = s.steps.map((x) => x.id);
+  const command = (id: string) => (s.steps.find((x) => x.id === id) as { command: string[] }).command;
+
+  it("lays the adopt Op, adopts staging, then declares it on plunge before the pull request plans it", () => {
+    expect(command("adopt-op")).toEqual(["plywood-e2e", "configure", "${PLYWOOD_E2E_ADOPT:-adopt-staging}"]);
+    expect(command("on-plunge")).toEqual(["plywood-e2e", "configure", "staging-on-plunge"]);
+    expect(ids.indexOf("adopt-op")).toBeLessThan(ids.indexOf("adopt-preview"));
+    expect(ids.indexOf("adopt")).toBeLessThan(ids.indexOf("on-plunge"));
+    expect(ids.indexOf("on-plunge")).toBeLessThan(ids.indexOf("events"));
+  });
+
+  it("points the BREAK arm's adopt Op at the bare bucket, and lays no base overlay over main", () => {
+    expect(s.break.env).toEqual({ BREAK: "1", PLYWOOD_E2E_ADOPT: "adopt-bare-bucket" });
   });
 });
 

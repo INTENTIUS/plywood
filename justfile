@@ -95,6 +95,22 @@ tutorial-preview stack="dev" backend="file":
 tutorial-scan:
     stack/tutorial.sh scan
 
+# The bench on chant's e2e harness (e2e/, plywood#25): the harness's floci,
+# Forgejo and runner with plywood's seed, and plywood#22's claims as harness
+# scenarios (e2e/scenarios), each a plain run that must pass and a BREAK run
+# that must be caught. It needs a chant with @intentius/chant/e2e-harness
+# (`just chant-local`); on the pinned chant the commands that start anything
+# refuse and name the tutorial bench above. Same names and ports as the
+# tutorial bench, so run one or the other.
+#   just e2e lint                 the scenarios against plywood's rules and the harness's lint
+#   just e2e dry-run pw-disjoint  a scenario's two arms, step by step; touches nothing
+#   just e2e image <plunge>       the job image: plywood's images and a linux plunge build (run `just images` first)
+#   just e2e up                   start and seed the bench
+#   just e2e claim pw-disjoint    record the scenario's row and render site/src/data/claims.json
+#   just e2e down                 remove the bench's containers and volumes
+e2e *args:
+    npx tsx e2e/main.ts {{args}}
+
 # Release steps (AGENTS.md, Releasing). Each checks before it writes, and
 # `--dry-run` on `release` runs every check and changes nothing.
 #   just release-bump 0.1.0        the version in the package, the lock file and the Dockerfiles

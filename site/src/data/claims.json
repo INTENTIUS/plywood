@@ -1,0 +1,6 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-claims/v1/e2e-claims.schema.json",
+  "contract": 1,
+  "product": "plywood",
+  "rows": []
+}

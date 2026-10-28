@@ -1,0 +1,63 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-adopt",
+  "product": "plywood",
+  "claim": "plunge/adopt-stock-stack",
+  "title": "A stock Pulumi stack moves onto plunge's records through plywood's adopt op, then updates through a pull request",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "limits": { "out-of-band": 900 },
+  "steps": [
+    {
+      "id": "adopt-preview",
+      "do": "out-of-band",
+      "label": "plywood-adopt checks the bucket, exports staging and stops at its gate with the preview's digest",
+      "command": ["plywood-e2e", "job", "plywood", "run", "plywood-adopt"],
+      "expect": [{ "exit": 3 }, { "ledger": { "op": "plywood-adopt", "status": "gated", "count": 1 } }]
+    },
+    {
+      "id": "adopt-approve",
+      "do": "out-of-band",
+      "label": "the reviewer approves the preview the gate binds",
+      "command": ["plywood-e2e", "approve-pending", "plywood-adopt"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "adopt",
+      "do": "out-of-band",
+      "label": "the next run adopts staging",
+      "command": ["plywood-e2e", "job", "plywood", "run", "plywood-adopt"],
+      "expect": [{ "exit": 0 }, { "ledger": { "op": "plywood-adopt", "status": "ok", "count": 1 } }]
+    },
+    { "id": "events", "do": "open", "branch": "e2e/adopt-events", "overlay": "staging-events-7200", "title": "staging: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's update job is on the ledger",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "the adopted stack updated on plunge",
+      "command": ["plywood-e2e", "applied", "pulumi-up", "staging"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "markers",
+      "do": "out-of-band",
+      "label": "plunge's first update of the adopted stack tagged the events queue",
+      "command": ["plywood-e2e", "markers", "staging", "events"],
+      "expect": [{ "exit": 0 }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_BASE_OVERLAY": "adopt-bare-bucket" },
+    "note": "main points staging at a bucket with no versioning, lifecycle rule or public access block, which chant's bucket check and plunge's store refuse, so plywood-adopt must not stop at its gate."
+  }
+}

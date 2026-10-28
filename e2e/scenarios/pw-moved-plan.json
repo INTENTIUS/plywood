@@ -1,0 +1,41 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-moved-plan",
+  "product": "plywood",
+  "claim": "plunge/saved-plan-moved",
+  "title": "A plunge update whose records moved after its preview is refused with chant's moved code",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    { "id": "events", "do": "open", "branch": "e2e/moved-events", "overlay": "dev-events-7200", "title": "dev: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
+    {
+      "id": "elsewhere",
+      "do": "out-of-band",
+      "label": "another update writes the events queue's record after the preview",
+      "command": ["plywood-e2e", "plunge-up", "dev", "corpus:eventsRetentionSeconds=${PLYWOOD_E2E_RETENTION:-1800}"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's update job is on the ledger",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "moved",
+      "do": "out-of-band",
+      "label": "it refused with chant's moved code, named dev among its moved runs, and was not gated",
+      "command": ["plywood-e2e", "moved", "pulumi-up", "dev"],
+      "expect": [{ "exit": 0 }, { "ledger": { "op": "pulumi-up", "status": "gated", "count": 0 } }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_RETENTION": "3600" },
+    "note": "The update made elsewhere sets the value dev already has, so no record is written, nothing moves, and the merge's update applies: the moved check must fail."
+  }
+}

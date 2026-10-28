@@ -1,0 +1,5 @@
+{
+  "files": {
+    "plywood.yml": "# yaml-language-server: $schema=https://intentius.io/plywood/plywood.schema.json\n#\n# plywood.yml of the bench's tutor/shop repository (e2e/seed.ts writes it\n# before plywood init). dev runs on plunge's record store; staging is a\n# stock stack in the same bucket until pw-adopt moves it onto plunge's\n# records; prod-us and prod-eu stay on stock Pulumi. Every URL is floci as a\n# job on the bench's network sees it.\nstacks:\n  shop/dev:\n    dir: .\n    backend: plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true\n  shop/staging:\n    dir: .\n    backend: plunge+s3://plywood-tutorial-bare?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true\n  shop/prod-us:\n    dir: .\n    backend: s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true\n  shop/prod-eu:\n    dir: .\n    backend: s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true\nforge:\n  kind: forgejo\n  url: http://forgejo:3000\nreports:\n  url: s3://plywood-tutorial-reports/shop\n"
+  }
+}

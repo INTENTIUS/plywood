@@ -15,6 +15,7 @@
     "publish/**/*.ts",
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
+    "e2e/**/*.ts",
     "chant.config.ts",
     "vitest.config.ts"
   ],

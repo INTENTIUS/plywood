@@ -1,0 +1,1 @@
+{ "set": { "Pulumi.staging.yaml": { "corpus:eventsRetentionSeconds": "7200" } } }

@@ -228,6 +228,197 @@
         }
       }
     },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The preview and up identities per cloud, for every stack and per stack glob. The preview job trades its OIDC token before the program is checked out.",
+      "properties": {
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aws": {
+              "type": "string",
+              "description": "An IAM role ARN."
+            },
+            "gcp": {
+              "type": "string",
+              "description": "A service account email."
+            },
+            "azure": {
+              "type": "string",
+              "description": "An Entra app's client id."
+            },
+            "pulumi": {
+              "type": "string",
+              "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+              "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+            }
+          },
+          "description": "The preview job's identity per cloud, for every stack."
+        },
+        "up": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aws": {
+              "type": "string",
+              "description": "An IAM role ARN."
+            },
+            "gcp": {
+              "type": "string",
+              "description": "A service account email."
+            },
+            "azure": {
+              "type": "string",
+              "description": "An Entra app's client id."
+            },
+            "pulumi": {
+              "type": "string",
+              "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+              "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+            }
+          },
+          "description": "The update job's identity per cloud, for every stack."
+        },
+        "stacks": {
+          "type": "object",
+          "description": "Stack glob (project/stack; * stays within one segment) to its own preview and up identities. The first glob that matches a stack is its.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "preview": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "aws": {
+                    "type": "string",
+                    "description": "An IAM role ARN."
+                  },
+                  "gcp": {
+                    "type": "string",
+                    "description": "A service account email."
+                  },
+                  "azure": {
+                    "type": "string",
+                    "description": "An Entra app's client id."
+                  },
+                  "pulumi": {
+                    "type": "string",
+                    "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+                    "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+                  }
+                }
+              },
+              "up": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "aws": {
+                    "type": "string",
+                    "description": "An IAM role ARN."
+                  },
+                  "gcp": {
+                    "type": "string",
+                    "description": "A service account email."
+                  },
+                  "azure": {
+                    "type": "string",
+                    "description": "An Entra app's client id."
+                  },
+                  "pulumi": {
+                    "type": "string",
+                    "pattern": "^(?:(?:team|user):[^\\s:]+|organization|organization:admin)$",
+                    "description": "A Pulumi Cloud token: team:<name>, user:<login>, organization or organization:admin."
+                  }
+                }
+              },
+              "environments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Environment globs the rule covers. Absent: every environment."
+              }
+            }
+          }
+        },
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "region": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": "string"
+            }
+          }
+        },
+        "gcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "sts_endpoint": {
+              "type": "string"
+            },
+            "iam_endpoint": {
+              "type": "string"
+            }
+          }
+        },
+        "azure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tenant_id": {
+              "type": "string"
+            },
+            "subscription_id": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            },
+            "authority": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "pulumi_cloud": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "org"
+      ],
+      "description": "The Pulumi Cloud organization the stacks' state is in. With identity's pulumi tokens, each job trades for its own access token.",
+      "properties": {
+        "org": {
+          "type": "string",
+          "description": "The organization."
+        },
+        "api_url": {
+          "type": "string",
+          "description": "The Pulumi Cloud API, for a self-hosted one. Default https://api.pulumi.com."
+        },
+        "audience": {
+          "type": "string",
+          "description": "The OIDC token's audience. Default urn:pulumi:org:<org>."
+        }
+      }
+    },
     "review_stacks": {
       "type": "object",
       "additionalProperties": false,
@@ -453,12 +644,6 @@
       ]
     },
     "drift": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "identity": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "pulumi_cloud": {
       "description": "Read by a later plywood; accepted as written."
     },
     "notify": {

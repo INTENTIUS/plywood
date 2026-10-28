@@ -39,7 +39,7 @@ import { error, isObject, oneOf, onlyKeys, type ConfigGroup, type ConfigProblem,
 export const POLICY_ENGINES = ["conftest", "opa"] as const;
 export type PolicyEngine = (typeof POLICY_ENGINES)[number];
 
-export const POLICY_KEYS = ["rego", "engine", "namespace", "command", "packs", "source"] as const;
+export const POLICY_KEYS = ["rego", "engine", "namespace", "command", "packs", "source", "providers"] as const;
 export const PACK_KEYS = ["dir", "config"] as const;
 export const SOURCE_KEYS = ["repo", "ref", "path"] as const;
 
@@ -149,6 +149,12 @@ export function packsForStack(packs: readonly PolicyPack[], stackDir: string): P
   return packs.map((p) => ({ dir: rel(p.dir), ...(p.config ? { config: rel(p.config) } : {}) }));
 }
 
+/** plywood.yml's `policy.providers`: the provider packages the preset allows, or undefined when it sets none. */
+export function policyProvidersOf(doc: RawConfig): string[] | undefined {
+  const list = isObject(doc.policy) ? doc.policy.providers : undefined;
+  return Array.isArray(list) && list.length > 0 ? list.filter((s): s is string => typeof s === "string") : undefined;
+}
+
 /** plywood.yml's `policy.source` as chant's, or undefined. */
 export function policySourceOf(doc: RawConfig): ChantPolicySource | undefined {
   const src = isObject(doc.policy) ? doc.policy.source : undefined;
@@ -214,6 +220,12 @@ export const policy: ConfigGroup = {
             path: { type: "string", default: "policy", description: "The Rego directory inside the repository." },
           },
         },
+        providers: {
+          type: "array",
+          items: { type: "string", pattern: "^[a-z][a-z0-9-]*$" },
+          uniqueItems: true,
+          description: "The provider packages a stack may use, such as aws and random; component packages too. plywood init writes the allowlist as a Rego rule into policy.rego and as the CrossGuard pack policy/plywood-providers.",
+        },
         packs: {
           type: "array",
           description: "CrossGuard packs the preview and the update run with --policy-pack. Mandatory violations deny; advisory ones are note lines.",
@@ -261,6 +273,13 @@ export const policy: ConfigGroup = {
     if (p.command !== undefined) {
       if (!Array.isArray(p.command) || p.command.length === 0 || p.command.some((a) => typeof a !== "string" || a === "")) out.push(error("policy.command", "is argv, a list of strings"));
       else if (!p.command.some((a: string) => a.includes("{input}"))) out.push(error("policy.command", "must pass the change set as {input}"));
+    }
+    if (p.providers !== undefined) {
+      if (!Array.isArray(p.providers) || p.providers.length === 0) out.push(error("policy.providers", "is a list of provider packages, such as [aws, random]"));
+      else
+        p.providers.forEach((name, i) => {
+          if (typeof name !== "string" || !/^[a-z][a-z0-9-]*$/.test(name)) out.push(error(`policy.providers.${i}`, `is ${JSON.stringify(name)}; a provider package is a Pulumi type's first segment, such as aws`));
+        });
     }
     if (p.packs !== undefined) {
       if (!Array.isArray(p.packs)) out.push(error("policy.packs", "is a list of pack directories"));

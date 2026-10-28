@@ -45,13 +45,14 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { emitYAMLEntry } from "@intentius/chant/yaml";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
 import { identityClouds, pulumiCloudOf } from "./config/identity";
 import { notifyForChant } from "./config/observe";
-import { packsForStack, stepPolicyPacksOf } from "./config/policy";
+import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyPacksOf } from "./config/policy";
+import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
@@ -371,6 +372,9 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   } else files.push(put(root, CHANT_CONFIG_FILE, chantConfigTs(), opts.dryRun));
   files.push(put(root, COMPONENTS_FILE, componentsFile(stacks, settings.pipeline.after, reviewSuffix ? { reviewSuffix } : {}), opts.dryRun));
 
+  // plywood#31: the provider allowlist, as a Rego rule in policy.rego and as a CrossGuard pack.
+  files.push(...providersPresetStep(root, doc, opts.dryRun, notes));
+
   // What the repository already runs.
   if (detected.preCommit) files.push(await preCommitStep(root, detected.preCommit, opts.dryRun));
   for (const wf of detected.pulumiActions) {
@@ -439,6 +443,28 @@ function declarationStep(root: string, detected: Detected, settings: ChantSettin
   const doc = workspaceDeclaration(existing, { name: repoName(root), projects: detected.projects, ci: settings.ci, lexiconVersion: CHANT_PIN });
   if (existing && JSON.stringify(existing) === JSON.stringify(doc)) return { file: { file: DECLARATION_FILE, status: "unchanged" }, doc };
   return { file: put(root, DECLARATION_FILE, jsonText(doc), dryRun), doc };
+}
+
+/**
+ * The provider allowlist preset (src/policy-presets.ts), when plywood.yml
+ * sets policy.providers: the Rego rule into policy.rego (or not, with a note,
+ * when no Rego directory is set or the rules come from policy.source), and
+ * the CrossGuard pack with its config, which runs once policy.packs lists it.
+ */
+function providersPresetStep(root: string, doc: RawConfig, dryRun: boolean, notes: string[]): InitFile[] {
+  const allowed = policyProvidersOf(doc);
+  if (!allowed) return [];
+  const p = isObject(doc.policy) ? doc.policy : {};
+  const out: InitFile[] = [];
+  if (typeof p.rego === "string" && p.source === undefined) {
+    const namespace = typeof p.namespace === "string" ? p.namespace : "main";
+    out.push(put(root, posix.join(cleanPath(p.rego), PROVIDERS_REGO_FILE), providersRego(allowed, namespace), dryRun, "deny_provider_package, read at base"));
+  } else notes.push(`policy.providers: no Rego rule was written; set policy.rego to a directory and run '${PRODUCT} init' again for one, or use the CrossGuard pack`);
+  for (const [file, text] of Object.entries(providersPackFiles())) out.push(put(root, posix.join(PROVIDERS_PACK_DIR, file), text, dryRun));
+  out.push(put(root, PROVIDERS_PACK_CONFIG, providersPackConfig(allowed), dryRun));
+  const listed = policyPacksOf(doc).some((pack) => pack.dir === PROVIDERS_PACK_DIR);
+  if (!listed) notes.push(`policy.providers: add { dir: ${PROVIDERS_PACK_DIR}, config: ${PROVIDERS_PACK_CONFIG} } to policy.packs to run the CrossGuard pack in each preview and update; it needs @pulumi/policy installed in ${PROVIDERS_PACK_DIR}`);
+  return out;
 }
 
 /** `.pre-commit-config.yaml` as a check hook, so plywood check runs the team's hooks at the base commit. */

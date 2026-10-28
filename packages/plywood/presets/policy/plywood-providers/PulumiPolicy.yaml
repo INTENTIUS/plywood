@@ -1,0 +1,2 @@
+description: plywood's provider allowlist, from plywood.yml's policy.providers
+runtime: nodejs

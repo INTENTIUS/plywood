@@ -86,6 +86,7 @@ export function helpText(): string {
     "Approvals:",
     "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>;",
     "                                                      up finds its pull request from the digest when --pr is left out",
+    "    [--forge <kind>] [--branch <b>]                   then post plywood/approval again on the open pull requests into <b>",
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
     "Stack operations (each waits for a second person's approval):",

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
-import { setChantAuditForTests, setChantNextForTests, type ChantAudit } from "../src/chant-next";
+import { acceptsContentsWrite, chantNext, setChantAuditForTests, setChantNextForTests, type ChantAudit } from "../src/chant-next";
 import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { toChantSettings } from "../src/chant-config";
@@ -206,6 +206,16 @@ describe("plywood ci on the parity features", () => {
     expect(await ci(["--forge", "github", "--dry-run"], false, FALLBACK_EXIT, o)).toBe(0);
     expect(o.stderr.join("\n")).toContain(APPROVAL_STATUS_NOTE);
   });
+
+  it("drops the note once chant posts plywood/approval for pull-request waves (chant#4630 ruling)", async () => {
+    const dir = repo("stacks:\n  shop/dev: {}\napproval: pr-review\n");
+    mkdirSync(join(dir, ".chant/op-waves"), { recursive: true });
+    writeFileSync(join(dir, ".chant/op-waves/pulumi-up.spec.json"), JSON.stringify({ name: "pulumi-up", waves: [{ name: "dev", runs: [{ target: "shop/dev" }] }] }));
+    setChantProductForTests(fakeChant({ APPROVAL_STATUS_FLOOR: "0.124.56", APPROVAL_STATUS_PULL_REQUEST_FLOOR: "0.124.56" }).api);
+    const o = io(dir);
+    expect(await ci(["--forge", "github", "--dry-run"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(o.stderr.join("\n")).not.toContain(APPROVAL_STATUS_NOTE);
+  });
 });
 
 describe("plywood.yml's parity keys", () => {
@@ -276,6 +286,35 @@ describe("the drift jobs' identities (chant#4631)", () => {
     expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", undefined, { cloud: true, env: "production" }).ops[0]).toHaveProperty("update");
   });
 
+  it("raises the update job's contents to write on GitHub and Forgejo once chant takes it (chant#4631 ruling)", () => {
+    const doc = parseConfig(yml).doc;
+    const perms = (forge: "github" | "forgejo" | "gitlab", contentsWrite?: boolean) =>
+      (driftCloudFields(doc, forge, "shop/prod", "up", "production", contentsWrite === undefined ? {} : { contentsWrite }) as { update: { permissions?: unknown } }).update.permissions;
+    expect(perms("github", true)).toEqual({ contents: "write" });
+    expect(perms("forgejo", true)).toEqual({ contents: "write" });
+    expect(perms("gitlab", true)).toBeUndefined();
+    expect(perms("github", false)).toBeUndefined();
+    expect(perms("github")).toBeUndefined();
+    expect(driftCloudFields(doc, "github", "shop/dev", "issue", "production", { contentsWrite: true })).not.toHaveProperty("update");
+    const op = (contentsWrite: boolean) => driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", undefined, { cloud: true, contentsWrite, env: "production" }).ops[0] as { update: { permissions?: unknown } };
+    expect(op(true).update.permissions).toEqual({ contents: "write" });
+    expect(op(false).update.permissions).toBeUndefined();
+  });
+
+  it("detects contents: write by the probe chant's check accepts", async () => {
+    const refusing = { assertScheduledOpCloud: (spec: { update?: { permissions?: Record<string, string> } }) => {
+      if (spec.update?.permissions?.contents) throw new Error("update.permissions names contents");
+    } };
+    expect(await acceptsContentsWrite(async () => ({ assertScheduledOpCloud: () => undefined }))).toBe(true);
+    expect(await acceptsContentsWrite(async () => refusing)).toBe(false);
+    expect(await acceptsContentsWrite(async () => ({}))).toBe(false);
+    expect(await acceptsContentsWrite(async () => { throw new Error("no subpath"); })).toBe(false);
+    setChantNextForTests("reset");
+    const real = await chantNext();
+    // On the 0.124.55 pin the subpath is missing, so neither is there; on chant integration/ci-products-4 both are.
+    expect(real.updateContentsWrite).toBe(real.scheduledOpCloud);
+  });
+
   it("leaves the update to the update job when the spec has one", () => {
     const dir = repo(yml);
     mkdirSync(join(dir, ".chant/ops"), { recursive: true });
@@ -317,5 +356,11 @@ describe("the bin passes chant's check-job and audit-log through (chant#4624, #4
       ["ci", "check-job"],
       ["audit-log", "unrecorded", "--audit-log", "aws", "--op", "pulumi-up", "--since", "2026-10-01T00:00:00Z"],
     ]);
+  });
+
+  it("leaves with check-job's 9 when the guard refuses the job (chant#4624)", async () => {
+    setChantProductForTests({ ...fakeChant().api, runChantInProcess: async () => 9 });
+    const c: Io = { out: () => {}, err: () => {} };
+    expect(await main(["ci", "check-job"], c)).toBe(9);
   });
 });

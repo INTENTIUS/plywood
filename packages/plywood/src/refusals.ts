@@ -17,7 +17,7 @@ export interface RefusalContext {
 }
 
 /** The refused outcomes plywood explains; `done`, `failed` and `drift` carry chant's own message. */
-export const REFUSALS = ["waiting", "moved", "held", "superseded", "denied", "declined"] as const satisfies readonly ExitName[];
+export const REFUSALS = ["waiting", "moved", "held", "superseded", "denied", "declined", "misplaced"] as const satisfies readonly ExitName[];
 
 export type Refusal = (typeof REFUSALS)[number];
 
@@ -43,6 +43,8 @@ export function refusalLine(refusal: Refusal, ctx: RefusalContext = {}): string 
       return `A policy denied the change. Fix it and preview again, or override it with '${PRODUCT} override <stack> --rule <id> --reason <text>' naming exactly the rules chant listed (${POLICY_RULE_FORMS}). An override is spent once its update runs.`;
     case "declined":
       return `An approver declined the change, so nothing was updated. Push a new change and preview it again.`;
+    case "misplaced":
+      return `The job ran outside the forge environment, branch or runner plywood.yml gives this stack, and chant's job guard named the difference above, so nothing ran. Run it from that branch on that runner, or change environments and runners in plywood.yml and run '${PRODUCT} ci' again.`;
   }
 }
 

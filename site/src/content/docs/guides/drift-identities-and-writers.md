@@ -9,6 +9,8 @@ With `identity` in `plywood.yml`, each stack's drift job trades its OIDC token f
 
 Under `respond.drift: up` the update has a job of its own after the read. It starts only when the read found drift. That job holds the stack's up identity and runs in the stack's forge environment from `environments`. It runs `plywood up` for the waves holding the stack, each through its gate.
 
+On GitHub and Forgejo the update job also holds `contents: write`, so `plywood up` there pushes its records to `chant/lifecycle` with the job token. The read keeps `contents: read`. GitLab sets no scopes per job: whether its job token may push is a project setting, so `plywood ci` asks for none there.
+
 `drift.audit_log` names the CloudTrail to read each stack's writes from. Give `aws` or `aws:<region>` for every stack, or map stack globs to them:
 
 ```yaml

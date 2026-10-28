@@ -404,7 +404,7 @@ export function driftOpSpec(
   stacks: readonly string[],
   schedule: string,
   chant?: ChantProduct,
-  opts: { cloud?: boolean; env?: string } = {},
+  opts: { cloud?: boolean; contentsWrite?: boolean; env?: string } = {},
 ): { ops: unknown[]; options: Record<string, unknown> } {
   const respond = driftResponseOf(doc);
   // With chant's agent job (chant#4616) the drift run keeps the issue and the agent job opens the pull request.
@@ -413,7 +413,7 @@ export function driftOpSpec(
   const pipeline = toChantSettings({ doc }).pipeline;
   const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
   return {
-    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))), ...(opts.cloud ? driftCloudFields(doc, forge, s, respond, opts.env ?? "production") : {}) })),
+    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))), ...(opts.cloud ? driftCloudFields(doc, forge, s, respond, opts.env ?? "production", { contentsWrite: opts.contentsWrite === true }) : {}) })),
     options: {
       runCommand: [...BIN.split(/\s+/), "drift", "--op", "{name}", "--forge", forge],
       beforeScript: [SNAPSHOTS_FETCH, ...(engine.beforeScript ?? [])],
@@ -428,8 +428,11 @@ export function driftOpSpec(
  * `update`, a job after the read that runs `plywood up` for the waves
  * holding the stack with the stack's up identity, its forge environment and
  * plywood.yml's env and pass. The read itself never holds the up identity.
+ * With `contentsWrite` (a chant that takes the chant#4631 ruling) the update
+ * job on GitHub and Forgejo gets `contents: write`, so its records reach
+ * chant/lifecycle with the job token.
  */
-export function driftCloudFields(doc: RawConfig, forge: ForgeKind, stack: string, respond: DriftResponse, env: string): Record<string, unknown> {
+export function driftCloudFields(doc: RawConfig, forge: ForgeKind, stack: string, respond: DriftResponse, env: string, opts: { contentsWrite?: boolean } = {}): Record<string, unknown> {
   const settings = toChantSettings({ doc });
   const decl = settings.ci.identity?.cloud;
   const ids = decl ? resolveTargetCloudIdentity(decl as never, env, stack, stack) : undefined;
@@ -438,7 +441,10 @@ export function driftCloudFields(doc: RawConfig, forge: ForgeKind, stack: string
   const waves = wavesHolding(doc, [stack]);
   const command = waves === "all" ? `${BIN} up` : waves.map((k) => `${BIN} up --wave ${k}`).join(" && ");
   const fields = driftJobFields(forge, settings.pipeline.jobs, stack);
-  out.update = { command, ...(ids?.apply ? { cloud: ids.apply } : {}), ...fields };
+  // chant#4631 ruling: the update job may raise contents to write, so `plywood up` there records on chant/lifecycle.
+  // GitLab has no per-job token scopes and refuses update.permissions; whether its job token may push is a project setting.
+  const permissions = opts.contentsWrite && forge !== "gitlab" ? { permissions: { contents: "write" } } : {};
+  out.update = { command, ...(ids?.apply ? { cloud: ids.apply } : {}), ...fields, ...permissions };
   return out;
 }
 
@@ -492,8 +498,9 @@ export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc:
     io.err(`${PRODUCT} ci: drift.schedule is set and plywood.yml lists no stacks, so no drift job was written`);
     return table.done;
   }
+  const next = await chantNext();
   if (writeIfChanged(io.cwd, DRIFT_OP_FILE, driftOpFile(doc, settings.stacks, settings.schedule))) io.err(`${PRODUCT} ci: wrote ${DRIFT_OP_FILE}; commit it with the workflow`);
-  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant, { cloud: (await chantNext()).scheduledOpCloud, env }), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
+  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant, { cloud: next.scheduledOpCloud, contentsWrite: next.updateContentsWrite, env }), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
   const outDir = OP_OUTPUT_DIR[forge];
   const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", DRIFT_SPEC_FILE, "--output", outDir], words);
   if (code !== table.done) return code;

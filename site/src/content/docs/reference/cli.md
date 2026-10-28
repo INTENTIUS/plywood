@@ -34,7 +34,7 @@ Every command takes `--json`, which prints one JSON object on stdout in place of
 
 | Command | Does |
 |---|---|
-| `plywood approve <gate> --plan <digest> [--pr <n>] [--stack <stack>] [--sign] [--yes]` | records an approval of one digest at `up` (a pull request), `review` (its review stack) or `wave-<k>`; `up` finds its pull request from the digest when `--pr` is left out |
+| `plywood approve <gate> --plan <digest> [--pr <n>] [--stack <stack>] [--sign] [--yes]` | records an approval of one digest at `up` (a pull request), `review` (its review stack) or `wave-<k>`; `up` finds its pull request from the digest when `--pr` is left out, and an approval at `up` is recorded under `pulumi-up` too, where the waves after the merge read it |
 | `plywood override <stack> --rule <id>... --reason <text> [--plan <digest>] [--sign]` | records an override of a policy denial, spent once its update runs |
 
 ## Stack operations

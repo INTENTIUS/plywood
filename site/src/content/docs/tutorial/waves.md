@@ -17,7 +17,7 @@ Approve the pull request's preview as `tutor`, then merge:
 npx plywood approve up --plan jcs1-sha256:71d2...
 ```
 
-`plywood approve up` finds the pull request from the digest. After the merge, the waves job runs the waves in order. Each wave previews its stacks on the merged commit, and when the approved preview covers those plans the wave updates under it. The job log says so for each wave:
+`plywood approve up` finds the pull request from the digest. It records the approval twice: under the pull request's op, `pr-<n>`, and under `pulumi-up`, the op the waves read after the merge. After the merge, the waves job runs the waves in order. Each wave previews its stacks on the merged commit, and when the approved preview covers those plans the wave updates under it. The job log says so for each wave:
 
 ```text
 wave 1 (dev) applies under the pull request's approval of jcs1-sha256:71d2... at up, which covers its plans

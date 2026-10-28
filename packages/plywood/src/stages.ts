@@ -20,9 +20,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { chantProduct, hasChant4607, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { configCheck } from "./config-check";
-import { applyWhenOf } from "./config/apply";
+import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
 import { locksOf } from "./config/locks";
 import { FORGES } from "./config/routing";
@@ -204,6 +204,10 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   return withChant(`${PRODUCT} ci`, table, io, async (chant) => {
     const reviewStacks = await chantReviewStacks();
     if (config.doc.review_stacks !== undefined && !reviewStacks) io.err(`${PRODUCT}: ${REVIEW_STACKS_NEED_CHANT}`);
+    if (applyWhenOf(config.doc) === "pull-request") {
+      const note = requiresNotHonoured(chant, config.doc);
+      if (note) io.err(`${PRODUCT}: ${note}`);
+    }
     let waves: unknown;
     try {
       waves = readWavesSpec(io.cwd);
@@ -276,21 +280,45 @@ export interface WorkflowPlan {
 export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, env: string, waves: unknown, extra: string[] = [], opts: { reviewStacks?: boolean } = {}): WorkflowPlan {
   const shape = pipelineShape(doc, forge, waves);
   const words = wordsForJobs(shape.jobs);
+  // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
+  const requires = shape.applyBeforeMerge ? requiresArgv(chant, doc) : [];
   const jobs = chant.productPipelineJobs(forge, env, {
     words,
     ...(shape.applyBeforeMerge ? { applyBeforeMerge: true } : {}),
     ...(shape.locks ? { locks: shape.locks } : {}),
     ...(shape.waves ? { waves } : {}),
+    ...(requires.length ? { applyRequires: requires[1]!.split(",") } : {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
   const argv = [
     "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
-    ...(shape.applyBeforeMerge ? ["--apply-before-merge"] : []),
+    ...(shape.applyBeforeMerge ? ["--apply-before-merge", ...requires] : []),
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
     ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
     ...extra,
   ];
   return { jobs, words, prWords, argv };
+}
+
+/**
+ * `--requires <list>` for `pr-apply --before-merge` and the build that writes
+ * its job (chant#4607), when plywood.yml's apply.requires names fewer than
+ * the four checks and the installed chant takes the flag. Empty otherwise:
+ * all four are chant's default, and a chant before chant#4607 asks all four
+ * whatever plywood.yml lists ({@link requiresNotHonoured} says so).
+ */
+export function requiresArgv(chant: ChantProduct, doc: RawConfig): string[] {
+  const listed = applyRequiresOf(doc);
+  if (listed.length === APPLY_REQUIRES.length || !hasChant4607(chant)) return [];
+  const parsed = chant.parseRequiresList!(listed);
+  return "checks" in parsed ? ["--requires", parsed.checks.join(",")] : [];
+}
+
+/** The line a chant without `--requires` gets when plywood.yml lists fewer checks, or undefined. */
+export function requiresNotHonoured(chant: ChantProduct, doc: RawConfig): string | undefined {
+  const listed = applyRequiresOf(doc);
+  if (listed.length === APPLY_REQUIRES.length || hasChant4607(chant)) return undefined;
+  return `apply.requires lists ${listed.join(", ")}, and the installed chant has no pr-apply --requires (chant#4607), so the update before merge asks all four checks: ${APPLY_REQUIRES.join(", ")}`;
 }
 
 export function usage(message: string, table: ExitTable, io: StageIo): number {

@@ -45,6 +45,8 @@ export interface ProductPipelineOptions {
   locks?: "plan";
   branch?: string;
   waves?: unknown;
+  /** The checks the apply-before-merge job asks (chant#4607); a chant before it ignores the option. */
+  applyRequires?: string[];
 }
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
@@ -63,6 +65,32 @@ export interface ChantProduct {
   NOTIFY_RELAY_FLOOR?: string;
   /** chant's relay server (chant#4611); its presence says `notify relay` runs in process. */
   startRelayServer?: (...args: unknown[]) => unknown;
+  /** The standing pending gates waiting on a plan digest, with the pull request a `pr-<n>` op names (chant#4607). */
+  pendingGatesByPlan?(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
+  /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */
+  parseRequiresList?(values: readonly string[]): { checks: string[] } | { error: string };
+}
+
+/** One standing pending gate a digest matched (chant's `PendingGateByPlan`, chant#4607). */
+export interface PendingGateByPlan {
+  op: string;
+  gate: string;
+  pr?: number;
+  member?: string;
+  matched: "planDigest" | "changeSet";
+  timestamp: string;
+  url?: string;
+}
+
+/**
+ * Whether the installed chant has chant#4607: the op-wave generators write
+ * the product's bin in each wave job, `pr-apply --before-merge` takes
+ * `--requires`, and pending gates are read by plan digest. All three landed
+ * together, and `pendingGatesByPlan` with `parseRequiresList` on the
+ * ci-product entry is the check.
+ */
+export function hasChant4607(chant: ChantProduct): boolean {
+  return typeof chant.pendingGatesByPlan === "function" && typeof chant.parseRequiresList === "function";
 }
 
 /** The functions whose presence says the installed chant has the product pipeline. */

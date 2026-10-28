@@ -3,7 +3,8 @@ import type { ChantProduct } from "../src/chant-product";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { reviewStackName } from "../src/config/review-stacks";
-import { chantReviewStacks, REVIEW_GATE, setChantReviewStacksForTests } from "../src/review-stacks";
+import { chantReviewStacks, REVIEW_GATE, reviewSuffixOf, setChantReviewStacksForTests } from "../src/review-stacks";
+import { componentsFile } from "../src/init/render";
 import { workflowPlan } from "../src/stages";
 import { approveTarget } from "../src/up";
 import type { PRODUCT_WORDS } from "../src/words";
@@ -68,5 +69,19 @@ describe("the review stack jobs", () => {
     setChantReviewStacksForTests(false);
     expect(workflowPlan(chant, doc, "github", "production", undefined, [], { reviewStacks: await chantReviewStacks() }).argv).not.toContain("--pr-env");
     expect(workflowPlan(chant, {}, "github", "production", undefined, [], { reviewStacks: true }).argv).not.toContain("--pr-env");
+  });
+});
+
+describe("review stacks end to end (chant#4609)", () => {
+  it("takes review_stacks.name's suffix as the step's reviewSuffix", () => {
+    expect(reviewSuffixOf("pr-{number}-shop")).toBe("shop");
+    expect(reviewSuffixOf("pr-{number}")).toBeUndefined();
+    expect(reviewSuffixOf(undefined)).toBeUndefined();
+  });
+
+  it("writes reviewSuffix on each pulumi-up step only when asked", () => {
+    const stacks = [{ key: "shop/dev", project: "shop", stack: "dev", dir: "infra" }] as never;
+    expect(componentsFile(stacks, {}, { reviewSuffix: "shop" })).toContain('"reviewSuffix":"shop"');
+    expect(componentsFile(stacks)).not.toContain("reviewSuffix");
   });
 });

@@ -92,6 +92,51 @@ export interface ChantStackOps {
 
 const REQUIRED = ["gatedStackExport", "gatedStackCancel", "gatedStackMove"] as const;
 
+/** chant's stack lock reader (`pulumiStackLockIds`, chant#4615): the lock ids a stack holds now, read from a `file://` backend. */
+export type ChantStackLockReader = (opts: { dir: string; stack: string; project?: string; engine?: string; env?: Record<string, string | undefined> }) => Promise<{ checked: boolean; backend?: string; ids: string[] }>;
+
+let cachedLocks: Promise<ChantStackLockReader | undefined> | undefined;
+
+/** chant's lock reader, or undefined when the installed pulumi lexicon lacks it; `cancel` then takes the id from `--lock` alone. */
+export function chantStackLockReader(): Promise<ChantStackLockReader | undefined> {
+  cachedLocks ??= (async () => {
+    try {
+      // @ts-ignore: pulumiStackLockIds is newer than the lexicon at 0.124.54 (chant#4615).
+      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
+      return typeof m.pulumiStackLockIds === "function" ? (m.pulumiStackLockIds as ChantStackLockReader) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  return cachedLocks;
+}
+
+/** Tests stand in a lock reader (or none, for the fallback). `reset` goes back to the real import. */
+export function setChantStackLockReaderForTests(fake: ChantStackLockReader | undefined | "reset"): void {
+  cachedLocks = fake === "reset" ? undefined : Promise.resolve(fake);
+}
+
+/**
+ * The lock id `cancel` asks to release: `--lock`, else the one lock chant's
+ * reader finds on the stack's `file://` backend (chant#4615). No lock, two
+ * locks, or a backend the reader cannot list is an error that says which.
+ */
+export async function lockToCancel(given: string | undefined, stack: { dir: string; stack: string; project?: string; engine?: string }, env: Record<string, string | undefined>): Promise<{ lockId: string; read: boolean } | { error: string }> {
+  if (given) return { lockId: given, read: false };
+  const reader = await chantStackLockReader();
+  if (!reader) return { error: STACK_OP_WORDS.needsLock };
+  let locks: Awaited<ReturnType<ChantStackLockReader>>;
+  try {
+    locks = await reader({ dir: stack.dir, stack: stack.stack, ...(stack.project ? { project: stack.project } : {}), ...(stack.engine ? { engine: stack.engine } : {}), env });
+  } catch (e) {
+    return { error: `${STACK_OP_WORDS.needsLock}. Reading the stack's lock failed: ${(e as Error).message}` };
+  }
+  if (!locks.checked) return { error: STACK_OP_WORDS.lockNotListed(locks.backend) };
+  if (locks.ids.length === 0) return { error: STACK_OP_WORDS.noLock(stack.stack) };
+  if (locks.ids.length > 1) return { error: STACK_OP_WORDS.manyLocks(stack.stack, locks.ids) };
+  return { lockId: locks.ids[0]!, read: true };
+}
+
 let cachedOps: Promise<ChantStackOps | undefined> | undefined;
 let cachedRollback: Promise<boolean> | undefined;
 
@@ -336,19 +381,22 @@ export async function cancelStack(args: string[], json: boolean, table: ExitTabl
   if (extra.length) return usage(`cancel does not take ${extra.join(" ")}`, table, io);
   const named = positionals(lock.rest);
   if (named.length !== 1) return usage(`cancel takes one stack: ${STACK_OP_WORDS.usage.cancel}`, table, io);
-  if (!lock.value) return usage(STACK_OP_WORDS.needsLock, table, io);
   const read = readConfig(io.cwd);
   if ("error" in read) return usage(read.error, table, io);
   const stack = resolveStack(read.config, read.path, named[0]!, common.dir);
   if ("error" in stack) return usage(stack.error, table, io);
   useBackend([stack], io.env);
+  // chant#4615: with no --lock, the one lock a file:// backend holds for the stack.
+  const lockId = await lockToCancel(lock.value, stack, io.env);
+  if ("error" in lockId) return usage(lockId.error, table, io);
+  if (lockId.read && !json) io.err(`${PRODUCT} cancel: ${stack.key} holds lock ${lockId.lockId}`);
   const rules = requestRules(read.config);
   return runRequest("cancel", json, table, io, async (ops) => {
     const outcome = await ops.gatedStackCancel({
       by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
-      dir: stack.dir, stack: stack.stack, lockId: lock.value!, project: stack.project, ...(stack.engine ? { engine: stack.engine } : {}),
+      dir: stack.dir, stack: stack.stack, lockId: lockId.lockId, project: stack.project, ...(stack.engine ? { engine: stack.engine } : {}),
     });
-    return reportOutcome("cancel", outcome, stack.stack, rules, (r) => STACK_OP_WORDS.cancelled(stack.key, lock.value!, r.lockChecked), json, table, io);
+    return reportOutcome("cancel", outcome, stack.stack, rules, (r) => STACK_OP_WORDS.cancelled(stack.key, lockId.lockId, r.lockChecked), json, table, io);
   });
 }
 

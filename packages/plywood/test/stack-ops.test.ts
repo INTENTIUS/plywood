@@ -15,6 +15,7 @@ import {
   requestRules,
   resolveStack,
   rollbackStack,
+  setChantStackLockReaderForTests,
   setChantStackOpsForTests,
   STACK_OPS_OP,
   type ChantStackOps,
@@ -68,6 +69,7 @@ function fakeChant(code = 0) {
 
 afterEach(() => {
   setChantStackOpsForTests("reset");
+  setChantStackLockReaderForTests("reset");
   setChantProductForTests("reset");
 });
 
@@ -159,6 +161,7 @@ describe("plywood cancel", () => {
 
   it("needs --lock", async () => {
     setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
+    setChantStackLockReaderForTests(undefined);
     const out = io(repo(YML));
     expect(await cancelStack(["shop/dev"], false, T, out)).toBe(T.failed);
     expect(out.stderr.join("\n")).toContain("--lock <id>");
@@ -169,6 +172,46 @@ describe("plywood cancel", () => {
     const out = io(repo(YML));
     expect(await cancelStack(["shop/dev", "--lock", "l1", "--by", "ana"], false, T, out)).toBe(T.waiting);
     expect(out.stderr.join("\n")).toContain("ana made the request");
+  });
+});
+
+describe("plywood cancel with chant's lock reader (plywood#26, chant#4615)", () => {
+  it("reads the one lock a file:// backend holds when --lock is left out", async () => {
+    const { ops, calls } = fakeOps({ status: "done", digest: "sha256:c", result: { lockChecked: true } });
+    setChantStackOpsForTests(ops);
+    const asked: unknown[] = [];
+    setChantStackLockReaderForTests(async (o) => (asked.push(o), { checked: true, backend: "file:///srv/state", ids: ["lock-7"] }));
+    const out = io(repo(YML));
+    expect(await cancelStack(["web/prod"], false, T, out)).toBe(T.done);
+    expect(asked[0]).toMatchObject({ stack: "prod", project: "web" });
+    expect(calls[0]!.opts).toMatchObject({ stack: "prod", lockId: "lock-7" });
+    expect(out.stderr.join("\n")).toContain("web/prod holds lock lock-7");
+  });
+
+  it("refuses no lock, two locks, and a backend the reader cannot list, and runs nothing", async () => {
+    const { ops, calls } = fakeOps({ status: "spent", digest: "x" });
+    setChantStackOpsForTests(ops);
+    for (const [answer, words] of [
+      [{ checked: true, ids: [] }, "holds no lock"],
+      [{ checked: true, ids: ["a", "b"] }, "holds 2 locks (a, b)"],
+      [{ checked: false, backend: "s3://state", ids: [] }, "s3://state"],
+    ] as const) {
+      setChantStackLockReaderForTests(async () => ({ ...answer, ids: [...answer.ids] }));
+      const out = io(repo(YML));
+      expect(await cancelStack(["web/prod"], false, T, out)).toBe(T.failed);
+      expect(out.stderr.join("\n")).toContain(words);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("takes --lock over the reader", async () => {
+    const { ops, calls } = fakeOps({ status: "done", digest: "sha256:c", result: { lockChecked: true } });
+    setChantStackOpsForTests(ops);
+    let read = false;
+    setChantStackLockReaderForTests(async () => ((read = true), { checked: true, ids: ["other"] }));
+    expect(await cancelStack(["web/prod", "--lock", "mine"], false, T, io(repo(YML)))).toBe(T.done);
+    expect(read).toBe(false);
+    expect(calls[0]!.opts).toMatchObject({ lockId: "mine" });
   });
 });
 

@@ -79,7 +79,7 @@ import {
   type InitStack,
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
-import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
+import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
 import { WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, type StageIo } from "./stages";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
@@ -348,6 +348,10 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   if (problems.length) return fail(problems.map((p) => `${kept}: ${p.key} ${p.message}`).join("\n"), forge);
   const doc = config.doc;
   const settings: ChantSettings = toChantSettings(config);
+  // Review stacks (plywood#15, chant#4609): ci.prEnvironment's project/stack template and the step's reviewSuffix only on a lexicon that runs them end to end.
+  const reviewStacks = config.doc.review_stacks !== undefined ? await chantReviewStacks() : false;
+  if (settings.ci.prEnvironment && !reviewStacks) delete settings.ci.prEnvironment;
+  const reviewSuffix = reviewStacks ? reviewSuffixOf(settings.pipeline.reviewStackName) : undefined;
   const stacks = initStacks(detected, doc, settings.members);
   // The merge's waves: the canary first, each wave cut by StackReferences and waves.after (plywood#18).
   const order = await stackOrder(root, stacks, settings.pipeline.after);
@@ -364,7 +368,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
       files.push({ file: CHANT_CONFIG_FILE, status: "kept", note: 'add "pulumi" to its lexicons so chant previews and updates the stacks' });
     } else files.push({ file: CHANT_CONFIG_FILE, status: "kept" });
   } else files.push(put(root, CHANT_CONFIG_FILE, chantConfigTs(), opts.dryRun));
-  files.push(put(root, COMPONENTS_FILE, componentsFile(stacks, settings.pipeline.after), opts.dryRun));
+  files.push(put(root, COMPONENTS_FILE, componentsFile(stacks, settings.pipeline.after, reviewSuffix ? { reviewSuffix } : {}), opts.dryRun));
 
   // What the repository already runs.
   if (detected.preCommit) files.push(await preCommitStep(root, detected.preCommit, opts.dryRun));

@@ -438,6 +438,7 @@ function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: R
     branch,
     ...(runner !== undefined ? { runner } : {}),
     ...(settings.pipeline.quorum?.length ? { quorum: settings.pipeline.quorum } : {}),
+    ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
   });
   return chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
 }

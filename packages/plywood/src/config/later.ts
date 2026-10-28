@@ -9,9 +9,6 @@ import type { ConfigGroup } from "./types";
 
 export const LATER_KEYS: Readonly<Record<string, string>> = {
   drift: "plywood#8",
-  notify: "plywood#20",
-  telemetry: "plywood#20",
-  reports: "plywood#20",
   review: "plywood#19",
   agent: "plywood#19",
   control: "plywood#18",

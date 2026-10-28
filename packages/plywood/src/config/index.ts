@@ -19,6 +19,7 @@ import { identity } from "./identity";
 import { images } from "./images";
 import { later } from "./later";
 import { locks } from "./locks";
+import { observe } from "./observe";
 import { policy } from "./policy";
 import { reviewStacks } from "./review-stacks";
 import { routing } from "./routing";
@@ -27,7 +28,7 @@ import { error, isObject, type ConfigGroup, type ConfigProblem, type JsonSchema,
 
 export type { ConfigGroup, ConfigProblem, RawConfig } from "./types";
 
-export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, identity, reviewStacks, routing, images, later];
+export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, identity, reviewStacks, observe, routing, images, later];
 
 /** The names chant's pulumi lexicon also looks for (chant#4559, member-engine.ts `PLYWOOD_FILES`). */
 export const CONFIG_NAMES = ["plywood.yml", "plywood.yaml"] as const;

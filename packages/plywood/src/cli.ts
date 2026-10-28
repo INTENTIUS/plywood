@@ -13,7 +13,9 @@
  */
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
+import { audit } from "./audit";
 import { configIdentities, forgeCheck } from "./identities";
+import { applyTelemetry } from "./telemetry";
 import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
@@ -67,6 +69,11 @@ export function helpText(): string {
     "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>",
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
+    "Ledger:",
+    "  audit [approvals|updates|runs|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...",
+    "                                                      the workspace ledger's rows, as chant ledger reads them",
+    "  query \"<sql>\"                                      SQL over the ledger's tables (chant query)",
+    "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
     "  config identities [--file <path>] [--env <env>]",
@@ -102,6 +109,9 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   // chant's verified install lines, when the installed pulumi lexicon has them (chant#4592); the config translation is synchronous.
   await useChantInstallLines();
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
+  // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
+  if (verb !== "config" && verb !== "init" && verb !== "tips") await applyTelemetry(stageIo.cwd, stageIo.env);
+  if (verb === "audit") return audit(args.slice(1), json, table, stageIo);
   if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
   if (verb === "config") return config(args.slice(1), table, emit);
   if (verb === "forge") return forgeCheck(args.slice(1), json, table, stageIo);

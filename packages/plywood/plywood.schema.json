@@ -444,6 +444,115 @@
         }
       }
     },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Chat and webhook messages when a wave waits, an update is refused or fails, or drift is found. Each value names a variable.",
+      "properties": {
+        "slack": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "webhook"
+          ],
+          "properties": {
+            "webhook": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the incoming webhook's URL."
+            }
+          }
+        },
+        "teams": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "webhook"
+          ],
+          "properties": {
+            "webhook": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the incoming webhook's URL."
+            }
+          }
+        },
+        "webhook": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "key"
+          ],
+          "description": "A generic webhook; each chant.notify/v1 event is signed with the key.",
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the webhook's URL."
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The variable holding the signing key."
+            }
+          }
+        },
+        "on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "wave-waiting",
+              "up-refused",
+              "up-failed",
+              "drift"
+            ]
+          },
+          "description": "The events to send. Default: all of them."
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One OpenTelemetry trace per run over OTLP/HTTP, with a span per stack. OTEL_* variables in the job win over these.",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "description": "The OTLP/HTTP base URL; /v1/traces is added."
+        },
+        "headers_env": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the OTLP headers, k=v,k2=v2."
+        },
+        "service_name": {
+          "type": "string",
+          "default": "plywood",
+          "description": "The trace's service.name."
+        },
+        "traces": {
+          "type": "boolean",
+          "default": true,
+          "description": "false turns traces off."
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "description": "Where each run's HTML report is kept.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "s3://<bucket>/<prefix>, gs://<bucket>/<prefix>, az://<account>/<container>/<prefix> or file://<dir>."
+        }
+      }
+    },
     "branches": {
       "type": "object",
       "additionalProperties": {
@@ -644,15 +753,6 @@
       ]
     },
     "drift": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "notify": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "telemetry": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "reports": {
       "description": "Read by a later plywood; accepted as written."
     },
     "review": {

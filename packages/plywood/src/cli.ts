@@ -14,7 +14,9 @@
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
 import { audit } from "./audit";
+import { mcp } from "./agents";
 import { drift } from "./drift";
+import { guard } from "./guard";
 import { configIdentities, forgeCheck } from "./identities";
 import { control } from "./control";
 import { applyTelemetry } from "./telemetry";
@@ -95,6 +97,11 @@ export function helpText(): string {
     "  control reconcile [--apply] [--project <key>]       each repository's plywood.yml from its entry, as a pull request",
     "  control dispatch [--sha <sha>]                      tell plywood.yml's control repo this commit applied",
     "",
+    "Agents:",
+    "  mcp [--report-url <url>]                            chant's read-only MCP server over stdio, with plywood's read tools",
+    "  guard check <command line>                          whether the agent guard refuses a command",
+    "  guard install [--dir <d>]                           the Claude Code hook and the pulumi and plunge wrappers",
+    "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
     "  config identities [--file <path>] [--env <env>]",
@@ -152,6 +159,8 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "move") return moveStack(args.slice(1), json, table, stageIo);
   if (verb === "rollback") return rollbackStack(args.slice(1), json, table, stageIo);
   if (verb === "drift") return drift(args.slice(1), json, table, stageIo);
+  if (verb === "mcp") return mcp(args.slice(1), json, table, stageIo);
+  if (verb === "guard") return guard(args.slice(1), json, table, stageIo);
   // `plywood ci` writes the workflow; `plywood ci <sub>` is chant's `ci <sub>`, as a generated job runs it.
   if (verb === "ci") {
     const sub = args[1];

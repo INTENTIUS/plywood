@@ -209,7 +209,7 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
       }
     }
     if (respond === "pull-request" && results.some((r) => r.drifted > 0)) {
-      io.err(`${PRODUCT} drift: respond.drift is pull-request; the drift agent's pull request is plywood's agent feature, so this run kept the issue only`);
+      io.err(`${PRODUCT} drift: respond.drift is pull-request; no chant job runs the drift agent (agent.drift) yet, so this run kept the issue only`);
     }
 
     const drifted = results.filter((r) => r.drifted > 0).map((r) => r.stack);

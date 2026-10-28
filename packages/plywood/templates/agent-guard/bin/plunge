@@ -1,0 +1,27 @@
+#!/bin/sh
+# plywood's agent guard wrapper for plunge (plywood#19), written by 'plywood guard install'.
+# First on PATH in an agent session: with PLYWOOD_AGENT_GUARD=1 or CLAUDECODE=1
+# it refuses 'plunge up', 'plunge update' and 'plunge destroy', and runs every other
+# command with the real plunge further down PATH.
+self_dir=$(cd "$(dirname "$0")" && pwd)
+if [ "${PLYWOOD_AGENT_GUARD:-}" = "1" ] || [ "${CLAUDECODE:-}" = "1" ]; then
+  skip=0
+  for arg in "$@"; do
+    if [ "$skip" = 1 ]; then skip=0; continue; fi
+    case "$arg" in
+      -C|--cwd|-s|--stack|--color|--config-file|--logflow|-v|--verbose|--tracing|--profiling|--memprofilerate) skip=1 ;;
+      -*) ;;
+      up|update|destroy)
+        echo "plywood guard: an agent session does not run 'plunge $arg'. Open a pull request; plywood previews it, and the update runs after a person approves the digest." >&2
+        exit 1 ;;
+      *) break ;;
+    esac
+  done
+fi
+IFS=:
+for dir in $PATH; do
+  [ "$(cd "$dir" 2>/dev/null && pwd)" = "$self_dir" ] && continue
+  if [ -x "$dir/plunge" ]; then exec "$dir/plunge" "$@"; fi
+done
+echo "plywood guard: no plunge on PATH after $self_dir" >&2
+exit 127

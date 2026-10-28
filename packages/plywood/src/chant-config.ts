@@ -24,6 +24,7 @@
  * Each config group writes its own part (src/config/<group>.ts).
  */
 import { GROUPS, type PlywoodConfig } from "./config/index";
+import type { AgentSettings, ReviewSettings } from "./config/agents";
 import type { DriftSettings } from "./config/drift";
 import type { ChantIdentitySettings } from "./config/identity";
 import type { ChantNotifyConfig } from "./config/observe";
@@ -116,6 +117,10 @@ export interface ChantPipelineSettings {
   notify?: ChantNotifyConfig;
   /** The scheduled drift check and its response (plywood#8): chant's scheduled Op jobs and `plywood drift`. */
   drift?: DriftSettings;
+  /** The review agent's step (plywood#19): a reviewAgent in handoff mode, in the pull request Op plywood ci writes. */
+  review?: ReviewSettings;
+  /** The agents' settings and spend limit (plywood#19). */
+  agent?: AgentSettings;
 }
 
 /** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */

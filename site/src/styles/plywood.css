@@ -78,13 +78,14 @@
 
 /*
  * Pixel art in the logo's grid: a small saw in wood and steel marks each section
- * heading and stands in for a horizontal rule, and a small isometric block drawn
- * as a mask is the list bullet.
+ * heading and stands in for a horizontal rule, and a tiny one-colour saw drawn
+ * as a mask is the list bullet, so it takes the accent colour of either theme.
  */
 :root {
 	/* The saw (28x17, wood handle and steel blade), used as the section mark and the divider. */
 	--pw-divider: url('/plywood/brand/plywood-saw.svg') center / 28px 17px no-repeat;
-	--pw-block: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' width='10' height='10' shape-rendering='crispEdges'><path d='M4 1h2v1h-2zM2 2h6v1h-6zM1 3h8v1h-8zM1 4h8v4h-8zM2 8h6v1h-6zM4 9h2v1h-2z'/></svg>");
+	/* The bullet saw (12x7): a handle with a hole, then a deep blade that tapers to the tip, its teeth stepping along the lower edge. */
+	--pw-saw-bullet: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7' width='12' height='7' shape-rendering='crispEdges'><path d='M1 0h11v1h-11zM0 1h1v1h-1zM3 1h9v1h-9zM0 2h1v1h-1zM3 2h9v1h-9zM0 3h1v1h-1zM3 3h8v1h-8zM0 4h1v1h-1zM3 4h6v1h-6zM10 4h1v1h-1zM1 5h6v1h-6zM8 5h1v1h-1zM3 6h1v1h-1zM5 6h1v1h-1z'/></svg>");
 }
 
 .sl-markdown-content :is(h1, h2, h3),
@@ -153,12 +154,12 @@ h1#_top {
 	content: '';
 	position: absolute;
 	left: -1.4rem;
-	top: calc((1lh - 10px) / 2);
-	width: 10px;
-	height: 10px;
+	top: calc((1lh - 7px) / 2);
+	width: 12px;
+	height: 7px;
 	background: var(--pw-accent);
-	-webkit-mask: var(--pw-block) center / 10px 10px no-repeat;
-	mask: var(--pw-block) center / 10px 10px no-repeat;
+	-webkit-mask: var(--pw-saw-bullet) center / 12px 7px no-repeat;
+	mask: var(--pw-saw-bullet) center / 12px 7px no-repeat;
 }
 .sl-markdown-content h3:not(.not-content, .not-content *) {
 	font-size: 1.05rem;

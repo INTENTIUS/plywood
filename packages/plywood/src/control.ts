@@ -167,6 +167,25 @@ export async function wavesControl(cwd: string): Promise<{ control: Record<strin
   return { control, repo: target.repo };
 }
 
+/**
+ * The control repo the note job reads (plywood#28, chant#4619): plywood.yml's
+ * `control` resolved to chant's target, or undefined when plywood.yml has
+ * none, the installed chant has no control repo, or the settings do not
+ * check. `plywood ci` and `plywood init` pass it to productPipelineJobs,
+ * which hands back the note job's read step as `post.control`.
+ */
+export async function noteControlTarget(doc: RawConfig, root: string): Promise<Target | undefined> {
+  const settings = controlOf(doc);
+  if (!settings) return undefined;
+  const chant = await chantControl();
+  if (!chant || chant.controlSettingsProblems(settings).length > 0) return undefined;
+  try {
+    return chant.resolveControlTarget(settings, repoName(root));
+  } catch {
+    return undefined;
+  }
+}
+
 /** chant#4568's presence check: these three present means the rest is too. */
 const REQUIRED = ["controlDispatchRequest", "putControlEntry", "reconcileProjects"] as const;
 

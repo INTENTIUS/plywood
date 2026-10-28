@@ -24,6 +24,7 @@ set -euo pipefail
 
 up() {
   need_docker
+  need_job_image
   local started
   started=$(date +%s)
   log "starting Forgejo, its runner and floci (compose project $PROJECT)…"

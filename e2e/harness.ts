@@ -270,7 +270,7 @@ export interface HarnessModule {
     clock: Clock;
     checkout?: string;
     emailDomain?: string;
-  }) => PullForgePort & { comments(pull: number): Promise<string[]> };
+  }) => PullForgePort & { comments(pull: number): Promise<string[]>; issues(): Promise<Array<{ number: number; title: string; body: string; open: boolean }>> };
   forgejoApi<T = unknown>(
     url: string,
     token: string,

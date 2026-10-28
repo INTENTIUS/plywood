@@ -8,12 +8,28 @@
  * | pw-moved-plan | plunge/saved-plan-moved  | C3, a saved plan refused with exit 40                  |
  * | pw-adopt      | plunge/adopt-stock-stack | adopt                                                  |
  *
+ * plywood#22's stock Pulumi claims run on the bench's two stock stacks,
+ * prod-us and prod-eu (S3 state on floci), which the seed deploys:
+ *
+ * | scenario         | claim              | what the BREAK arm changes                      |
+ * |------------------|--------------------|-------------------------------------------------|
+ * | pw-one-note      | preview/one-note   | the two stacks take different changes           |
+ * | pw-moved-preview | gate/moved-preview | the push after the approval leaves the preview  |
+ * | pw-canary        | wave/canary        | both prod stacks in one wave                    |
+ * | pw-drift         | drift/issue        | the change by hand sets the value it already has |
+ *
+ * The three that update put the prod stacks ahead of dev and staging in the
+ * waves (base overlays stock-first*, laid by `plywood-e2e configure`, which
+ * runs plywood ci), so their waves never wait on staging, which plunge
+ * reads only after pw-adopt.
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPORT_URL } from "./bench";
+import { expandWord } from "./checks";
 import { COMMANDS } from "./ports";
 import type { Scenario } from "./harness";
 
@@ -26,6 +42,10 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-disjoint": "plunge/disjoint-updates",
   "pw-moved-plan": "plunge/saved-plan-moved",
   "pw-adopt": "plunge/adopt-stock-stack",
+  "pw-one-note": "preview/one-note",
+  "pw-moved-preview": "gate/moved-preview",
+  "pw-canary": "wave/canary",
+  "pw-drift": "drift/issue",
 };
 
 /** The scenario files in `dir`, by id. */
@@ -45,8 +65,9 @@ export function readScenario(id: string, dir = SCENARIOS_DIR): Scenario {
  * What plywood holds its scenarios to, beyond the harness's lint: the file
  * is named for its id, the claim is the one plywood lists for it, the
  * product is plywood, the report URL is the bench's, every overlay and base
- * overlay exists, every `plywood-e2e` command is one plywood runs, and each
- * `${NAME}` word has a default for the plain arm.
+ * overlay exists (those a configure or push step names, in either arm,
+ * too), every `plywood-e2e` command is one plywood runs, and each `${NAME}`
+ * word has a default for the plain arm.
  */
 export function lintPlywoodScenario(file: string, s: Scenario, dirs = { overlays: OVERLAYS_DIR, base: BASE_OVERLAYS_DIR }): string[] {
   const out: string[] = [];
@@ -74,6 +95,20 @@ export function lintPlywoodScenario(file: string, s: Scenario, dirs = { overlays
       }
     }
     if (!(step.expect ?? []).some((e) => "exit" in e)) out.push(`${file}: out-of-band step ${step.id} expects no exit code, so its check is never read`);
+    // The overlay a configure or push step names, in both arms.
+    const named = first === "plywood-e2e" && (name === "configure" || name === "push") ? step.command[name === "configure" ? 2 : 3] : undefined;
+    if (named !== undefined) {
+      for (const env of [{}, s.break?.env ?? {}]) {
+        let value: string;
+        try {
+          value = expandWord(named, env);
+        } catch {
+          continue; // reported above as a name with no default
+        }
+        if (name === "configure" && !existsSync(join(dirs.base, `${value}.json`))) out.push(`${file}: step ${step.id} configures base overlay ${value}, which e2e/scenarios/base-overlays lacks`);
+        if (name === "push") overlay(value, `step ${step.id}`);
+      }
+    }
   }
   return out;
 }

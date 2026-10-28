@@ -1,0 +1,41 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-canary",
+  "product": "plywood",
+  "claim": "wave/canary",
+  "title": "The canary stack updates in the first wave, and the next wave starts only after it ends, under the pull request's approval",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "waves",
+      "do": "out-of-band",
+      "label": "main makes prod-us the canary wave and prod-eu the next, and plywood ci writes them again",
+      "command": ["plywood-e2e", "configure", "${PLYWOOD_E2E_WAVES:-stock-first}"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "events", "do": "open", "branch": "e2e/canary-events", "overlay": "prod-events-7200", "title": "prod: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's wave jobs settled both prod stacks",
+      "command": ["plywood-e2e", "wait-stacks", "pulumi-up", "prod-us", "prod-eu"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "canary",
+      "do": "out-of-band",
+      "label": "prod-us updated in an earlier wave than prod-eu and ended before prod-eu's update started",
+      "command": ["plywood-e2e", "canary", "pulumi-up", "prod-us", "prod-eu"],
+      "expect": [{ "exit": 0 }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_WAVES": "stock-one-wave" },
+    "note": "main puts both prod stacks in one first wave, so no canary goes ahead of the other: the canary check must fail."
+  }
+}

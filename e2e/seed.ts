@@ -13,7 +13,8 @@
  *              stack/seed-repo.sh (the repo setup of stack/seed.sh), with
  *              e2e/scenarios/base/plywood.yml, then in a job container:
  *              dev created and deployed on plunge's store, staging deployed
- *              on stock Pulumi for pw-adopt, prod-us and prod-eu created,
+ *              on stock Pulumi for pw-adopt, prod-us and prod-eu deployed
+ *              on stock Pulumi for plywood#22's stock claims,
  *              and `plywood init --forge forgejo --yes`, which writes the
  *              pull request workflow wired to plywood's verbs
  *
@@ -141,8 +142,8 @@ async function seedPeople(c: SeedContext, forge: string): Promise<Pick<BenchStat
 
 /**
  * The cloud half of the seed, run in a job container on a clone of main:
- * each stack created in its backend, dev deployed on plunge and staging on
- * stock Pulumi. Every pulumi and plunge line names its backend and skips
+ * each stack created in its backend, dev deployed on plunge, and staging,
+ * prod-us and prod-eu on stock Pulumi. Every pulumi and plunge line names its backend and skips
  * the update check. With `commit`, it also runs `plywood init` and pushes
  * the stack files and the workflow to main.
  */
@@ -159,8 +160,11 @@ export function cloudScript(commit: boolean): string {
     // staging stays a stock stack, in the store's bucket where plunge's adopt reads it (pw-adopt).
     init("pulumi", stockInStore, "staging"),
     `${env(stockInStore)} pulumi up --yes --non-interactive --stack staging`,
+    // prod-us and prod-eu are stock Pulumi stacks, deployed, for plywood#22's stock claims (pw-one-note, pw-moved-preview, pw-canary, pw-drift).
     init("pulumi", state, "prod-us"),
+    `${env(state)} pulumi up --yes --non-interactive --stack prod-us`,
     init("pulumi", state, "prod-eu"),
+    `${env(state)} pulumi up --yes --non-interactive --stack prod-eu`,
     ...(commit
       ? [
           `${env(state)} plywood init --forge forgejo --yes`,

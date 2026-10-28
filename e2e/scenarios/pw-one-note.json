@@ -1,0 +1,27 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-one-note",
+  "product": "plywood",
+  "claim": "preview/one-note",
+  "title": "A change that reaches two stock Pulumi stacks gives one note, one group and one approval command",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    { "id": "events", "do": "open", "branch": "e2e/one-note-events", "overlay": "prod-events-7200", "title": "prod: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    {
+      "id": "note",
+      "do": "out-of-band",
+      "label": "one note holds the grouped summary and the one approval line, which no other comment repeats",
+      "command": ["plywood-e2e", "note", "e2e/one-note-events", "plywood approve up --plan", ": 1 group,", "shop/prod-us", "shop/prod-eu"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "events-approve", "do": "approve", "pull": "events", "expect": [{ "comment": ": 1 group," }] }
+  ],
+  "break": {
+    "env": { "BREAK": "1" },
+    "overlay": "prod-eu-events-workers",
+    "note": "prod-eu also takes a fourth worker queue, so the two stacks take different changes and the note shows two groups: the one-group check must fail."
+  }
+}

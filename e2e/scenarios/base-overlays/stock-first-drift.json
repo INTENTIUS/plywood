@@ -1,0 +1,1 @@
+{"append":{"plywood.yml":"waves:\n  - [shop/prod-us]\n  - [shop/prod-eu]\n  - [shop/dev]\n  - [shop/staging]\ndrift:\n  schedule: \"0 6 * * *\"\n  stacks: [shop/prod-us]\n"}}

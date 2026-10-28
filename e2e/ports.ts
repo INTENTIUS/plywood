@@ -23,8 +23,26 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { readRunLedger } from "@intentius/chant/lifecycle/run-ledger";
 import { readGateLedger } from "@intentius/chant/lifecycle/gate-ledger";
-import { BUCKETS, FLOCI_NET, FORGEJO_NET, ORG, PROJECT, REPO, jobEnv, plungeStoreUrl } from "./bench";
-import { disjointTogether, expandWord, finishedRuns, hasMarkers, lockishKeys, movedNotGated, stackTarget, targetIsStack, waveRuns, EXIT, type CheckResult } from "./checks";
+import { BUCKETS, FLOCI_NET, FORGEJO_NET, ORG, PROJECT, REPO, jobEnv, plungeStoreUrl, s3BackendUrl } from "./bench";
+import {
+  canaryFirst,
+  disjointTogether,
+  driftIssueHolds,
+  expandWord,
+  finishedRuns,
+  hasMarkers,
+  lockishKeys,
+  movedNotGated,
+  oneNote,
+  stackTarget,
+  targetIsStack,
+  waitsAtGate,
+  waveRuns,
+  EXIT,
+  type CheckResult,
+  type IssueView,
+} from "./checks";
+import { driftIssueTitle, driftOpName } from "../packages/plywood/src/words";
 import type { ApproveInput, Arm, BucketPort, Clock, HarnessModule, LedgerRecord, Person, SafeRunInstance } from "./harness";
 import { overlayFiles, readOverlay } from "./overlays";
 
@@ -249,6 +267,73 @@ export interface CommandContext {
   waitLimit: number;
   /** Tags of floci's SQS queues. */
   queueTags?: () => Promise<Array<{ url: string; tags: Record<string, string> }>>;
+  /** Who pushes main for `configure`. */
+  admin?: Person;
+  /** An overlay's files against the seeded repository: a step's (`pull`) or a base overlay (`base`). */
+  overlay?(name: string, kind: "pull" | "base"): Record<string, string>;
+  /** Push `files` over `branch` as the author, a commit on top of its head. */
+  pushBranch?(branch: string, files: Record<string, string>, message: string): Promise<string>;
+  /** Every comment of the newest pull request from `branch`, or undefined when there is none. */
+  pullComments?(branch: string): Promise<string[] | undefined>;
+  /** The shop repository's issues. */
+  issues?(): Promise<IssueView[]>;
+}
+
+/** The arm's name for a branch a step named: the harness pushes `<branch>-break` in the BREAK arm. */
+export const armBranch = (branch: string, env: Record<string, string>): string => (env.BREAK === "1" ? `${branch}-break` : branch);
+
+/**
+ * The backend of a stack that runs on stock Pulumi on the bench: the prod
+ * stacks in the state bucket, staging in the store's bucket until pw-adopt
+ * moves it. dev runs on plunge's store and is not one.
+ */
+export function stockBackend(stack: string): string {
+  if (stack === "prod-us" || stack === "prod-eu") return s3BackendUrl(BUCKETS.state, FLOCI_NET);
+  if (stack === "staging") return s3BackendUrl(BUCKETS.records, FLOCI_NET);
+  throw new Error(`${stack} is not a stock Pulumi stack on the bench (prod-us, prod-eu or staging)`);
+}
+
+/** A node line that writes the files a base64 JSON variable holds, in the job's checkout. */
+const WRITE_FILES = `node -e 'const fs=require("fs"),p=require("path");const f=JSON.parse(Buffer.from(process.env.PLYWOOD_E2E_FILES,"base64").toString("utf8"));for(const [k,v] of Object.entries(f)){fs.mkdirSync(p.dirname(k),{recursive:true});fs.writeFileSync(k,v)}'`;
+
+/**
+ * The script `configure` runs in a job container on a clone of main: lay
+ * the base overlay's files, run `plywood ci` as a person would after editing
+ * plywood.yml (the waves spec, the workflow and any drift jobs written
+ * again), and push main. The commit says [skip ci] so the push starts no
+ * waves job of its own.
+ */
+export function configureScript(name: string): string {
+  return [
+    WRITE_FILES,
+    `PULUMI_BACKEND_URL=${quote(s3BackendUrl(BUCKETS.state, FLOCI_NET))} plywood ci --forge forgejo`,
+    "git add -A",
+    `git commit -q -m ${quote(`e2e: plywood.yml from base overlay ${name}, and plywood ci [skip ci]`)} || true`,
+    "git push -q origin HEAD:main",
+  ].join("\n");
+}
+
+/**
+ * The script `sqs-retention` runs: the stack's events queue URL from its
+ * outputs, then SQS SetQueueAttributes on floci, unsigned as floci takes it,
+ * the hand change behind Pulumi's back the drift tutorial makes.
+ */
+export function retentionScript(stack: string, seconds: string): string {
+  if (!/^\d+$/.test(seconds)) throw new Error(`sqs-retention takes seconds, not ${seconds}`);
+  const set = `node -e 'fetch(process.argv[1]+"/",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({Action:"SetQueueAttributes",Version:"2012-11-05",QueueUrl:process.argv[2],"Attribute.1.Name":"MessageRetentionPeriod","Attribute.1.Value":process.argv[3]}).toString()}).then(async(r)=>{if(!r.ok){console.error("floci answered "+r.status+": "+(await r.text()));process.exit(1)}})' ${quote(FLOCI_NET)} "$url" ${quote(seconds)}`;
+  return [`url=$(PULUMI_BACKEND_URL=${quote(stockBackend(stack))} pulumi stack output eventsQueueUrl --stack ${quote(stack)})`, 'test -n "$url"', set].join("\n");
+}
+
+/**
+ * The script `drift-job` runs: what the scheduled drift job of `shop/<stack>`
+ * runs (src/drift.ts driftOpSpec), the snapshots fetch, then `plywood drift
+ * --op <name> --forge forgejo`, with the forge variables a Forgejo job has.
+ */
+export function driftJobScript(stack: string): string {
+  return [
+    "git fetch -q --no-tags origin '+refs/chant/snapshots:refs/chant/snapshots' || true",
+    `plywood drift --op ${quote(driftOpName(`shop/${stack}`))} --forge forgejo`,
+  ].join("\n");
 }
 
 /** The commands `plywood-e2e` takes, with their arguments. */
@@ -262,6 +347,15 @@ export const COMMANDS: Record<string, string> = {
   job: "<word>...: the words as a command in a job container on a clone of main",
   "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container",
   "approve-pending": "<op>: the reviewer approves the newest pending gate of <op> with the plan it binds",
+  configure: "<base overlay>: lay it over main, run plywood ci and push main, in a job container as the admin",
+  push: "<branch> <overlay>: push the overlay as one more commit on the arm's pull request branch",
+  note: "<branch> <once> <text>...: one comment on the branch's pull request holds <once> and every <text>, and <once> appears once (./checks.ts oneNote)",
+  "wait-stacks": "<op> <stack>...: wait until a wave job of <op> since the arm started settled each stack, or one stopped",
+  canary: "<op> <first> <then>: <first> updated in an earlier wave, ended before <then> started (./checks.ts canaryFirst)",
+  waits: "<op> <stack>: no job applied <stack>, one waits at a wave's own gate (./checks.ts waitsAtGate)",
+  "sqs-retention": "<stack> <seconds>: set the stack's events queue's retention on floci by hand, in a job container",
+  "drift-job": "<stack>: the scheduled drift job's command for shop/<stack>, in a job container with Forgejo's job variables",
+  "drift-issue": "<stack> <name> <attribute>: one open drift issue for shop/<stack> with a row for <name> naming <attribute> (./checks.ts driftIssueHolds)",
 };
 
 const say = (c: CommandContext, r: CheckResult): number => {
@@ -331,6 +425,64 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       const script = `plywood approve ${quote(p.gate)} --op ${quote(a[0]!)} --plan ${quote(p.planDigest)} --approver ${quote(c.reviewer.login)} --yes`;
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.reviewer }, script));
     }
+    case "configure": {
+      need(1);
+      if (!c.overlay || !c.admin) throw new Error("plywood-e2e configure needs the admin and the overlays");
+      const files = Buffer.from(JSON.stringify(c.overlay(a[0]!, "base")), "utf8").toString("base64");
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.admin, env: { PLYWOOD_E2E_FILES: files } }, configureScript(a[0]!)));
+    }
+    case "push": {
+      need(2);
+      if (!c.overlay || !c.pushBranch) throw new Error("plywood-e2e push needs the overlays and the forge");
+      const branch = armBranch(a[0]!, c.armEnv());
+      const sha = await c.pushBranch(branch, c.overlay(a[1]!, "pull"), `e2e: ${a[1]} on ${branch}`);
+      return say(c, { code: 0, line: `pushed ${a[1]} on ${branch} at ${sha.slice(0, 10)}` });
+    }
+    case "note": {
+      need(3);
+      if (!c.pullComments) throw new Error("plywood-e2e note needs the forge's comments");
+      const branch = armBranch(a[0]!, c.armEnv());
+      const deadline = c.clock.now() + Math.max(c.waitLimit - 30, 30) * 1000;
+      for (;;) {
+        const bodies = (await c.pullComments(branch)) ?? [];
+        const r = oneNote(bodies, { once: a[1]!, holds: a.slice(2) });
+        if (r.code === 0 || c.clock.now() >= deadline) return say(c, r);
+        await c.clock.sleep(5000);
+      }
+    }
+    case "wait-stacks": {
+      need(2);
+      const [op, ...stacks] = a;
+      const deadline = c.clock.now() + Math.max(c.waitLimit - 30, 30) * 1000;
+      for (;;) {
+        const runs = waveRuns(await c.ledger.runs(c.env, op!), op!, c.since());
+        const settled = (s: string) => runs.some((r) => stackTarget(r, s) || [...r.wave!.applied, ...r.wave!.failed, ...r.wave!.moved].some((t) => targetIsStack(t, s)));
+        const stopped = runs.find((r) => r.status !== "ok");
+        if (stacks.every(settled)) return say(c, { code: 0, line: `${stacks.join(", ")} settled by ${runs.length} ${op} wave jobs` });
+        if (stopped) return say(c, { code: 0, line: `wave ${stopped.wave!.number} of ${op} stopped ${stopped.status} (exit ${stopped.wave!.exitCode}); the next check reads why` });
+        if (c.clock.now() >= deadline) return say(c, { code: 124, line: `${stacks.filter((s) => !settled(s)).join(", ")} not settled after ${c.waitLimit}s` });
+        await c.clock.sleep(5000);
+      }
+    }
+    case "canary":
+      need(3);
+      return say(c, canaryFirst(await c.ledger.runs(c.env, a[0]!), { op: a[0]!, since: c.since(), first: a[1]!, then: a[2]! }));
+    case "waits":
+      need(2);
+      return say(c, waitsAtGate(await c.ledger.runs(c.env, a[0]!), { op: a[0]!, since: c.since(), stack: a[1]! }, await c.ledger.pending(a[0]!, c.since())));
+    case "sqs-retention":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, retentionScript(a[0]!, a[1]!)));
+    case "drift-job": {
+      need(1);
+      const env = { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: c.author.token };
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, driftJobScript(a[0]!)));
+    }
+    case "drift-issue": {
+      need(3);
+      if (!c.issues) throw new Error("plywood-e2e drift-issue needs the forge's issues");
+      return say(c, driftIssueHolds(await c.issues(), { title: driftIssueTitle(`shop/${a[0]}`), name: a[1]!, attribute: a[2]! }));
+    }
     default:
       throw new Error(`plywood-e2e has no command ${name ?? "(none)"}; it takes ${Object.keys(COMMANDS).join(", ")}`);
   }
@@ -363,24 +515,29 @@ export function reviewerChant(c: Pick<CommandContext, "h" | "safe" | "jobImage" 
 // ── main as the admin ───────────────────────────────────────────────────
 
 /** Commit `files` over main as the admin and push it: a base overlay for a BREAK arm. Returns the new sha. */
-export async function pushOverMain(o: { forgeUrl: string; admin: Person; scratch: string; files: Record<string, string>; message: string }): Promise<string> {
+export function pushOverMain(o: { forgeUrl: string; admin: Person; scratch: string; files: Record<string, string>; message: string }): Promise<string> {
+  return pushOverBranch({ forgeUrl: o.forgeUrl, person: o.admin, scratch: o.scratch, branch: "main", files: o.files, message: o.message });
+}
+
+/** Commit `files` over `branch` as `person` and push it. Returns the new sha. */
+export async function pushOverBranch(o: { forgeUrl: string; person: Person; scratch: string; branch: string; files: Record<string, string>; message: string }): Promise<string> {
   mkdirSync(o.scratch, { recursive: true });
-  const dir = mkdtempSync(join(o.scratch, "base-"));
+  const dir = mkdtempSync(join(o.scratch, "push-"));
   const u = new URL(o.forgeUrl);
-  u.username = o.admin.login;
-  u.password = o.admin.token;
+  u.username = o.person.login;
+  u.password = o.person.token;
   u.pathname = `/${ORG}/${REPO}.git`;
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
-  const redact = [o.admin.token];
-  await sh("git", ["clone", "-q", "--branch", "main", u.toString(), dir], { env, redact });
+  const redact = [o.person.token];
+  await sh("git", ["clone", "-q", "--branch", o.branch, u.toString(), dir], { env, redact });
   for (const [path, content] of Object.entries(o.files)) {
     const to = join(dir, ...path.split("/"));
     mkdirSync(dirname(to), { recursive: true });
     writeFileSync(to, content);
   }
   await sh("git", ["-C", dir, "add", "-A"], { env });
-  await sh("git", ["-C", dir, "-c", `user.name=${o.admin.login}`, "-c", `user.email=${o.admin.login}@plywood-tutorial.local`, "-c", "commit.gpgsign=false", "commit", "-q", "-m", o.message], { env });
-  await sh("git", ["-C", dir, "push", "-q", "origin", "HEAD:refs/heads/main"], { env, redact });
+  await sh("git", ["-C", dir, "-c", `user.name=${o.person.login}`, "-c", `user.email=${o.person.login}@plywood-tutorial.local`, "-c", "commit.gpgsign=false", "commit", "-q", "-m", o.message], { env });
+  await sh("git", ["-C", dir, "push", "-q", "origin", `HEAD:refs/heads/${o.branch}`], { env, redact });
   return (await sh("git", ["-C", dir, "rev-parse", "HEAD"], { env })).trim();
 }
 

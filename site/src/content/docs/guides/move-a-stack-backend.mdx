@@ -18,6 +18,8 @@ pulumi stack init prod
 pulumi stack import --file prod.json
 ```
 
+`npx plywood export shop/prod --out ~/prod.json` takes the same export behind a gate. A second person approves the request, and then the file lands on your machine alone, outside the repository.
+
 Then set the new `backend:` for the stack in `plywood.yml`. The stack keeps its resources and outputs. Update history and Insights stay with Pulumi Cloud.
 
 ## Onto plunge
@@ -26,6 +28,8 @@ Then set the new `backend:` for the stack in `plywood.yml`. The stack keeps its 
 pulumi stack export --stack prod --file prod.json
 plunge stack adopt --file prod.json --stack prod --json
 ```
+
+`npx plywood move shop/prod --onto plunge` runs the same adoption for every stack `plywood init --engine plunge` set up, with each stack waiting for an approval of its preview.
 
 `adopt` classifies every resource and writes nothing. Add `--yes` to write one record per resource and its markers. A stock `pulumi stack import` of the same export moves the stack back.
 

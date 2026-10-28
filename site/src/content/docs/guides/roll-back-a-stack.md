@@ -13,10 +13,16 @@ Cut a release after a good update:
 npx chant release cut shop-2026-10-27
 ```
 
-Roll a stack back to it:
+Roll every stack the release holds in an environment back to it:
 
 ```sh
-npx plywood rollback shop/prod-east --release shop-2026-10-27
+npx plywood rollback --release shop-2026-10-27 --env prod
 ```
 
-The rollback previews the release's program against the stack. The preview waits for an approval like any other, and `up` runs the release's tree.
+Roll one stack back to the release it ran before the current one:
+
+```sh
+npx plywood rollback shop/prod-east
+```
+
+The rollback previews the release's program against the stack, and the release gate waits for an approval of that preview. After the approval, the same command again updates the stack to the release's tree. `--dry-run` prints the preview and stops.

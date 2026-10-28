@@ -21,6 +21,7 @@ import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from
 import { tipById, tipLines, TIPS } from "./tips";
 import { useChantInstallLines } from "./images";
 import { approve, override, up } from "./up";
+import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
 declare const __PLYWOOD_VERSION__: string | undefined;
@@ -68,6 +69,14 @@ export function helpText(): string {
     "Approvals:",
     "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>",
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
+    "",
+    "Stack operations (each waits for a second person's approval):",
+    "  export <stack> --out <file>                         the stack's export, to a file on your machine",
+    "  cancel <stack> --lock <id>                          release a stuck stack lock",
+    "  move <urn>... --from <stack> --to <stack>           move resources; both stacks preview no change",
+    "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
+    "  rollback <stack> [--digest <d>] | --release <name> --env <env>",
+    "                                                      preview a release's program, then update behind its gate",
     "",
     "Ledger:",
     "  audit [approvals|updates|runs|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...",
@@ -125,6 +134,10 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "up") return up(args.slice(1), json, table, stageIo);
   if (verb === "approve") return approve(args.slice(1), json, table, stageIo);
   if (verb === "override") return override(args.slice(1), json, table, stageIo);
+  if (verb === "export") return exportStack(args.slice(1), json, table, stageIo);
+  if (verb === "cancel") return cancelStack(args.slice(1), json, table, stageIo);
+  if (verb === "move") return moveStack(args.slice(1), json, table, stageIo);
+  if (verb === "rollback") return rollbackStack(args.slice(1), json, table, stageIo);
   // `plywood ci` writes the workflow; `plywood ci <sub>` is chant's `ci <sub>`, as a generated job runs it.
   if (verb === "ci") {
     const sub = args[1];

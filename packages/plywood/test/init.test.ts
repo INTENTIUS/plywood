@@ -429,7 +429,8 @@ describe("flags, templates and pure parts", () => {
   it("parses init's flags", () => {
     expect(parseInitArgs(["--gate", "destroy", "--engine", "plunge"])).toMatchObject({ gate: "on-destructive", engine: "plunge", bucketCheck: true });
     expect(parseInitArgs(["--preset", "nope"])).toEqual({ error: expect.stringContaining("not one of merge, before-merge, approve-all") });
-    expect(parseInitArgs(["--from", "x.yml"])).toEqual({ error: expect.stringContaining("not built yet") });
+    expect(parseInitArgs(["--from", "x.yml"])).toEqual({ error: expect.stringContaining("its path names none") });
+    expect(parseInitArgs(["--from", ".github/workflows/pulumi.yml"])).toMatchObject({ from: { source: "pulumi-actions", files: [".github/workflows/pulumi.yml"] } });
     expect(parseInitArgs(["--print-prompt"])).toEqual({ printPrompt: true });
     expect(parseInitArgs(["--no-bucket-check", "--dry-run"])).toMatchObject({ bucketCheck: false, dryRun: true });
   });

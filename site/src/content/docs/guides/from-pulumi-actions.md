@@ -13,10 +13,20 @@ draft: true
 npx plywood init --from .github/workflows/pulumi.yml
 ```
 
-`init` reads each `pulumi/actions` step's `command`, `stack-name`, `work-dir` and `cloud-url`, and writes:
+`init` reads each `pulumi/actions` step's `command`, `stack-name`, `work-dir`, `policyPacks`, `cloud-url` and `pulumi-version`, and writes:
 
 - `plywood.yml`, with one stack entry per step;
 - `.github/workflows/plywood.yml`, the generated pipeline.
+
+An `up` on a push becomes the branch that updates the stack. `init` then lists each input it could not carry by file and step, `refresh` and `target` among them.
+
+`--from pulumi-actions` reads every workflow under `.github/workflows`. The same flag reads other pipelines' files too:
+
+| `--from` | Files |
+|---|---|
+| `deployments` | each `Pulumi.<stack>.deploy.yaml` exported from Pulumi Deployments |
+| `spacelift` | `.spacelift/config.yml` |
+| `env0` | `env0.workflow.yml` and `env0.yml` |
 
 ## Run both, then remove the old one
 

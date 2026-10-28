@@ -1,0 +1,9 @@
+version: 2
+deploy:
+  steps:
+    setupVariables:
+      after:
+        - echo ready
+    pulumiPreview:
+      before:
+        - npm ci

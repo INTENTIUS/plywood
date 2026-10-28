@@ -88,7 +88,7 @@ export function stepInput(s: InitStack): Record<string, unknown> {
  * (chant discovers any exported component-shaped value in a
  * `*.component.ts` file), so the file imports nothing.
  */
-export function componentsFile(stacks: readonly InitStack[]): string {
+export function componentsFile(stacks: readonly InitStack[], after: Readonly<Record<string, readonly string[]>> = {}): string {
   const taken = new Set<string>();
   const lines = [
     "// Written by plywood init from the stacks it found; running it again rewrites",
@@ -97,7 +97,9 @@ export function componentsFile(stacks: readonly InitStack[]): string {
     "",
   ];
   for (const s of stacks) {
-    const component = { name: componentName(s), dependsOn: [], deploy: [{ phase: "up", steps: [{ kind: "pulumi-up", ...stepInput(s) }] }] };
+    // plywood.yml's waves.after (plywood#18); chant adds each StackReference itself (chant#4547).
+    const dependsOn = (after[s.key] ?? []).filter((u) => stacks.some((x) => x.key === u)).map((u) => componentName({ key: u }));
+    const component = { name: componentName(s), dependsOn, deploy: [{ phase: "up", steps: [{ kind: "pulumi-up", ...stepInput(s) }] }] };
     lines.push(`export const ${exportName(s, taken)} = ${JSON.stringify(component)};`);
   }
   return lines.join("\n") + "\n";
@@ -135,6 +137,8 @@ export function waveRunner(runner: ChantRunner | undefined): ChantRunnerSpec | u
 export interface WavesSpecInput {
   stacks: readonly InitStack[];
   waves?: string[][];
+  /** The waves already settled (src/stack-order.ts: canary first, each wave cut by the stacks' order); in place of `waves`. */
+  ordered?: ReadonlyArray<{ name: string; stacks: InitStack[] }>;
   gate: ChantGatePolicy;
   branch: string;
   runner?: ChantRunnerSpec;
@@ -150,7 +154,7 @@ export interface WavesSpecInput {
  * strictest of its stacks'.
  */
 export function wavesSpec(input: WavesSpecInput): Record<string, unknown> {
-  const waves = wavesOf(input.stacks, input.waves).filter((w) => w.stacks.length > 0);
+  const waves = (input.ordered ?? wavesOf(input.stacks, input.waves)).filter((w) => w.stacks.length > 0);
   return {
     name: OP_NAME,
     op: OP_NAME,

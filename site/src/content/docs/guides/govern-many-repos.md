@@ -6,7 +6,15 @@ draft: true
 ---
 
 ```yaml
-control: https://github.com/acme/infra-control
+control: github.com/acme/infra-control
 ```
 
-Each repository's `plywood.yml` names the control repo. Its policies, `trust.json` and pins apply to every repository at the control repo's default branch. [The control repo](/plywood/concepts/control-repo/).
+Each repository's `plywood.yml` names the control repo. The control repo sets an approver or a pin for one repository or for all of them:
+
+```sh
+plywood control put github.com/acme/shop --approver 'shop/prod-*=sre:2'
+plywood control put defaults --pin pulumi=3.272.0
+plywood control reconcile
+```
+
+`reconcile` prints the change each repository would get, and `--apply` opens the pull requests. [The control repo](/plywood/concepts/control-repo/).

@@ -29,7 +29,7 @@ afterEach(() => setChantReviewStacksForTests("reset"));
 describe("review_stacks", () => {
   it("names each review stack pr-{number}, with an optional suffix, and refuses any other pattern", () => {
     expect(errors("review_stacks: { template: shop/dev }")).toEqual([]);
-    expect(errors("review_stacks: { template: shop/dev, name: pr-{number}-shop, ttl: 72h }")).toEqual([]);
+    expect(errors('review_stacks: { template: shop/dev, name: "pr-{number}-shop", ttl: 72h }')).toEqual([]);
     for (const name of ["review-{number}", "{number}", "pr-{number}/x", "prod", "pr-{number}-Shop"]) {
       expect(errors(`review_stacks: { template: shop/dev, name: "${name}" }`).map((p) => p.key), name).toEqual(["review_stacks.name"]);
     }

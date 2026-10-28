@@ -36,11 +36,18 @@ describe("plywood.yml", () => {
     expect(toChantSettings(config)).toEqual({
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", policy: { path: "policy" } },
       members: [
-        { name: "shop/dev", dir: "infra", engine: "pulumi" },
-        { name: "shop/prod-east", dir: "infra", engine: "pulumi" },
+        { name: "shop/dev", dir: "infra" },
+        { name: "shop/prod-us", dir: "infra" },
       ],
-      memberDefaults: { engine: "pulumi" },
-      pipeline: { waves: [["shop/dev"], ["shop/prod-east"]], gate: "on-destructive", approval: "ledger", excludeAuthor: true, policyPacks: [{ dir: "policy/aws-guard" }], engineSetup: DEFAULT_SETUP },
+      memberDefaults: {},
+      pipeline: {
+        gate: "on-destructive",
+        approval: "ledger",
+        excludeAuthor: true,
+        policyPacks: [{ dir: "policy/aws-guard" }],
+        drift: { schedule: "0 6 * * *", stacks: ["shop/dev", "shop/prod-us"], respond: "issue" },
+        engineSetup: DEFAULT_SETUP,
+      },
     });
   });
 

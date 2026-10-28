@@ -7,8 +7,6 @@ import { VERBS } from "../src/words";
 import { setChantProductForTests } from "../src/chant-product";
 
 const RULED = ["check", "preview", "up", "drift", "approve", "override"];
-/** The verbs later units build (plywood#8). */
-const NOT_BUILT = ["drift"];
 
 function capture(): Io & { stdout: string[]; stderr: string[] } {
   const stdout: string[] = [];
@@ -25,18 +23,12 @@ describe("plywood CLI", () => {
     expect(helpText()).toContain("Pull request automation for Pulumi");
   });
 
-  it.each(NOT_BUILT)("%s says it is not built yet and exits with chant's failed code", async (verb) => {
-    const io = capture();
-    expect(await main([verb], io)).toBe(FALLBACK_EXIT.failed);
-    expect(io.stderr.join("\n")).toBe(`plywood: plywood ${verb} is not built yet.`);
-    expect(io.stdout).toEqual([]);
-  });
-
   it("prints one JSON object with --json", async () => {
     const io = capture();
-    expect(await main(["drift", "--json"], io)).toBe(1);
+    expect(await main(["apply", "--json"], io)).toBe(FALLBACK_EXIT.failed);
     expect(io.stdout).toHaveLength(1);
-    expect(JSON.parse(io.stdout[0])).toEqual({ command: "drift", ok: false, exitCode: 1, error: "plywood drift is not built yet." });
+    expect(JSON.parse(io.stdout[0])).toEqual({ command: "apply", ok: false, exitCode: 1, error: "unknown command 'apply'. Run 'plywood --help' for the commands." });
+    expect(io.stderr).toEqual([]);
   });
 
   it("lists resume in --help and runs chant run resume through plywood's words (plywood#26)", async () => {
@@ -83,12 +75,17 @@ describe("exit codes", () => {
 
 describe("placement", () => {
   // plywood holds words; chant runs pulumi, plunge and git (CONTRIBUTING.md).
+  // plywood upgrade (plywood#23) alone spawns, and only npm and npx.
   it("no module under src runs pulumi, plunge or git", () => {
     const src = join(import.meta.dirname, "../src");
     const files = readdirSync(src, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts"));
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const text = readFileSync(join(src, f), "utf8");
+      if (f === "upgrade.ts") {
+        expect([...text.matchAll(/\bexec\("([^"]+)"/g)].map((m) => m[1])).toEqual(["npm", "npm", "npx"]);
+        continue;
+      }
       expect(text, f).not.toMatch(/node:child_process|["']child_process["']|\bexeca\b|Bun\.spawn/);
     }
   });

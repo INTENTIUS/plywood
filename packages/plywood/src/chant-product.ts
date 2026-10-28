@@ -52,7 +52,10 @@ export interface ChantProduct {
   assertProductWords(input: ProductWordsInput | ProductWords, options?: { jobs?: readonly ChantCommand[] }): ProductWords;
   productPipelineJobs(forge: ForgeKind, env: string, options: ProductPipelineOptions): ProductPipelineJobs;
   approveLine(words: ProductWords, input: { op: string; gate: string; digest: string }): string;
-  runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords): Promise<number>;
+  /** `options.mcp` is chant#4555's product tool hook, for `serve mcp`; a chant before it ignores the option. */
+  runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords, options?: { mcp?: unknown }): Promise<number>;
+  /** Present when `runChantInProcess` takes the product tool hook (chant#4555). */
+  PRODUCT_MCP_HOOK_FLOOR?: string;
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
   productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;

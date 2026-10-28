@@ -616,6 +616,74 @@
         }
       }
     },
+    "review": {
+      "description": "A model reviews each pull request and posts one note. It approves and gates nothing. Off when absent.",
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "instructions": {
+              "type": "string",
+              "description": "The instructions file, read from the base branch. Default .chant/review.md."
+            },
+            "command": {
+              "type": "string",
+              "description": "The model command: the prompt on stdin, the answer on stdout."
+            },
+            "key_env": {
+              "type": "string",
+              "default": "ANTHROPIC_API_KEY",
+              "description": "The variable holding the model's key, the one secret the command sees."
+            },
+            "timeout": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minutes the command may run."
+            }
+          }
+        }
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agents that act on a request: /plywood agent <ask>, and the drift agent's pull request.",
+      "properties": {
+        "comment": {
+          "type": "boolean",
+          "default": false,
+          "description": "Answer /plywood agent <ask> on a pull request."
+        },
+        "drift": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open a pull request that fixes a drifted stack (respond.drift: pull-request)."
+        },
+        "command": {
+          "type": "string",
+          "description": "The model command: the prompt on stdin, the answer on stdout."
+        },
+        "key_env": {
+          "type": "string",
+          "default": "ANTHROPIC_API_KEY",
+          "description": "The variable holding the model's key, the one secret the command sees."
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minutes the command may run."
+        },
+        "max_runs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most agent runs per day."
+        }
+      }
+    },
     "branches": {
       "type": "object",
       "additionalProperties": {
@@ -868,12 +936,6 @@
           }
         }
       ]
-    },
-    "review": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "agent": {
-      "description": "Read by a later plywood; accepted as written."
     },
     "env": {
       "description": "Read by a later plywood; accepted as written."

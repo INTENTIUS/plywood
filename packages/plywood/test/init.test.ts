@@ -218,6 +218,12 @@ describe("golden files", () => {
     expect(components).toContain('export const shop_dev = {"name":"shop-dev","dependsOn":[],"deploy":[{"phase":"up","steps":[{"kind":"pulumi-up","dir":"infra","stack":"dev","member":"shop"}]}]};');
     expect(components.split("\n").filter((l) => l.startsWith("export const"))).toHaveLength(3);
     expect(readFileSync(join(root, "chant.config.ts"), "utf8")).toContain('lexicons: ["pulumi"]');
+    // plywood#22: the Op the spec names, written before chant's waves generator runs, a preview per stack in wave order.
+    expect(r.files.find((f) => f.file === "ops/pulumi-up.op.ts")?.status).toBe("written");
+    const op = readFileSync(join(root, "ops/pulumi-up.op.ts"), "utf8");
+    expect(op).toContain('name: "pulumi-up",');
+    expect(op).toContain('phase("dev", [pulumiPreviewStep("shop", { dir: "infra", stack: "dev", id: "dev-shop-dev" })]),');
+    expect(op.indexOf('phase("staging"')).toBeLessThan(op.indexOf('phase("prod"'));
   });
 
   it("two projects: a member each, and their stacks share a wave per environment", async () => {
@@ -287,7 +293,7 @@ describe("a second run", () => {
     const wf = join(root, ".github/workflows/plywood.yml");
     const own = "  smoke:\n    runs-on: ubuntu-latest\n    # our own check\n    steps:\n      - run: ./scripts/smoke.sh\n";
     writeFileSync(wf, readFileSync(wf, "utf8") + own);
-    const before = Object.fromEntries(["plywood.yml", "chant.workspace.json", "plywood.component.ts", ".chant/op-waves/pulumi-up.spec.json"].map((f) => [f, readFileSync(join(root, f), "utf8")]));
+    const before = Object.fromEntries(["plywood.yml", "chant.workspace.json", "plywood.component.ts", ".chant/op-waves/pulumi-up.spec.json", "ops/pulumi-up.op.ts"].map((f) => [f, readFileSync(join(root, f), "utf8")]));
 
     const r = await runInit({ ...OPTS, gate: "never" }, FALLBACK_EXIT, io(root));
     for (const [f, text] of Object.entries(before)) expect(readFileSync(join(root, f), "utf8")).toBe(text);

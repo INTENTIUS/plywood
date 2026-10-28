@@ -59,6 +59,10 @@ export interface ChantProduct {
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
   productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;
+  /** Present when chant's notify has the relay and `chant notify relay` (chant#4611). */
+  NOTIFY_RELAY_FLOOR?: string;
+  /** chant's relay server (chant#4611); its presence says `notify relay` runs in process. */
+  startRelayServer?: (...args: unknown[]) => unknown;
 }
 
 /** The functions whose presence says the installed chant has the product pipeline. */

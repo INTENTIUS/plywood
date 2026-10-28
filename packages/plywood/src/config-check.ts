@@ -73,9 +73,12 @@ export function configCheck(cwd: string, file?: string): ConfigCheckResult {
 function policyLine(doc: RawConfig): string {
   const rego = chantPolicyOf(doc);
   const packs = policyPacksOf(doc);
+  const src = rego?.source;
+  const regoDir = src ? `${src.path ?? "policy"} of ${src.repo}@${src.ref}` : (rego?.path ?? "policy");
+  const hasRego = rego !== undefined && (src !== undefined || rego.path !== undefined || rego.command !== undefined || rego.engine !== undefined || rego.namespace !== undefined);
   const parts = [
-    ...(rego ? [`Rego in ${rego.path ?? "policy"} (${rego.engine ?? "conftest"}), read at base`] : []),
-    ...(packs.length ? [`CrossGuard ${packs.map((p) => p.dir).join(", ")} in each preview`] : []),
+    ...(hasRego ? [`Rego in ${regoDir} (${rego!.engine ?? "conftest"}), read at ${src ? "the ref the base names" : "base"}`] : []),
+    ...(packs.length ? [`CrossGuard ${packs.map((p) => p.dir).join(", ")}${src ? ` from ${src.repo}@${src.ref}` : ""} in each preview${rego?.packs ? ", read at base (ci.policy.packs)" : ""}`] : []),
   ];
   return parts.length ? parts.join("; ") : "none";
 }

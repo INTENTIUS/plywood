@@ -4,7 +4,8 @@
  * built (src/stages.ts), and `up`, `approve` and `override` (src/up.ts);
  * and `drift` (src/drift.ts). `config check` reads plywood.yml
  * (src/config-check.ts), and `config identities` and `forge check` the
- * identities (src/identities.ts). chant's own verbs (`components`, `ci <sub>`, `run`,
+ * identities (src/identities.ts). `estate` (src/estate.ts) and `notify
+ * relay` (src/notify.ts) are chant's estate and relay with plywood's words. chant's own verbs (`components`, `ci <sub>`, `run`,
  * `lock`, `unlock`) pass to chant unchanged with plywood's words, for the
  * lines the generated jobs run through the bin.
  *
@@ -16,6 +17,9 @@ import { exitCodes, type ExitTable } from "./exit-codes";
 import { audit } from "./audit";
 import { mcp } from "./agents";
 import { drift } from "./drift";
+import { estate } from "./estate";
+import { notify } from "./notify";
+import { useChantPolicySource } from "./config/policy";
 import { guard } from "./guard";
 import { configIdentities, forgeCheck } from "./identities";
 import { control } from "./control";
@@ -89,6 +93,9 @@ export function helpText(): string {
     "  audit [approvals|updates|runs|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...",
     "                                                      the workspace ledger's rows, as chant ledger reads them",
     "  query \"<sql>\"                                      SQL over the ledger's tables (chant query)",
+    "  estate [--report-url <url>] [--prefix <p>] [--fail-overdue]",
+    "                                                      the estate page, overdue drift checks and delivery metrics",
+    "  notify relay                                        receive Approve clicks from Slack and Teams and record them",
     "",
     "Control repo:",
     "  control init [--forge <kind>]                       in the control repo: the workflow that runs each repository's dependents",
@@ -107,7 +114,8 @@ export function helpText(): string {
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
     "  config identities [--file <path>] [--env <env>]",
     "                                the preview and up identity each stack takes, per cloud",
-    "  forge check                   the identities next to the forge and cloud setup (needs chant)",
+    "  forge check [--env <env>] [--forge <kind>] [--repo <owner/name>] [--branch <b>] [--require-clouds]",
+    "                                the identities next to the forge, cloud and Pulumi Cloud setup",
     "",
     "Options:",
     "  --json     print one JSON object on stdout",
@@ -137,6 +145,8 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   }
   // chant's verified install lines, when the installed pulumi lexicon has them (chant#4592); the config translation is synchronous.
   await useChantInstallLines();
+  // Whether chant reads ci.policy.source and ci.policy.packs (chant#4613); the config check and translation read it.
+  await useChantPolicySource();
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
   if (verb !== "config" && verb !== "init" && verb !== "tips") await applyTelemetry(stageIo.cwd, stageIo.env);
@@ -144,6 +154,8 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
   if (verb === "config") return config(args.slice(1), table, emit);
   if (verb === "forge") return forgeCheck(args.slice(1), json, table, stageIo);
+  if (verb === "estate") return estate(args.slice(1), json, table, stageIo);
+  if (verb === "notify") return notify(args.slice(1), json, table, stageIo);
   if (verb === "control") return control(args.slice(1), json, table, stageIo);
   if (verb === "init") {
     const interactive = !json && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true && process.stderr.isTTY === true;

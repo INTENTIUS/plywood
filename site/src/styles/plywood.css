@@ -74,18 +74,19 @@
 	--pw-warn: #b23a26;
 	--pw-panel: #faf7f3;
 	--pw-rule: #e2d9ce;
+	--pw-saw-bullet: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7' width='12' height='7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%2365330e'/><rect x='2' y='0' width='1' height='1' fill='%23df8e3f'/><rect x='3' y='0' width='1' height='1' fill='%23323232'/><rect x='4' y='0' width='1' height='1' fill='%23323232'/><rect x='5' y='0' width='1' height='1' fill='%23323232'/><rect x='6' y='0' width='1' height='1' fill='%23323232'/><rect x='7' y='0' width='1' height='1' fill='%23323232'/><rect x='8' y='0' width='1' height='1' fill='%23323232'/><rect x='9' y='0' width='1' height='1' fill='%23323232'/><rect x='10' y='0' width='1' height='1' fill='%23323232'/><rect x='11' y='0' width='1' height='1' fill='%23323232'/><rect x='0' y='1' width='1' height='1' fill='%2365330e'/><rect x='3' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='4' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='5' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='6' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='7' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='8' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='9' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='10' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='11' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='0' y='2' width='1' height='1' fill='%2365330e'/><rect x='3' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='4' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='5' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='6' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='7' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='8' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='9' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='10' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='11' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='0' y='3' width='1' height='1' fill='%2365330e'/><rect x='3' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='4' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='5' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='6' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='7' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='8' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='9' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='10' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='0' y='4' width='1' height='1' fill='%2365330e'/><rect x='3' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='4' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='5' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='6' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='7' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='8' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='10' y='4' width='1' height='1' fill='%23323232'/><rect x='1' y='5' width='1' height='1' fill='%2365330e'/><rect x='2' y='5' width='1' height='1' fill='%23b36521'/><rect x='3' y='5' width='1' height='1' fill='%23323232'/><rect x='4' y='5' width='1' height='1' fill='%23323232'/><rect x='5' y='5' width='1' height='1' fill='%23323232'/><rect x='6' y='5' width='1' height='1' fill='%23323232'/><rect x='8' y='5' width='1' height='1' fill='%23323232'/><rect x='3' y='6' width='1' height='1' fill='%23323232'/><rect x='5' y='6' width='1' height='1' fill='%23323232'/></svg>");
 }
 
 /*
  * Pixel art in the logo's grid: a small saw in wood and steel marks each section
- * heading and stands in for a horizontal rule, and a tiny one-colour saw drawn
- * as a mask is the list bullet, so it takes the accent colour of either theme.
+ * heading and stands in for a horizontal rule, and a tiny saw in the same wood and steel
+ * is the list bullet, one image for the dark page and one for the light.
  */
 :root {
 	/* The saw (28x17, wood handle and steel blade), used as the section mark and the divider. */
 	--pw-divider: url('/plywood/brand/plywood-saw.svg') center / 28px 17px no-repeat;
 	/* The bullet saw (12x7): a handle with a hole, then a deep blade that tapers to the tip, its teeth stepping along the lower edge. */
-	--pw-saw-bullet: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7' width='12' height='7' shape-rendering='crispEdges'><path d='M1 0h11v1h-11zM0 1h1v1h-1zM3 1h9v1h-9zM0 2h1v1h-1zM3 2h9v1h-9zM0 3h1v1h-1zM3 3h8v1h-8zM0 4h1v1h-1zM3 4h6v1h-6zM10 4h1v1h-1zM1 5h6v1h-6zM8 5h1v1h-1zM3 6h1v1h-1zM5 6h1v1h-1z'/></svg>");
+	--pw-saw-bullet: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7' width='12' height='7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23b36521'/><rect x='2' y='0' width='1' height='1' fill='%23df8e3f'/><rect x='3' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='4' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='5' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='6' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='7' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='8' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='9' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='10' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='11' y='0' width='1' height='1' fill='%236e6e6e'/><rect x='0' y='1' width='1' height='1' fill='%23b36521'/><rect x='3' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='4' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='5' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='6' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='7' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='8' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='9' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='10' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='11' y='1' width='1' height='1' fill='%23c4c4c4'/><rect x='0' y='2' width='1' height='1' fill='%23b36521'/><rect x='3' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='4' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='5' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='6' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='7' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='8' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='9' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='10' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='11' y='2' width='1' height='1' fill='%23c4c4c4'/><rect x='0' y='3' width='1' height='1' fill='%23b36521'/><rect x='3' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='4' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='5' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='6' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='7' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='8' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='9' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='10' y='3' width='1' height='1' fill='%239a9a9a'/><rect x='0' y='4' width='1' height='1' fill='%23b36521'/><rect x='3' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='4' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='5' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='6' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='7' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='8' y='4' width='1' height='1' fill='%239a9a9a'/><rect x='10' y='4' width='1' height='1' fill='%236e6e6e'/><rect x='1' y='5' width='1' height='1' fill='%23b36521'/><rect x='2' y='5' width='1' height='1' fill='%23df8e3f'/><rect x='3' y='5' width='1' height='1' fill='%236e6e6e'/><rect x='4' y='5' width='1' height='1' fill='%236e6e6e'/><rect x='5' y='5' width='1' height='1' fill='%236e6e6e'/><rect x='6' y='5' width='1' height='1' fill='%236e6e6e'/><rect x='8' y='5' width='1' height='1' fill='%236e6e6e'/><rect x='3' y='6' width='1' height='1' fill='%236e6e6e'/><rect x='5' y='6' width='1' height='1' fill='%236e6e6e'/></svg>");
 }
 
 .sl-markdown-content :is(h1, h2, h3),
@@ -131,6 +132,13 @@ h1#_top {
 	background: var(--pw-divider);
 	image-rendering: pixelated;
 }
+.pw-title-saw {
+	width: 28px;
+	height: 17px;
+	margin: 1.25rem 0 0.75rem;
+	background: var(--pw-divider);
+	image-rendering: pixelated;
+}
 .sl-markdown-content hr:not(.not-content, .not-content *) {
 	width: 28px;
 	height: 17px;
@@ -157,9 +165,7 @@ h1#_top {
 	top: calc((1lh - 7px) / 2);
 	width: 12px;
 	height: 7px;
-	background: var(--pw-accent);
-	-webkit-mask: var(--pw-saw-bullet) center / 12px 7px no-repeat;
-	mask: var(--pw-saw-bullet) center / 12px 7px no-repeat;
+	background: var(--pw-saw-bullet) center / 12px 7px no-repeat;
 }
 .sl-markdown-content h3:not(.not-content, .not-content *) {
 	font-size: 1.05rem;

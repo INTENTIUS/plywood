@@ -2,7 +2,7 @@
  * Agents (plywood#19): plywood's tools on chant's read-only MCP server, and
  * the review agent's jobs.
  *
- *   plywood mcp [--report-url <url>]
+ *   plywood mcp [--report-url <url>] [--propose]
  *       chant's `serve mcp --read-only` (chant#4543) in process, with
  *       plywood's tools through chant's product tool hook (chant#4555,
  *       `runChantInProcess(argv, words, { mcp })`). The server serves chant's
@@ -10,7 +10,11 @@
  *       plywood's, `plywood:stacks`, `plywood:settings`, `plywood:tips` and
  *       `plywood:verbs`, each declared read-only. It refuses every run tool:
  *       chant leaves op-run and op-approve out, and will not start with a
- *       product tool named as a write.
+ *       product tool named as a write. `--propose` (plywood#41) is chant's
+ *       propose tier (chant#4655): the same read tools plus
+ *       `plywood:request_from_template`, declared `forgeWrite`, which refuses
+ *       every call until plywood has Pulumi templates (plywood#40). On a
+ *       chant without the tier, `--propose` exits 1 naming it.
  *
  *   plywood ci, with `review` set
  *       writes ops/plywood-review.op.ts, a pull request Op that previews
@@ -24,7 +28,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
-import type { ChantProduct, ForgeKind } from "./chant-product";
+import { BUILT_CHANT, type ChantProduct, type ForgeKind } from "./chant-product";
 import { configCheck } from "./config-check";
 import { reviewOf } from "./config/agents";
 import { findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -33,23 +37,32 @@ import type { ExitTable } from "./exit-codes";
 import { chantPipelineOptions } from "./images";
 import { takeFlag, usage, withChant, type StageIo } from "./stages";
 import { tipLines, TIPS } from "./tips";
-import { BIN, PR_GATE, PRODUCT, PRODUCT_WORDS, TAGLINE, VERBS, type ProductWordsInput } from "./words";
+import { BIN, PR_GATE, PRODUCT, PRODUCT_WORDS, TAGLINE, TEMPLATE_REQUEST_WORDS, VERBS, type ProductWordsInput } from "./words";
 
-/** chant's `McpToolContribution`, as plywood fills it. */
-export interface PlywoodMcpTool {
+interface PlywoodMcpToolBase {
   name: string;
   description: string;
   inputSchema: { type: "object"; properties: Record<string, unknown>; required?: string[] };
   handler: (params: Record<string, unknown>) => Promise<unknown>;
-  readOnly: true;
 }
 
-/** chant's `ProductMcpHook` (chant#4555), as plywood fills it. */
+/** chant's `McpToolContribution`, as plywood fills it: a read tool, or a tool that opens a pull request (`forgeWrite`, served on `--propose` only, chant#4655). */
+export type PlywoodMcpTool = (PlywoodMcpToolBase & { readOnly: true; forgeWrite?: never }) | (PlywoodMcpToolBase & { forgeWrite: true; readOnly?: never });
+
+/** What chant hands the hook's `tools`; a chant before chant#4655 leaves `propose` out. */
+export interface PlywoodMcpContext {
+  cwd: string;
+  readOnly: boolean;
+  propose?: boolean;
+}
+
+/** chant's `ProductMcpHook` (chant#4555), as plywood fills it; `propose` is chant#4655's tier. */
 export interface PlywoodMcpHook {
   product: string;
-  tools(ctx: { cwd: string; readOnly: boolean }): PlywoodMcpTool[];
+  tools(ctx: PlywoodMcpContext): PlywoodMcpTool[];
   reportUrl?: string;
   readOnly: true;
+  propose?: boolean;
   instructions: string;
 }
 
@@ -101,28 +114,88 @@ export function plywoodMcpTools(ctx: { cwd: string }): PlywoodMcpTool[] {
   ];
 }
 
-/** The hook `plywood mcp` hands chant. */
-export function plywoodMcpHook(reportUrl?: string): PlywoodMcpHook {
+/**
+ * The tools `plywood mcp --propose` adds (chant#4655's tier). Each declares
+ * `forgeWrite: true`: it may open a pull request and nothing else.
+ * `request_from_template` takes the arguments `plywood request` will, and
+ * refuses every call until plywood has Pulumi templates (plywood#40, after
+ * the registry in plywood#32).
+ */
+export function plywoodProposeTools(): PlywoodMcpTool[] {
+  return [
+    {
+      name: TEMPLATE_REQUEST_WORDS.tool,
+      description: `Open a pull request for an app from a template, reviewed and gated like a person's. ${TEMPLATE_REQUEST_WORDS.refusal}`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          template: { type: "string", description: "The template's name in the catalog." },
+          version: { type: "string", description: "The template's version; the newest when left out." },
+          name: { type: "string", description: "The app's name, which names its directory and the request branch." },
+          app: { type: "string", description: "The app an add-on template joins." },
+          inputs: { type: "object", description: "The template's inputs, by name." },
+        },
+        required: ["template", "name", "inputs"],
+      },
+      forgeWrite: true,
+      handler: async () => {
+        throw new Error(TEMPLATE_REQUEST_WORDS.refusal);
+      },
+    },
+  ];
+}
+
+const READ_INSTRUCTIONS = `To change a stack, open a pull request: ${PRODUCT} previews it, and its update runs after a person approves the digest.`;
+
+/** The hook `plywood mcp` hands chant; with `propose`, the hook for chant#4655's tier. */
+export function plywoodMcpHook(reportUrl?: string, propose = false): PlywoodMcpHook {
   return {
     product: PRODUCT,
-    tools: (ctx) => plywoodMcpTools(ctx),
+    // A read-only server without the tier refuses to start with a forgeWrite tool, so they go only where chant says it serves them.
+    tools: (ctx) => [...plywoodMcpTools(ctx), ...(propose && ctx.propose === true ? plywoodProposeTools() : [])],
     readOnly: true,
+    ...(propose ? { propose: true } : {}),
     ...(reportUrl ? { reportUrl } : {}),
-    instructions: `${PRODUCT} (${TAGLINE}) serves read tools only. To change a stack, open a pull request: ${PRODUCT} previews it, and its update runs after a person approves the digest.`,
+    instructions: propose
+      ? `${PRODUCT} (${TAGLINE}) serves read tools and ${TEMPLATE_REQUEST_WORDS.tool}, which may open a pull request and nothing else. Pulumi templates are not available yet, so ${TEMPLATE_REQUEST_WORDS.tool} refuses every call. ${READ_INSTRUCTIONS}`
+      : `${PRODUCT} (${TAGLINE}) serves read tools only. ${READ_INSTRUCTIONS}`,
   };
 }
 
-/** `plywood mcp [--report-url <url>]`: chant's read-only MCP server over stdio, with plywood's tools. */
+/** The last chant release without the propose tier. */
+const PROPOSE_AFTER = "0.124.56";
+
+/** What `plywood mcp --propose` prints on a chant without chant#4655's tier. */
+export function needsProposeMessage(): string {
+  return (
+    `${PRODUCT} mcp --propose needs chant >= the release after ${PROPOSE_AFTER}, which carries the MCP propose tier (PRODUCT_MCP_PROPOSE_FLOOR, chant#4655). ` +
+    `This plywood was built with chant ${BUILT_CHANT}, which lacks it. ` +
+    "Upgrade plywood once that chant is out, or build against a local chant with 'just chant-local'."
+  );
+}
+
+/**
+ * `plywood mcp [--report-url <url>] [--propose]`: chant's read-only MCP
+ * server over stdio, with plywood's tools. `--propose` is chant's propose
+ * tier (`serve mcp --read-only --propose`, chant#4655), which also serves
+ * plywood's `forgeWrite` tools; on a chant without it, exit 1.
+ */
 export async function mcp(args: string[], _json: boolean, table: ExitTable, io: StageIo): Promise<number> {
-  const report = takeFlag(args, "--report-url");
+  const propose = args.includes("--propose");
+  const report = takeFlag(args.filter((a) => a !== "--propose"), "--report-url");
   if (report.missing) return usage("--report-url takes a URL", table, io);
   if (report.rest.length) return usage(`mcp does not take ${report.rest.join(" ")}`, table, io);
   return withChant(`${PRODUCT} mcp`, table, io, (chant) => {
     // stdout is the protocol's: every word of plywood's goes to stderr.
+    if (propose && typeof chant.PRODUCT_MCP_PROPOSE_FLOOR !== "string") {
+      io.err(`${PRODUCT}: ${needsProposeMessage()}`);
+      return Promise.resolve(table.failed);
+    }
     if (typeof chant.PRODUCT_MCP_HOOK_FLOOR !== "string") {
       io.err(`${PRODUCT} mcp: this chant has no product tool hook (chant#4555), so the server serves chant's read tools and none of ${PRODUCT}'s`);
     }
-    return chant.runChantInProcess(["serve", "mcp", "--read-only"], PRODUCT_WORDS, { mcp: plywoodMcpHook(report.value) });
+    const argv = ["serve", "mcp", "--read-only", ...(propose ? ["--propose"] : [])];
+    return chant.runChantInProcess(argv, PRODUCT_WORDS, { mcp: plywoodMcpHook(report.value, propose) });
   });
 }
 

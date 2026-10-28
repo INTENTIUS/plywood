@@ -91,6 +91,10 @@ export interface ChantProduct {
   runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords, options?: { mcp?: unknown }): Promise<number>;
   /** Present when `runChantInProcess` takes the product tool hook (chant#4555). */
   PRODUCT_MCP_HOOK_FLOOR?: string;
+  /** Present when `serve mcp --read-only --propose` serves the product's `forgeWrite` tools (chant#4655). */
+  PRODUCT_MCP_PROPOSE_FLOOR?: string;
+  /** The words a `forgeWrite` tool's name may hold on the propose tier (chant#4655). */
+  PRODUCT_TOOL_PROPOSE_WORDS?: readonly string[];
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
   productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;

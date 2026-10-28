@@ -16,7 +16,8 @@
  *                                 a scheduled Op (`@intentius/chant/scheduled-op-cloud`)
  *   applyMerge        chant#4636  `pr-apply --merge auto` (`@intentius/chant/pr-merge`)
  *
- * The responses (chant#4629) and the approval status (chant#4630) are read
+ * The responses (chant#4629), the build's flags for them and the merge
+ * (`PR_LOOP_BUILD_FLAGS_FLOOR`) and the approval status (chant#4630) are read
  * off the ci-product entry plywood already loads (`CI_RESPOND_FLOOR`,
  * `APPROVAL_STATUS_FLOOR` on {@link ChantProduct}), and the audit log
  * (chant#4632) is {@link chantAudit}, since plywood calls into it.
@@ -76,6 +77,11 @@ export function setChantNextForTests(has: Partial<ChantNext> | "reset"): void {
 /** Whether the installed chant has chant#4629's responses: a refused wave's diff, a failed apply's triage, the description check. */
 export function hasChantRespond(chant: Pick<ChantProduct, "CI_RESPOND_FLOOR"> | undefined): boolean {
   return typeof chant?.CI_RESPOND_FLOOR === "string";
+}
+
+/** Whether the installed chant's `build --pr-loop` takes the responses and the decide service (`PR_LOOP_BUILD_FLAGS_FLOOR`). */
+export function hasChantPrLoopFlags(chant: Pick<ChantProduct, "PR_LOOP_BUILD_FLAGS_FLOOR"> | undefined): boolean {
+  return typeof chant?.PR_LOOP_BUILD_FLAGS_FLOOR === "string";
 }
 
 /** Whether the installed chant has chant#4630's approval status, `<product>/approval` on a pull request's head. */

@@ -208,7 +208,7 @@ export const drift: ConfigGroup = {
       else {
         out.push(...onlyKeys(doc.decide, DECIDE_KEYS, "decide"));
         for (const k of DECIDE_KEYS) if (typeof doc.decide[k] !== "string" || doc.decide[k] === "") out.push(error(`decide.${k}`, k === "backend" ? "names a decide.backends entry of chant.config" : "names the pinned model id"));
-        if (!(isObject(doc.respond) && doc.respond.description === "check")) out.push(warning("decide", "is set and respond.description is not check, so nothing asks it"));
+        if (!(isObject(doc.respond) && doc.respond.description === "check")) out.push(warning("decide", "is set and respond.description is not check, so nothing asks it and plywood ci leaves it off the jobs"));
       }
     }
     return out;
@@ -217,7 +217,8 @@ export const drift: ConfigGroup = {
     const events = eventResponsesOf(doc);
     if (Object.keys(events).length) out.pipeline.respond = events;
     const decide = decideOf(doc);
-    if (decide && events.description === "check") out.pipeline.decide = decide;
+    // Kept without the check too: plywood ci leaves it off the jobs and says so (src/stages.ts respondOptions).
+    if (decide) out.pipeline.decide = decide;
     if (doc.drift === undefined && !(isObject(doc.respond) && doc.respond.drift !== undefined)) return;
     out.pipeline.drift = driftSettingsOf(doc);
   },

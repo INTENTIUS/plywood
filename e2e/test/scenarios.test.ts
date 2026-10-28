@@ -10,9 +10,17 @@ import { BASE_OVERLAYS_DIR, SCENARIOS_DIR, SCENARIO_CLAIMS, lintPlywoodScenario,
 const ROOT = join(import.meta.dirname, "..", "..");
 
 describe("plywood's scenarios", () => {
-  it("are plywood#22's plunge claims, one scenario each", () => {
-    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-adopt", "pw-disjoint", "pw-moved-plan"]);
-    expect(SCENARIO_CLAIMS).toEqual({ "pw-disjoint": "plunge/disjoint-updates", "pw-moved-plan": "plunge/saved-plan-moved", "pw-adopt": "plunge/adopt-stock-stack" });
+  it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside", () => {
+    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-adopt", "pw-canary", "pw-disjoint", "pw-drift", "pw-moved-plan", "pw-moved-preview", "pw-one-note"]);
+    expect(SCENARIO_CLAIMS).toEqual({
+      "pw-disjoint": "plunge/disjoint-updates",
+      "pw-moved-plan": "plunge/saved-plan-moved",
+      "pw-adopt": "plunge/adopt-stock-stack",
+      "pw-one-note": "preview/one-note",
+      "pw-moved-preview": "gate/moved-preview",
+      "pw-canary": "wave/canary",
+      "pw-drift": "drift/issue",
+    });
   });
 
   it("each pass plywood's lint, with a BREAK arm that sets BREAK=1", () => {
@@ -33,7 +41,7 @@ describe("plywood's scenarios", () => {
   it("lint clean through `just e2e lint` on the pinned chant", async () => {
     const out: string[] = [];
     expect(await lint(undefined, (l) => void out.push(l))).toBe(0);
-    expect(out).toHaveLength(3);
+    expect(out).toHaveLength(7);
   });
 
   it("catch a scenario that drifted from plywood's rules", () => {
@@ -58,6 +66,28 @@ describe("plywood's scenarios", () => {
     expect(readScenario("pw-disjoint").break.env.PLYWOOD_E2E_BASE_OVERLAY).toBe("stack-grain");
     expect(readScenario("pw-adopt").break.env.PLYWOOD_E2E_BASE_OVERLAY).toBe("adopt-bare-bucket");
     expect(readScenario("pw-moved-plan").break.env.PLYWOOD_E2E_RETENTION).toBe("3600");
+  });
+
+  it("break the stock claims through the subject each checks", () => {
+    expect(readScenario("pw-one-note").break.overlay).toBe("prod-eu-events-workers");
+    expect(readScenario("pw-moved-preview").break.env.PLYWOOD_E2E_REPUSH).toBe("notes-line");
+    expect(readScenario("pw-canary").break.env.PLYWOOD_E2E_WAVES).toBe("stock-one-wave");
+    expect(readScenario("pw-drift").break.env.PLYWOOD_E2E_DRIFT_RETENTION).toBe("7200");
+    const lines = dryRun(readScenario("pw-canary")).join("\n");
+    expect(lines).toContain("configure stock-first;");
+    expect(lines).toContain("configure stock-one-wave;");
+  });
+
+  it("catch a configure or push step whose overlay is missing in either arm", () => {
+    const s = readScenario("pw-canary");
+    const bad: Scenario = {
+      ...s,
+      steps: [...s.steps, { id: "x", do: "out-of-band", command: ["plywood-e2e", "push", "e2e/canary-events", "${PLYWOOD_E2E_P:-no-such-overlay}"], expect: [{ exit: 0 }] }],
+      break: { env: { BREAK: "1", PLYWOOD_E2E_WAVES: "no-such-base" } },
+    };
+    const found = lintPlywoodScenario(join(SCENARIOS_DIR, "pw-canary.json"), bad).join("\n");
+    expect(found).toContain("base overlay no-such-base");
+    expect(found).toContain("overlay no-such-overlay");
   });
 
   it("dry-run both arms, the BREAK arm's values in place, touching nothing", () => {

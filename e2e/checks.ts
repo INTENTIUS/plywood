@@ -133,3 +133,89 @@ export function hasMarkers(tags: Record<string, string>, name: string, stack: st
   const owner = tags["plunge-stack"];
   return typeof urn === "string" && urnName(urn) === name && typeof owner === "string" && owner.length > 0 && (owner === stack || owner.endsWith(`/${stack}`) || owner.includes(stack));
 }
+
+// ── plywood#22's stock Pulumi claims ────────────────────────────────────
+
+/** A wave record's window on `stack`: its target's timing when chant kept one, else the record's own start and end. */
+function stackWindow(r: LedgerRecord, stack: string): [number, number] {
+  const t = stackTarget(r, stack);
+  return t ? windowOf(t) : [Date.parse(r.started), Date.parse(r.ended)];
+}
+
+const appliedStack = (r: LedgerRecord, stack: string): boolean => r.wave!.exitCode === EXIT.done && r.wave!.applied.some((a) => targetIsStack(a, stack));
+
+/**
+ * pw-canary's check (`wave/canary`): one wave job of `op` since `since`
+ * applied `first` with exit 0, a later wave's job applied `then` with exit 0,
+ * and the later one started only after the canary's update of `first`
+ * ended. Both stacks in one wave job is a failure: nothing went first.
+ */
+export function canaryFirst(records: readonly LedgerRecord[], o: { op: string; since: string; first: string; then: string }): CheckResult {
+  const runs = waveRuns(records, o.op, o.since);
+  const a = runs.find((r) => appliedStack(r, o.first));
+  if (!a) return no(`no ${o.op} job applied ${o.first} with exit 0 since the run started`);
+  const b = runs.find((r) => appliedStack(r, o.then));
+  if (!b) return no(`no ${o.op} job applied ${o.then} with exit 0 since the run started`);
+  if (a === b) return no(`${o.first} and ${o.then} updated in one wave job (wave ${a.wave!.number}), so nothing went first`);
+  if (a.wave!.number >= b.wave!.number) return no(`${o.first} updated in wave ${a.wave!.number}, not before ${o.then}'s wave ${b.wave!.number}`);
+  const [, aEnd] = stackWindow(a, o.first);
+  const [bStart] = stackWindow(b, o.then);
+  if (bStart < aEnd) return no(`${o.then}'s update started ${aEnd - bStart} ms before the canary's update of ${o.first} ended`);
+  return ok(`${o.first} updated in wave ${a.wave!.number}, then ${o.then} in wave ${b.wave!.number}, ${bStart - aEnd} ms after the canary ended`);
+}
+
+/**
+ * pw-moved-preview's check (`gate/moved-preview`): after a push past the
+ * approval, no wave job of `op` since `since` applied `stack`, one stopped
+ * gated or waiting (chant's 3), and a wave gate (`wave-<k>`) stands pending
+ * since the run started. `pending` is the newest pending gate of `op`.
+ */
+export function waitsAtGate(records: readonly LedgerRecord[], o: { op: string; since: string; stack: string }, pending: { gate: string } | undefined): CheckResult {
+  const runs = waveRuns(records, o.op, o.since);
+  const applied = runs.find((r) => r.wave!.applied.some((a) => targetIsStack(a, o.stack)));
+  if (applied) return no(`wave ${applied.wave!.number} of ${o.op} applied ${o.stack} although its preview changed after the approval`);
+  const waiting = runs.find((r) => r.status === "gated" || r.status === "waiting" || r.wave!.exitCode === EXIT.waiting);
+  if (!waiting) return no(`no ${o.op} job stopped at a gate since the run started (${runs.length} wave jobs)`);
+  if (!pending) return no(`wave ${waiting.wave!.number} stopped, and no gate of ${o.op} is pending since the run started`);
+  if (!/^wave-\d+$/.test(pending.gate)) return no(`the pending gate is ${pending.gate}, not a wave's own gate`);
+  return ok(`wave ${waiting.wave!.number} waits at ${pending.gate}; ${o.stack} was not applied`);
+}
+
+/**
+ * pw-one-note's check (`preview/one-note`): one comment holds every text
+ * in `holds` and the approval line `once`, and no other comment repeats
+ * that line, so the pull request has one note with one approval command.
+ */
+export function oneNote(bodies: readonly string[], o: { once: string; holds: readonly string[] }): CheckResult {
+  const count = (b: string) => b.split(o.once).length - 1;
+  const total = bodies.reduce((n, b) => n + count(b), 0);
+  const note = bodies.find((b) => count(b) === 1 && o.holds.every((h) => b.includes(h)));
+  if (!note) {
+    const missing = o.holds.filter((h) => !bodies.some((b) => b.includes(h)));
+    return no(`no comment holds ${JSON.stringify(o.once)} with ${o.holds.map((h) => JSON.stringify(h)).join(" and ")}${missing.length ? ` (no comment holds ${missing.map((m) => JSON.stringify(m)).join(", ")})` : ""}`);
+  }
+  if (total !== 1) return no(`${JSON.stringify(o.once)} appears ${total} times across ${bodies.length} comments, not once`);
+  return ok(`one note holds the approval line and ${o.holds.map((h) => JSON.stringify(h)).join(", ")}`);
+}
+
+/** A forge issue as the checks read it. */
+export interface IssueView {
+  number: number;
+  title: string;
+  body: string;
+  open: boolean;
+}
+
+/**
+ * pw-drift's check (`drift/issue`): exactly one open issue titled `title`,
+ * whose table has a row for the resource named `name` (a URN ending in
+ * `::<name>`) listing `attribute`.
+ */
+export function driftIssueHolds(issues: readonly IssueView[], o: { title: string; name: string; attribute: string }): CheckResult {
+  const open = issues.filter((i) => i.open && i.title === o.title);
+  if (open.length !== 1) return no(`${open.length} open issues titled "${o.title}", not one`);
+  const row = open[0]!.body.split("\n").find((l) => l.startsWith("|") && new RegExp(`::${o.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\`?\\s*\\|`).test(l));
+  if (!row) return no(`issue #${open[0]!.number} has no row for a resource named ${o.name}`);
+  if (!row.includes(o.attribute)) return no(`issue #${open[0]!.number}'s row for ${o.name} does not name ${o.attribute}: ${row.trim()}`);
+  return ok(`issue #${open[0]!.number} names ${o.name} with ${o.attribute}`);
+}

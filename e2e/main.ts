@@ -24,9 +24,9 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { FLOCI_NET, JOB_IMAGE, PROJECT, REPORT_URL, BUCKETS, benchStack, engineEnv, hostUrls, jobImageDockerfile, stateDir } from "./bench";
+import { FLOCI_NET, JOB_IMAGE, ORG, PROJECT, REPO, REPORT_URL, BUCKETS, benchStack, engineEnv, hostUrls, jobImageDockerfile, stateDir } from "./bench";
 import { NeedsChantHarness, harness, requireHarness, type Arm, type HarnessModule, type Scenario } from "./harness";
-import { ForgeLedger, LockObserver, armPort, memberReports, outOfBand, pushOverMain, reviewerChant, sh, type CommandContext } from "./ports";
+import { ForgeLedger, LockObserver, armPort, memberReports, outOfBand, pushOverBranch, pushOverMain, reviewerChant, sh, type CommandContext } from "./ports";
 import { recordAndRender, renderFromLedger } from "./claims";
 import { BASE_OVERLAYS_DIR, OVERLAYS_DIR, SCENARIOS_DIR, lintPlywoodScenario, readScenario, scenarioFiles } from "./scenarios";
 import { overlayFiles, readOverlay } from "./overlays";
@@ -64,7 +64,7 @@ export function dryRun(s: Scenario): string[] {
   for (const arm of ["plain", "break"] as Arm[]) {
     const env: Record<string, string> = arm === "break" ? s.break.env : {};
     lines.push(`${arm} arm${arm === "break" ? ` (${Object.entries(env).map(([k, v]) => `${k}=${v}`).join(" ")})` : ""}:`);
-    lines.push("  reset: close open pull requests, main back to the seed's commit, floci restarted and the stacks deployed again");
+    lines.push("  reset: close open pull requests and issues, main back to the seed's commit, floci restarted and the stacks deployed again");
     if (env.PLYWOOD_E2E_BASE_OVERLAY) lines.push(`  base: lay ${env.PLYWOOD_E2E_BASE_OVERLAY} over main`);
     for (const step of s.steps) {
       const what =
@@ -121,6 +121,12 @@ function newSafeRun(h: HarnessModule, name: string) {
   return new h.SafeRun({ scratch, extra: engineEnv(join(stateDir(ROOT), "file-backend")) });
 }
 
+/** The newest pull request (open or closed) whose head is `branch`. */
+async function newestPull(h: HarnessModule, forgeUrl: string, token: string, branch: string): Promise<number | undefined> {
+  const list = (await h.forgejoApi<Array<{ number: number; head?: { ref?: string } }>>(forgeUrl, token, "GET", `/repos/${ORG}/${REPO}/pulls?state=all&limit=50`)) ?? [];
+  return list.filter((p) => p.head?.ref === branch).reduce<number | undefined>((n, p) => (n === undefined || p.number > n ? p.number : n), undefined);
+}
+
 async function claim(h: HarnessModule, id: string): Promise<number> {
   const scenario = h.loadScenario(join(SCENARIOS_DIR, `${id}.json`));
   const own = lintPlywoodScenario(join(SCENARIOS_DIR, `${id}.json`), scenario);
@@ -151,6 +157,14 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
     author: st.author,
     reviewer: st.reviewer,
     waitLimit: scenario.limits?.["out-of-band"] ?? 600,
+    admin: st.admin,
+    overlay: (name, kind) => overlayFiles(readOverlay(kind === "base" ? BASE_OVERLAYS_DIR : OVERLAYS_DIR, name), shopDir(state)),
+    pushBranch: (branch, files, message) => pushOverBranch({ forgeUrl: urls.forgejo, person: st.author, scratch: join(state, "scratch"), branch, files, message }),
+    pullComments: async (branch) => {
+      const pull = await newestPull(h, urls.forgejo, st.admin.token, branch);
+      return pull === undefined ? undefined : forge.comments(pull);
+    },
+    issues: () => forge.issues(),
   };
   const result = await h.runClaim(
     scenario,
@@ -166,6 +180,8 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
       reset: async () => {
         observer.stop();
         for (const pull of await forge.openPulls()) await forge.closePull(pull);
+        // A drift issue from the arm before would answer this arm's issue checks.
+        for (const issue of await forge.issues()) if (issue.open) await h.forgejoApi(urls.forgejo, st.admin.token, "PATCH", `/repos/${ORG}/${REPO}/issues/${issue.number}`, { state: "closed" });
         for (const b of await forge.branches()) if (b !== "main" && !b.startsWith("chant/")) await forge.deleteBranch(b);
         await forge.forceMain(st.baseSha);
         await resetCloud(sc, st);

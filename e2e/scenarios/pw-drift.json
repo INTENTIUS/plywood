@@ -1,0 +1,62 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-drift",
+  "product": "plywood",
+  "claim": "drift/issue",
+  "title": "A queue changed by hand on floci gives one drift issue naming its URN and attribute",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "drift-on",
+      "do": "out-of-band",
+      "label": "main puts prod-us first in the waves and schedules its drift check, and plywood ci writes the jobs",
+      "command": ["plywood-e2e", "configure", "stock-first-drift"],
+      "expect": [{ "exit": 0 }]
+    },
+    { "id": "events", "do": "open", "branch": "e2e/drift-events", "overlay": "prod-us-events-7200", "title": "prod-us: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's wave job settled prod-us",
+      "command": ["plywood-e2e", "wait-stacks", "pulumi-up", "prod-us"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "the update applied prod-us, which stores the export the drift read compares against",
+      "command": ["plywood-e2e", "applied", "pulumi-up", "prod-us"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "by-hand",
+      "do": "out-of-band",
+      "label": "the events queue's retention is changed on floci behind Pulumi's back",
+      "command": ["plywood-e2e", "sqs-retention", "prod-us", "${PLYWOOD_E2E_DRIFT_RETENTION:-60}"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "drift-job",
+      "do": "out-of-band",
+      "label": "the scheduled drift job's command exits with chant's drift code and opens the stack's issue",
+      "command": ["plywood-e2e", "drift-job", "prod-us"],
+      "expect": [{ "exit": 2 }, { "issue": { "title": "plywood: shop/prod-us has drifted", "open": true } }]
+    },
+    {
+      "id": "issue",
+      "do": "out-of-band",
+      "label": "one open issue, with a row for the events queue naming messageRetentionSeconds",
+      "command": ["plywood-e2e", "drift-issue", "prod-us", "events", "messageRetentionSeconds"],
+      "expect": [{ "exit": 0 }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_DRIFT_RETENTION": "7200" },
+    "note": "The change by hand sets the retention prod-us already has after the update, so nothing drifted, the drift job exits 0 and opens no issue: the drift-job step must fail."
+  }
+}

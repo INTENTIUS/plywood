@@ -147,10 +147,11 @@ describe("the seed", () => {
     }
   });
 
-  it("deploys dev on plunge's store and staging as a stock stack in the store's bucket, and runs plywood init only on the first seed", () => {
+  it("deploys dev on plunge's store, staging as a stock stack in the store's bucket and the prod stacks on stock S3, and runs plywood init only on the first seed", () => {
     const first = cloudScript(true);
     expect(first).toMatch(/plunge\+s3:\/\/plywood-tutorial-plunge\?[^']*' PULUMI_SKIP_UPDATE_CHECK=true plunge up --yes --non-interactive --stack dev/);
     expect(first).toMatch(/s3:\/\/plywood-tutorial-plunge\?[^']*' PULUMI_SKIP_UPDATE_CHECK=true pulumi up --yes --non-interactive --stack staging/);
+    for (const prod of ["prod-us", "prod-eu"]) expect(first).toMatch(new RegExp(`s3://plywood-tutorial-state\\?[^']*' PULUMI_SKIP_UPDATE_CHECK=true pulumi up --yes --non-interactive --stack ${prod}`));
     expect(first).toContain("plywood init --forge forgejo --yes");
     expect(cloudScript(false)).not.toContain("plywood init");
     expect(cloudScript(false)).not.toContain("git push");

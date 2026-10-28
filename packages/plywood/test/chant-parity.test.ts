@@ -14,7 +14,7 @@ import { checkConfig, parseConfig } from "../src/config/index";
 import { toChantSettings } from "../src/chant-config";
 import { attributeStack, driftCloudFields, driftOpSpec, DRIFT_SPEC_FILE, specHasUpdate } from "../src/drift";
 import { FALLBACK_EXIT } from "../src/exit-codes";
-import { APPLY_MERGE_NEEDS_CHANT, APPROVAL_STATUS_NOTE, ci, preview, writtenNotes, type StageIo } from "../src/stages";
+import { APPLY_MERGE_NEEDS_CHANT, APPROVAL_STATUS_NOTE, DECIDE_LEFT_OFF, ci, preview, respondArgv, writtenNotes, type StageIo } from "../src/stages";
 import { up } from "../src/up";
 import { driftIssueBody, PRODUCT_WORDS } from "../src/words";
 
@@ -126,6 +126,46 @@ describe("plywood ci on the parity features", () => {
     expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, p)).toBe(0);
     expect(old.pipelines[0]!.respond).toBeUndefined();
     expect(p.stderr.join("\n")).toContain("respond.wave_refused, respond.description need chant's responses to pipeline events (chant#4629)");
+  });
+
+  it("puts the responses and the decide service on the build line with PR_LOOP_BUILD_FLAGS_FLOOR", async () => {
+    const yml = "stacks:\n  shop/dev: {}\nrespond:\n  wave_refused: off\n  description: check\ndecide:\n  backend: laya\n  model: m-1\n";
+    const chant = fakeChant({ CI_RESPOND_FLOOR: "0.124.56", PR_LOOP_BUILD_FLAGS_FLOOR: "0.124.56" });
+    setChantProductForTests(chant.api);
+    const o = io(repo(yml));
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(chant.pipelines[0]).toMatchObject({ respond: { "wave-refused": "off", description: "check" }, decide: { backend: "laya", model: "m-1" } });
+    const build = chant.calls[0]!;
+    expect(build.slice(build.indexOf("--respond"), build.indexOf("--respond") + 6)).toEqual(["--respond", "wave-refused=off,description=check", "--decide-backend", "laya", "--decide-model", "m-1"]);
+    expect(o.stderr.join("\n")).not.toContain("reaches no pull request job yet");
+  });
+
+  it("leaves the decide service off the build line and the jobs unless respond.description is check", async () => {
+    const yml = "stacks:\n  shop/dev: {}\nrespond:\n  apply_failed: off\ndecide:\n  backend: laya\n  model: m-1\n";
+    expect(problems(yml)).toContain("warning decide");
+    const chant = fakeChant({ CI_RESPOND_FLOOR: "0.124.56", PR_LOOP_BUILD_FLAGS_FLOOR: "0.124.56" });
+    setChantProductForTests(chant.api);
+    const o = io(repo(yml));
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(chant.pipelines[0]!.decide).toBeUndefined();
+    expect(chant.calls[0]).toEqual(expect.arrayContaining(["--respond", "apply-failed=off"]));
+    expect(chant.calls[0]).not.toContain("--decide-backend");
+    expect(chant.calls[0]).not.toContain("--decide-model");
+    expect(o.stderr.join("\n")).toContain(DECIDE_LEFT_OFF);
+  });
+
+  it("writes no --respond when every response is chant's default, and no flags on a chant before the floor", async () => {
+    expect(respondArgv({ "wave-refused": "diff", "apply-failed": "triage", description: "off" }, undefined)).toEqual([]);
+    expect(respondArgv({ description: "check" }, undefined)).toEqual(["--respond", "description=check"]);
+    expect(respondArgv({ description: "off" }, { backend: "laya", model: "m" })).toEqual([]);
+    const yml = "stacks:\n  shop/dev: {}\nrespond:\n  description: check\ndecide:\n  backend: laya\n  model: m-1\n";
+    const old = fakeChant({ CI_RESPOND_FLOOR: "0.124.56" });
+    setChantProductForTests(old.api);
+    const o = io(repo(yml));
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(old.calls[0]).not.toContain("--respond");
+    expect(old.calls[0]).not.toContain("--decide-backend");
+    expect(o.stderr.join("\n")).toContain("respond.description reaches no pull request job yet");
   });
 
   it("asks for the merge after an update before merge with chant#4636, and says when the file lacks it", async () => {

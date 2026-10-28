@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://intentius.io/plywood/plywood.schema.json
+#
+# plywood.yml, written by plywood init. init reads each Pulumi.yaml and its
+# Pulumi.<stack>.yaml files, the backend and the forge from the repository,
+# so this file holds only what it could not settle there. Add a key to
+# change a default; every key is at https://intentius.io/plywood/reference/config/
+# Run plywood init again after adding a stack; it keeps this file as it is.
+waves:
+  after:
+    app/prod:
+      - network/prod

@@ -26,7 +26,7 @@ The pipeline is chant's [pull request CI](https://intentius.io/chant/guide/pull-
 |---|---|
 | `--gate always\|destroy\|never` | when a wave waits for an approval |
 | `--engine pulumi\|plunge` | the engine every stage runs |
-| `--from <workflow>` | read an existing `pulumi/actions` workflow |
+| `--from <source>` | read `pulumi-actions`, `deployments`, `spacelift` or `env0` settings from the repository, or one file of theirs |
 | `--forge github\|gitlab\|forgejo` | the forge, when `origin` does not say |
 
 ## Per forge

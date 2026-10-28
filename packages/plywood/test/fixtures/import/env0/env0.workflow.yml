@@ -1,0 +1,14 @@
+environments:
+  vpc:
+    name: network/prod
+    templateName: network
+  service:
+    name: app/prod
+    templateName: app
+    needs:
+      - vpc
+  dns:
+    name: DNS
+    templateName: route53
+    needs:
+      - service

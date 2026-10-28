@@ -1,0 +1,36 @@
+name: pulumi
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+jobs:
+  preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pulumi/actions@v6
+        with:
+          command: preview
+          stack-name: acme/dev
+          work-dir: infra
+          comment-on-pr: true
+          policyPacks: ../policy/aws-guard
+          refresh: true
+  up:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pulumi/actions@v6
+        with:
+          command: up
+          stack-name: acme/prod
+          work-dir: infra
+          pulumi-version: 3.272.0
+          cloud-url: https://api.pulumi.com
+          target: urn:pulumi:prod::shop::aws:s3/bucket:Bucket::site

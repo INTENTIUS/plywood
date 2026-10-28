@@ -82,6 +82,7 @@ import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, type StageIo } from "./stages";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
+import { importLines, mergeKeys, parseFrom, runImport, type FromFlag, type ImportResult } from "./import/index";
 import { template } from "./templates";
 import { OP_NAME, PRODUCT, PRODUCT_WORDS } from "./words";
 
@@ -99,6 +100,8 @@ export interface InitOptions {
   bucketCheck: boolean;
   dryRun: boolean;
   yes: boolean;
+  /** `--from`: the pipeline to read settings from (plywood#21). */
+  from?: FromFlag;
 }
 
 /** One file init looked at. */
@@ -121,6 +124,8 @@ export interface InitResult {
   buckets: BucketReport[];
   /** Each `plunge+` stack's adopt preview (src/init/adopt.ts). */
   adopt: AdoptPreview[];
+  /** What `--from` read, and each setting it could not carry. */
+  imported?: ImportResult;
 }
 
 /** The workspace declaration file, the chant project and the component file init writes. */
@@ -135,9 +140,6 @@ export const CHANT_PIN: string = (PLYWOOD_DEPENDENCIES as Record<string, string>
 /** Parses init's flags. A bad flag is a message. */
 export function parseInitArgs(args: string[]): InitOptions | { error: string } | { printPrompt: true } {
   if (args.includes("--print-prompt")) return { printPrompt: true };
-  if (args.includes("--from")) {
-    return { error: "--from, reading an existing pulumi/actions workflow, is not built yet; run init without it and the workflow stays as it is" };
-  }
   let rest = args;
   const take = (flag: string): { value?: string; error?: string } => {
     const t = takeFlag(rest, flag);
@@ -150,7 +152,8 @@ export function parseInitArgs(args: string[]): InitOptions | { error: string } |
   const engine = take("--engine");
   const forge = take("--forge");
   const env = take("--env");
-  const bad = [preset, gate, engine, forge, env].find((t) => t.error);
+  const fromFlag = take("--from");
+  const bad = [preset, gate, engine, forge, env, fromFlag].find((t) => t.error);
   if (bad) return { error: bad.error! };
   const flags = new Set(["--no-bucket-check", "--dry-run", "--yes", "-y"]);
   const extra = rest.filter((a) => !flags.has(a));
@@ -160,7 +163,10 @@ export function parseInitArgs(args: string[]): InitOptions | { error: string } |
   if (gate.value !== undefined && !g) return { error: `--gate ${gate.value} is not one of always, on-destructive (or destroy), never` };
   if (engine.value !== undefined && !(INIT_ENGINES as readonly string[]).includes(engine.value)) return { error: `--engine ${engine.value} is not one of ${INIT_ENGINES.join(", ")}` };
   if (forge.value !== undefined && !(FORGES as readonly string[]).includes(forge.value)) return { error: `--forge ${forge.value} is not one of ${FORGES.join(", ")}` };
+  const from = fromFlag.value !== undefined ? parseFrom(fromFlag.value) : undefined;
+  if (from && "error" in from) return { error: from.error };
   return {
+    ...(from ? { from } : {}),
     ...(preset.value ? { preset: preset.value as PresetName } : {}),
     ...(g ? { gate: g } : {}),
     ...(engine.value ? { engine: engine.value as InitEngine } : {}),
@@ -301,8 +307,11 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const todo: string[] = [];
   const buckets: BucketReport[] = [];
   const adopt: AdoptPreview[] = [];
+  // --from: the other pipeline's settings, read from the repository's files (plywood#21).
+  const imported = opts.from ? runImport(root, detected, opts.from) : undefined;
+  if (imported && imported.files.length === 0) notes.push(`--from ${imported.source} found no file to read${imported.notes.length ? `: ${imported.notes.join("; ")}` : ""}`);
   const fail = (message: string, forge = { kind: "github" as ForgeKind, because: "" }): InitResult => ({
-    ok: false, exitCode: table.failed, files, stacks: [], waves: [], forge, todo, notes: [...notes, message], buckets, adopt,
+    ok: false, exitCode: table.failed, files, stacks: [], waves: [], forge, todo, notes: [...notes, message], buckets, adopt, ...(imported ? { imported } : {}),
   });
 
   if (detected.projects.length === 0) return fail(`no Pulumi.yaml under ${root}; plywood init sets up a repository that has a Pulumi program`);
@@ -320,7 +329,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     }
     files.push({ file: kept, status: "kept" });
     const onPlunge = opts.engine === "plunge" && engineOf(config.doc)?.engine === "plunge";
-    const ignored = [opts.preset && "--preset", opts.gate && "--gate", opts.engine && !onPlunge && "--engine"].filter(Boolean);
+    const ignored = [opts.preset && "--preset", opts.gate && "--gate", opts.engine && !onPlunge && "--engine", imported && "--from"].filter(Boolean);
     if (ignored.length) notes.push(`${kept} is kept as it is, so ${ignored.join(", ")} changed nothing; set the keys there`);
     if (opts.engine === "plunge" && !onPlunge) notes.push(...keptPlungeLines(kept, detected, io.env));
     forge = forgeFor(config.doc, detected, opts);
@@ -328,7 +337,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     const made = await newConfigKeys(detected, opts, io);
     notes.push(...made.notes);
     forge = made.forge;
-    const text = plywoodYml(made.keys);
+    const text = plywoodYml(imported ? mergeKeys(made.keys, imported.keys) : made.keys);
     config = parseConfig(text, "plywood.yml");
     const problems = checkConfig(config).filter((p) => p.severity === "error");
     if (problems.length) return fail(problems.map((p) => `plywood.yml: ${p.key} ${p.message}`).join("\n"), forge);
@@ -392,6 +401,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     notes,
     buckets,
     adopt,
+    ...(imported ? { imported } : {}),
   };
 }
 
@@ -595,6 +605,7 @@ export function initLines(r: InitResult): string[] {
   out.push(`${PRODUCT} init: ${r.stacks.length} stack${r.stacks.length === 1 ? "" : "s"} on ${r.forge.kind} (${r.forge.because})`);
   for (const w of r.waves) out.push(`  wave ${w.name}: ${w.stacks.join(", ")}`);
   if (r.waves.length > 1) out.push(`  the first wave, ${r.waves[0]!.name}, is the canary`);
+  if (r.imported) out.push(...importLines(r.imported));
   out.push("Files:");
   for (const f of r.files) out.push(`  ${f.status.padEnd(9)} ${f.file}${f.note ? `: ${f.note}` : ""}`);
   if (r.notes.length) out.push(...r.notes.map((n) => (n.startsWith("  ") || n.endsWith(":") ? n : `- ${n}`)));

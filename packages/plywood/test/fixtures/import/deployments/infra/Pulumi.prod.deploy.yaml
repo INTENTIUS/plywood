@@ -1,0 +1,26 @@
+settings:
+  sourceContext:
+    git:
+      repoUrl: https://github.com/acme/shop.git
+      branch: refs/heads/main
+      repoDir: infra
+  operationContext:
+    preRunCommands:
+      - npm ci
+    environmentVariables:
+      AWS_REGION: us-east-1
+      LOG_LEVEL: debug
+    oidc:
+      aws:
+        roleArn: arn:aws:iam::000000000000:role/deploy
+        sessionName: pulumi
+  gitHub:
+    repository: acme/shop
+    deployCommits: true
+    previewPullRequests: true
+    pullRequestTemplate: true
+    paths:
+      - infra/**
+      - "!infra/README.md"
+  cacheOptions:
+    enable: true

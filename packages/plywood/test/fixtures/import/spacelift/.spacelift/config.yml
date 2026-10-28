@@ -1,0 +1,12 @@
+version: "1"
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-pulumi-javascript:latest
+  environment:
+    AWS_REGION: us-east-1
+stacks:
+  prod:
+    project_root: network
+  app-prod:
+    project_root: app
+    before_init:
+      - npm ci

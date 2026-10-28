@@ -177,6 +177,11 @@ describe("the seed", () => {
     expect(cloudScript(false)).not.toContain("git push");
   });
 
+  it("commits plywood init with [skip ci], so neither the seed's push nor a reset's force-push of that commit starts the record or waves workflow", () => {
+    const commit = cloudScript(true).split("\n").find((l) => l.startsWith("git commit"))!;
+    expect(commit).toContain("[skip ci]");
+  });
+
   it("builds the repository with stack/seed-repo.sh at plunge's main after plunge#55, the knobs far apart", () => {
     const repo = readFileSync(join(ROOT, "stack", "seed-repo.sh"), "utf8");
     const lib = readFileSync(join(ROOT, "stack", "lib.sh"), "utf8");

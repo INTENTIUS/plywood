@@ -267,6 +267,8 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
       stack,
       dir: stackDir,
       ...(engine ? { engine } : {}),
+      // plywood#22: the step's backend, so a preview and an update read this stack's store, not the job's PULUMI_BACKEND_URL.
+      ...(backend ? { backend } : {}),
       ...(pin ? { engineVersion: pin.engineVersion!, ...(pin.engineRoot ? { engineRoot: pin.engineRoot } : {}) } : {}),
       ...(own.gate ? { gate: own.gate } : {}),
       ...(packs.length ? { policyPacks: packs } : {}),

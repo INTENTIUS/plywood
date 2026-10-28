@@ -11,10 +11,12 @@ draft: true
 | `plywood check` | validates `plywood.yml`, each stack's config and the program's dependencies |
 | `plywood preview [--stack] [--target]` | previews each stack and writes the report |
 | `plywood up [--wave]` | updates the stacks of an approved wave |
+| `plywood resume [--op] [--wave]` | starts the wave jobs an approval has cleared since they stopped |
 | `plywood drift [--stack]` | reads each stack against the cloud |
-| `plywood approve <gate> --plan <digest> [--sign]` | records an approval of one digest |
+| `plywood approve <gate> --plan <digest> [--pr] [--sign]` | records an approval of one digest; `up` finds its pull request from the digest |
 | `plywood override <gate> --rule <id> --reason <text>` | records an override of one denial |
 | `plywood rollback <stack> --release <name>` | previews and updates a release's tree |
+| `plywood cancel <stack> [--lock <id>]` | releases a stuck stack lock once a second person approves; reads the id from a `file://` backend |
 | `plywood audit [--since] [--stack] [--json]` | reads the ledger |
 
 ## Comments

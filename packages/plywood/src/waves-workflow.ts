@@ -12,12 +12,15 @@
  *      so it is written beside the workflow and committed with it.
  *   2. chant's op-waves generator (`run --generate <forge> --spec <file>`)
  *      writes the waves workflow.
- *   3. Each job line chant wrote as `chant run wave ...` becomes the line
- *      productPipelineJobs gave, with plywood's bin.
+ *   3. On a chant before chant#4607, each job line chant wrote as
+ *      `chant run wave ...` becomes the line productPipelineJobs gave, with
+ *      plywood's bin. From chant#4607 the generator writes the words' bin in
+ *      the wave, resume and plans jobs itself (`OpWavesPipelineOptions.bin`),
+ *      so the file is left as chant wrote it.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ChantProduct, ForgeKind, ProductPipelineJobs } from "./chant-product";
+import { hasChant4607, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
 import { PRODUCT, type ProductWordsInput } from "./words";
@@ -90,11 +93,14 @@ export async function writeWaveJobs(
     io.err(`${PRODUCT} ci: chant wrote no waves workflow for ${waves.specFile} under ${outDir}`);
     return table.failed;
   }
-  const lines = binLines(waves, words.bin);
+  // chant#4607: the generator writes plywood's bin itself; before it, plywood swaps the lines.
+  const lines = hasChant4607(chant) ? undefined : binLines(waves, words.bin);
   for (const file of files) {
-    const text = readFileSync(file, "utf8");
-    const next = withBinLines(text, lines);
-    if (next !== text) writeFileSync(file, next);
+    if (lines) {
+      const text = readFileSync(file, "utf8");
+      const next = withBinLines(text, lines);
+      if (next !== text) writeFileSync(file, next);
+    }
     io.err(`${PRODUCT} ci: waves workflow at ${file.slice(io.cwd.length + 1)}`);
   }
   if (forge === "gitlab") {

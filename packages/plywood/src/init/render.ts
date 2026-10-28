@@ -88,7 +88,7 @@ export function stepInput(s: InitStack): Record<string, unknown> {
  * (chant discovers any exported component-shaped value in a
  * `*.component.ts` file), so the file imports nothing.
  */
-export function componentsFile(stacks: readonly InitStack[], after: Readonly<Record<string, readonly string[]>> = {}): string {
+export function componentsFile(stacks: readonly InitStack[], after: Readonly<Record<string, readonly string[]>> = {}, opts: { reviewSuffix?: string } = {}): string {
   const taken = new Set<string>();
   const lines = [
     "// Written by plywood init from the stacks it found; running it again rewrites",
@@ -99,7 +99,9 @@ export function componentsFile(stacks: readonly InitStack[], after: Readonly<Rec
   for (const s of stacks) {
     // plywood.yml's waves.after (plywood#18); chant adds each StackReference itself (chant#4547).
     const dependsOn = (after[s.key] ?? []).filter((u) => stacks.some((x) => x.key === u)).map((u) => componentName({ key: u }));
-    const component = { name: componentName(s), dependsOn, deploy: [{ phase: "up", steps: [{ kind: "pulumi-up", ...stepInput(s) }] }] };
+    // review_stacks.name's suffix (chant#4609): under pr-<n> the step applies <project>/pr-<n>-<suffix>.
+    const step = { kind: "pulumi-up", ...stepInput(s), ...(opts.reviewSuffix ? { reviewSuffix: opts.reviewSuffix } : {}) };
+    const component = { name: componentName(s), dependsOn, deploy: [{ phase: "up", steps: [step] }] };
     lines.push(`export const ${exportName(s, taken)} = ${JSON.stringify(component)};`);
   }
   return lines.join("\n") + "\n";

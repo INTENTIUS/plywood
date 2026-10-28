@@ -36,8 +36,9 @@ import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
+import { hasChant4607, type ChantProduct, type PendingGateByPlan } from "./chant-product";
 import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
-import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
+import { positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
 
 /** chant's op for policy overrides (`OVERRIDE_GATE_OP`, chant op/gate-name.ts). */
@@ -110,13 +111,54 @@ export async function approve(args: string[], json: boolean, table: ExitTable, i
   const unknown = passed.rest.filter((a) => a.startsWith("-"));
   if (unknown.length) return usage(`approve does not take ${unknown.join(" ")}`, table, io);
   if (named.length !== 1) return usage(`approve takes one gate: '${PRODUCT} approve ${PR_GATE} --pr <n> --plan <digest>' or '${PRODUCT} approve wave-<k> --plan <digest>'`, table, io);
-  const target = approveTarget(named[0]!, { pr: pr.value ?? io.env.PR_NUMBER, stack: stack.value, op: op.value });
-  if ("error" in target) return usage(target.error, table, io);
+  const prNumber = pr.value ?? io.env.PR_NUMBER;
+  const gate = named[0]!;
+  const plan = passed.argv[passed.argv.indexOf("--plan") + 1];
+  // chant#4607: `approve up --plan <digest>` finds its pull request from the digest, when chant reads pending gates by plan.
+  const byPlan = gate === PR_GATE && !prNumber && !op.value && passed.argv.includes("--plan");
+  const target = byPlan ? undefined : approveTarget(gate, { pr: prNumber, stack: stack.value, op: op.value });
+  if (target && "error" in target) return usage(target.error, table, io);
   if (!passed.argv.includes("--plan") && !passed.argv.includes("--expire")) {
     return usage(`approve needs --plan <digest>, the digest the preview printed, so a change that moved since is never approved in its place`, table, io);
   }
-  const argv = ["approve", target.op, target.gate, ...passed.argv, ...(json ? ["--json"] : [])];
-  return withChant(`${PRODUCT} approve`, table, io, async (chant) => explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err));
+  return withChant(`${PRODUCT} approve`, table, io, async (chant) => {
+    let to = target;
+    if (!to) {
+      const found = await upTargetByPlan(chant, plan!, { stack: stack.value, cwd: io.cwd });
+      if ("error" in found) return usage(found.error, table, io);
+      if (!json) io.err(`${PRODUCT} approve: ${plan} waits at pull request ${found.pr}'s ${PR_GATE} gate (op ${found.op})`);
+      to = { op: found.op, gate: PR_GATE };
+    }
+    const argv = ["approve", to.op, to.gate, ...passed.argv, ...(json ? ["--json"] : [])];
+    return explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err);
+  });
+}
+
+/**
+ * The pull request op whose `up` gate waits on `digest` (chant#4607's
+ * `pendingGatesByPlan`). With `stack`, the op of that stack's gate
+ * (`pr-<n>-<stack>`). Without chant#4607, `--pr` or PR_NUMBER stays required.
+ */
+export async function upTargetByPlan(chant: ChantProduct, digest: string, opts: { stack?: string; cwd?: string } = {}): Promise<{ op: string; pr: number } | { error: string }> {
+  const needsPr = `the ${PR_GATE} gate is a pull request's: name it with --pr <n> (or PR_NUMBER), or approve pr-<n>`;
+  if (!hasChant4607(chant)) return { error: `${needsPr}. The installed chant cannot find a pull request from a plan digest (chant#4607)` };
+  let gates: PendingGateByPlan[];
+  try {
+    gates = await chant.pendingGatesByPlan!(digest, { pullRequestsOnly: true, ...(opts.cwd ? { cwd: opts.cwd } : {}) });
+  } catch (e) {
+    return { error: `${needsPr}. Reading the pending gates for ${digest} failed: ${(e as Error).message}` };
+  }
+  let up = gates.filter((g) => g.gate === PR_GATE && g.pr !== undefined);
+  if (opts.stack) up = up.filter((g) => g.member === opts.stack);
+  const ops = [...new Set(up.map((g) => g.op))];
+  if (ops.length === 0) return { error: `no pull request's ${PR_GATE} gate waits on ${digest}${opts.stack ? ` for ${opts.stack}` : ""}. Check the digest the preview printed and fetch chant/lifecycle, or name the pull request with --pr <n>` };
+  const prs = [...new Set(up.map((g) => g.pr!))];
+  if (prs.length > 1) return { error: `${digest} waits at the ${PR_GATE} gate of pull requests ${prs.sort((a, b) => a - b).join(", ")}; name one with --pr <n>` };
+  // One pull request: its own op, unless only stack ops wait and there is more than one.
+  const whole = up.find((g) => g.member === undefined);
+  if (whole) return { op: whole.op, pr: whole.pr! };
+  if (ops.length > 1) return { error: `${digest} waits at the ${PR_GATE} gate of ${ops.join(", ")}; name the stack with --stack <stack>` };
+  return { op: ops[0]!, pr: prs[0]! };
 }
 
 /**
@@ -252,10 +294,42 @@ async function upBeforeMerge(number: string, args: string[], json: boolean, tabl
   const configured = (config.doc.forge as { kind?: string } | undefined)?.kind;
   const forge = forgeFlag.value ?? configured ?? "github";
   if (!(FORGES as readonly string[]).includes(forge)) return usage(`--forge ${forge} is not one of ${FORGES.join(", ")}`, table, io);
+  return withChant(`/${PRODUCT} up`, table, io, async (chant) => {
+    // chant#4607: apply.requires as --requires; a chant before it asks all four, and plywood says so.
+    const note = requiresNotHonoured(chant, config.doc);
+    if (note) io.err(`${PRODUCT}: ${note}`);
+    const argv = [
+      "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
+      "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,
+      ...requiresArgv(chant, config.doc),
+      ...(json ? ["--json"] : []),
+    ];
+    return explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err, { pr: number });
+  });
+}
+
+/**
+ * `plywood resume [--op <op>] [--wave <k>] [--dry-run] [--json]`: chant's
+ * `run resume --op pulumi-up`, in process with plywood's words. It starts
+ * the wave jobs whose gate an approval has since cleared, from the gate
+ * ledgers (chant#3683). `--wave <k>` names the gate `wave-<k>`; `--op` reads
+ * another op's gates, such as `plywood-adopt`. A refusal gets the line
+ * `plywood up` adds.
+ */
+export async function resume(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
+  const op = takeFlag(args, "--op");
+  const wave = takeFlag(op.rest, "--wave");
+  if (op.missing || wave.missing) return usage(`${op.missing ? "--op takes an op, such as pulumi-up" : "--wave takes a wave number"}`, table, io);
+  const switches: string[] = wave.rest.filter((a) => a === "--dry-run");
+  const extra = wave.rest.filter((a) => !switches.includes(a));
+  if (extra.length) return usage(`resume does not take ${extra.join(" ")}`, table, io);
+  if (wave.value !== undefined && !/^[1-9]\d*$/.test(wave.value)) return usage(`--wave takes a wave number, 1 or more, not '${wave.value}'`, table, io);
+  const k = wave.value !== undefined ? Number(wave.value) : undefined;
   const argv = [
-    "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
-    "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,
+    "run", "resume", "--op", op.value ?? OP_NAME,
+    ...(k !== undefined ? ["--gate", PRODUCT_WORDS.gateName.replace("{k}", String(k))] : []),
+    ...switches,
     ...(json ? ["--json"] : []),
   ];
-  return withChant(`/${PRODUCT} up`, table, io, async (chant) => explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err, { pr: number }));
+  return withChant(`${PRODUCT} resume`, table, io, async (chant) => explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err, k !== undefined ? { wave: k } : {}));
 }

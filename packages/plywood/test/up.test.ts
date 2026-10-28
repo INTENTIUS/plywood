@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { needsChantMessage, setChantProductForTests, type ChantProduct } from "../src/chant-product";
+import { needsChantMessage, setChantProductForTests, type ChantProduct, type PendingGateByPlan } from "../src/chant-product";
 import { FALLBACK_EXIT } from "../src/exit-codes";
 import { refusalLine, refusalOf, REFUSALS } from "../src/refusals";
 import { ci, type StageIo } from "../src/stages";
-import { approve, approveTarget, override, readUpSpec, up, WAVES_SPEC_FILE } from "../src/up";
+import { approve, approveTarget, override, readUpSpec, resume, up, upTargetByPlan, WAVES_SPEC_FILE } from "../src/up";
 import { binLines, withBinLines } from "../src/waves-workflow";
 import { PRODUCT_WORDS } from "../src/words";
 
@@ -238,6 +238,141 @@ describe("wave jobs in the generated workflow", () => {
     expect(workflow).toContain("run: npx --no-install plywood run wave --spec");
     expect(workflow).not.toContain("run: chant run wave");
     expect(JSON.parse(readFileSync(join(dir, WAVES_SPEC_FILE), "utf8"))).toMatchObject({ approvals: { pullRequest: { gate: "up" } } });
+  });
+});
+
+/** fakeChant with chant#4607's ci-product functions: pending gates from `pending`, and chant's --requires check. */
+function chant4607(pending: PendingGateByPlan[] = [], codes: number[] = [], onCall?: (argv: string[]) => void) {
+  const base = fakeChant(codes, onCall);
+  const reads: Array<{ digest: string; options: unknown }> = [];
+  const order = ["approved", "mergeable", "undiverged", "checks"];
+  base.api.pendingGatesByPlan = async (digest, options) => {
+    reads.push({ digest, options });
+    return pending;
+  };
+  base.api.parseRequiresList = (values) => ({ checks: order.filter((n) => values.flatMap((v) => v.split(",")).includes(n)) });
+  return { ...base, reads };
+}
+
+const gate = (op: string, pr: number, member?: string): PendingGateByPlan => ({ op, gate: "up", pr, ...(member ? { member } : {}), matched: "planDigest", timestamp: "2026-10-27T10:00:00Z" });
+
+describe("plywood approve up without --pr (plywood#26, chant#4607)", () => {
+  it("finds the pull request from the digest and approves its op", async () => {
+    const chant = chant4607([gate("pr-12", 12)]);
+    setChantProductForTests(chant.api);
+    const o = io(repo());
+    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(chant.reads[0]).toMatchObject({ digest: "sha256:abc", options: { pullRequestsOnly: true } });
+    expect(chant.calls[0]!.argv).toEqual(["approve", "pr-12", "up", "--plan", "sha256:abc"]);
+    expect(o.stderr.join("\n")).toContain("pull request 12");
+  });
+
+  it("takes one stack's op with --stack, and asks for the stack when several wait", async () => {
+    const pending = [gate("pr-12-shop-dev", 12, "shop-dev"), gate("pr-12-shop-prod", 12, "shop-prod")];
+    expect(await upTargetByPlan(chant4607(pending).api, "sha256:abc", { stack: "shop-prod" })).toEqual({ op: "pr-12-shop-prod", pr: 12 });
+    expect(await upTargetByPlan(chant4607(pending).api, "sha256:abc")).toMatchObject({ error: expect.stringContaining("--stack") });
+  });
+
+  it("refuses a digest no gate waits on, or one two pull requests wait on", async () => {
+    expect(await upTargetByPlan(chant4607([]).api, "sha256:abc")).toMatchObject({ error: expect.stringContaining("no pull request's up gate waits on sha256:abc") });
+    expect(await upTargetByPlan(chant4607([gate("pr-3", 3), gate("pr-4", 4)]).api, "sha256:abc")).toMatchObject({ error: expect.stringContaining("pull requests 3, 4") });
+  });
+
+  it("keeps --pr required on a chant before chant#4607", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    const o = io(repo());
+    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(o.stderr.join("\n")).toContain("--pr <n>");
+    expect(chant.calls).toEqual([]);
+  });
+
+  it("does not read the ledger when --pr or PR_NUMBER names the pull request", async () => {
+    const chant = chant4607([gate("pr-99", 99)]);
+    setChantProductForTests(chant.api);
+    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(), { PR_NUMBER: "7" }))).toBe(0);
+    expect(chant.reads).toEqual([]);
+    expect(chant.calls[0]!.argv.slice(0, 3)).toEqual(["approve", "pr-7", "up"]);
+  });
+});
+
+describe("plywood resume (plywood#26)", () => {
+  it("runs chant run resume --op pulumi-up in process with plywood's words", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    expect(await resume([], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(chant.calls[0]!.argv).toEqual(["run", "resume", "--op", "pulumi-up"]);
+    expect(chant.calls[0]!.words).toBe(PRODUCT_WORDS);
+  });
+
+  it("names a wave's gate with --wave, takes another --op, and passes --dry-run and --json", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    expect(await resume(["--wave", "2", "--dry-run"], true, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await resume(["--op", "plywood-adopt"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(chant.calls.map((c) => c.argv)).toEqual([
+      ["run", "resume", "--op", "pulumi-up", "--gate", "wave-2", "--dry-run", "--json"],
+      ["run", "resume", "--op", "plywood-adopt"],
+    ]);
+  });
+
+  it("adds the line plywood up adds to a refusal, and keeps chant's code", async () => {
+    const chant = fakeChant([FALLBACK_EXIT.waiting]);
+    setChantProductForTests(chant.api);
+    const o = io(repo());
+    expect(await resume(["--wave", "1"], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.waiting);
+    expect(o.stderr.join("\n")).toContain(refusalLine("waiting", { wave: 1 }));
+  });
+
+  it("refuses a bad wave and unknown flags, and names the chant it needs on the pin", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    expect(await resume(["--wave", "0"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await resume(["--force"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(chant.calls).toEqual([]);
+    setChantProductForTests(undefined);
+    const o = io(repo());
+    expect(await resume([], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.failed);
+    expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood resume"));
+  });
+});
+
+describe("apply.requires on chant#4607 (plywood#26)", () => {
+  const yml = "stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n  requires: [approved, checks]\n";
+
+  it("passes a subset to pr-apply --before-merge as --requires", async () => {
+    const chant = chant4607();
+    setChantProductForTests(chant.api);
+    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(repo(yml), { BASE_SHA: "abc" }))).toBe(0);
+    expect(chant.calls[0]!.argv).toEqual(["components", "pr-apply", "--before-merge", "--base", "abc", "--pr", "4", "--env", "production", "--gate", "up", "--forge", "github", "--requires", "approved,checks"]);
+  });
+
+  it("passes nothing for all four, and says a chant before chant#4607 asks all four", async () => {
+    const all = chant4607();
+    setChantProductForTests(all.api);
+    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n"), { BASE_SHA: "abc" }))).toBe(0);
+    expect(all.calls[0]!.argv).not.toContain("--requires");
+    const old = fakeChant();
+    setChantProductForTests(old.api);
+    const o = io(repo(yml), { BASE_SHA: "abc" });
+    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(old.calls[0]!.argv).not.toContain("--requires");
+    expect(o.stderr.join("\n")).toContain("asks all four checks");
+  });
+});
+
+describe("wave jobs on chant#4607 (plywood#26)", () => {
+  it("leaves the waves workflow as chant wrote it, with plywood's bin from chant's generator", async () => {
+    const dir = repo();
+    const text = `# generated. Regenerate with: chant run --generate github --spec ${WAVES_SPEC_FILE}\njobs:\n  a:\n    steps:\n      - run: npx --no-install plywood run wave --spec ${WAVES_SPEC_FILE} --wave 1\n`;
+    const chant = chant4607([], [], (argv) => {
+      if (argv[0] !== "run") return;
+      mkdirSync(join(dir, ".github/workflows"), { recursive: true });
+      writeFileSync(join(dir, ".github/workflows/pulumi-up.yml"), text);
+    });
+    setChantProductForTests(chant.api);
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(readFileSync(join(dir, ".github/workflows/pulumi-up.yml"), "utf8")).toBe(text);
   });
 });
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { helpText, main, type Io } from "../src/cli";
 import { FALLBACK_EXIT, exitCodes, isExitTable } from "../src/exit-codes";
 import { VERBS } from "../src/words";
+import { setChantProductForTests } from "../src/chant-product";
 
 const RULED = ["check", "preview", "up", "drift", "approve", "override"];
 /** The verbs later units build (plywood#8). */
@@ -36,6 +37,23 @@ describe("plywood CLI", () => {
     expect(await main(["drift", "--json"], io)).toBe(1);
     expect(io.stdout).toHaveLength(1);
     expect(JSON.parse(io.stdout[0])).toEqual({ command: "drift", ok: false, exitCode: 1, error: "plywood drift is not built yet." });
+  });
+
+  it("lists resume in --help and runs chant run resume through plywood's words (plywood#26)", async () => {
+    expect(helpText()).toMatch(/^  resume \[--op <op>\] \[--wave <k>\]/m);
+    const calls: string[][] = [];
+    setChantProductForTests({
+      assertProductWords: (w) => w as never,
+      productPipelineJobs: () => ({}) as never,
+      approveLine: () => "",
+      runChantInProcess: async (argv) => (calls.push(argv), 0),
+    });
+    try {
+      expect(await main(["resume", "--wave", "1"], capture())).toBe(0);
+      expect(calls).toEqual([["run", "resume", "--op", "pulumi-up", "--gate", "wave-1"]]);
+    } finally {
+      setChantProductForTests("reset");
+    }
   });
 
   it("exits 1 on an unknown command", async () => {

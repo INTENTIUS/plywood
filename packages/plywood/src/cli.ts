@@ -28,7 +28,7 @@ import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
 import { useChantInstallLines } from "./images";
-import { approve, override, up } from "./up";
+import { approve, override, resume, up } from "./up";
 import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
@@ -74,16 +74,18 @@ export function helpText(): string {
     "  up [--wave <k>] [--decide | --share <i> | --group <name>]",
     "                                                      run the merge's waves through the pulumi-up step",
     "  up --pr <n> [--base <rev>]                          update an open pull request (apply.when: pull-request)",
+    "  resume [--op <op>] [--wave <k>] [--dry-run]         start the wave jobs an approval has since cleared",
     "  drift [<stack>...] [--resource <urn>] [--forge <kind>] [--respond issue|pull-request|up|none]",
     "                                                      read each stack against the cloud; --forge keeps one issue per stack",
     "",
     "Approvals:",
-    "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>",
+    "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>;",
+    "                                                      up finds its pull request from the digest when --pr is left out",
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
     "Stack operations (each waits for a second person's approval):",
     "  export <stack> --out <file>                         the stack's export, to a file on your machine",
-    "  cancel <stack> --lock <id>                          release a stuck stack lock",
+    "  cancel <stack> [--lock <id>]                        release a stuck stack lock; on file:// it reads the id",
     "  move <urn>... --from <stack> --to <stack>           move resources; both stacks preview no change",
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
     "  rollback <stack> [--digest <d>] | --release <name> --env <env>",
@@ -165,6 +167,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);
   if (verb === "up") return up(args.slice(1), json, table, stageIo);
+  if (verb === "resume") return resume(args.slice(1), json, table, stageIo);
   if (verb === "approve") return approve(args.slice(1), json, table, stageIo);
   if (verb === "override") return override(args.slice(1), json, table, stageIo);
   if (verb === "export") return exportStack(args.slice(1), json, table, stageIo);

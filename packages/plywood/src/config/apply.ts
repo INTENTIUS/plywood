@@ -27,6 +27,12 @@ export function applyWhenOf(doc: RawConfig): ApplyWhen {
   return a.when === "pull-request" ? "pull-request" : DEFAULT_APPLY_WHEN;
 }
 
+/** The checks apply.requires lists, in plywood.yml's order; all four when it lists none. */
+export function applyRequiresOf(doc: RawConfig): string[] {
+  const a = isObject(doc.apply) ? doc.apply : {};
+  return Array.isArray(a.requires) ? (a.requires as unknown[]).filter((r): r is string => typeof r === "string") : [...APPLY_REQUIRES];
+}
+
 export const apply: ConfigGroup = {
   name: "apply",
   keys: ["apply"],

@@ -137,7 +137,7 @@ export const NO_IDENTITY = "the job's own credentials (no OIDC trade)";
 export const STACK_OP_WORDS = {
   usage: {
     export: `${PRODUCT} export <project/stack> --out <file>`,
-    cancel: `${PRODUCT} cancel <project/stack> --lock <id>`,
+    cancel: `${PRODUCT} cancel <project/stack> [--lock <id>]`,
     move: `${PRODUCT} move <urn>... --from <project/stack> --to <project/stack>, or ${PRODUCT} move <project/stack> --onto plunge`,
     rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback --release <name> --env <env>`,
   },
@@ -153,6 +153,11 @@ export const STACK_OP_WORDS = {
     `Moved ${r.moved.length} resource${r.moved.length === 1 ? "" : "s"} from ${from} to ${to} on ${r.engine}. Both stacks preview no change.`,
   needsLock:
     "cancel needs --lock <id>, the lock the stack holds: the id pulumi printed when it refused the update, or the file name under .pulumi/locks/ on a file:// backend",
+  lockNotListed: (backend: string | undefined): string =>
+    `cancel needs --lock <id> here: chant reads a stack's lock from a file:// backend only, and this stack's backend is ${backend ?? "not one plywood can find"}. Use the id pulumi printed when it refused the update`,
+  noLock: (stack: string): string => `${stack} holds no lock now, so there is nothing to cancel`,
+  manyLocks: (stack: string, ids: readonly string[]): string =>
+    `${stack} holds ${ids.length} locks (${ids.join(", ")}); name the one to release with --lock <id>`,
   noAdoptOp: (file: string): string =>
     `no ${file}. '${PRODUCT} init --engine plunge' writes it with each stack's adopt preview; run that first.`,
   adoptAll: (stack: string): string =>

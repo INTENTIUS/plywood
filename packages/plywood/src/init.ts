@@ -43,6 +43,7 @@ import { dirname, join } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
+import { identityClouds, pulumiCloudOf } from "./config/identity";
 import { packsForStack, policyPacksOf } from "./config/policy";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
@@ -487,8 +488,14 @@ function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: No
   const all = typeof doc.backend === "string" ? doc.backend : undefined;
   const cloud = detected.projects.some((p) => isPulumiCloud(backendOf(p, all ? { all } : {}, env).url));
   const where = forge === "gitlab" ? "CI/CD variables" : "repository secrets";
-  if (cloud) out.push(`Add PULUMI_ACCESS_TOKEN_PREVIEW and PULUMI_ACCESS_TOKEN_UP to the ${where}: the preview job's token and the update job's token`);
-  else out.push("Give the preview job and the update job their cloud access, each its own role through OIDC; the backend bucket's read and write go with them");
+  const traded = identityClouds(doc);
+  if (cloud && traded.includes("pulumi")) {
+    out.push(`Add an OIDC issuer for this ${forge} repository in Pulumi Cloud organization ${pulumiCloudOf(doc).org}, with a policy for each token identity names; no Pulumi token goes in the ${where}`);
+  } else if (cloud) {
+    out.push(`Set pulumi_cloud.org and identity.preview.pulumi and identity.up.pulumi in plywood.yml, so each job trades its OIDC token for its own Pulumi Cloud token, or add PULUMI_ACCESS_TOKEN_PREVIEW and PULUMI_ACCESS_TOKEN_UP to the ${where}`);
+  }
+  if (traded.some((c) => c !== "pulumi")) out.push(`Let each role identity names trust this repository's OIDC tokens: the preview role for pull requests, the up role for ${detected.defaultBranch} only`);
+  else if (!cloud) out.push("Give the preview job and the update job their cloud access, each its own role through OIDC (identity in plywood.yml); the backend bucket's read and write go with them");
   out.push(`Make ${PRODUCT}/preview a required status on ${detected.defaultBranch}`);
   return out;
 }

@@ -7,7 +7,7 @@
  *
  *   ci       chant's workspace `ci` block, under chant's own key names
  *            (`ci.workflow`, `ci.locks`, `ci.lockGrain`, `ci.prEnvironment`,
- *            `ci.policy`, `ci.branches`, `ci.labels`).
+ *            `ci.policy`, `ci.identity`, `ci.branches`, `ci.labels`).
  *   members  one entry per stack, as a Pulumi member: its directory, and the
  *            engine and backend chant's pulumi lexicon takes as the member's
  *            config (chant#4559, the first rule `pulumiMemberEngine` asks);
@@ -24,6 +24,7 @@
  * Each config group writes its own part (src/config/<group>.ts).
  */
 import { GROUPS, type PlywoodConfig } from "./config/index";
+import type { ChantIdentitySettings } from "./config/identity";
 import type { ChantPolicySettings, PolicyPack } from "./config/policy";
 
 /** chant's `ci.workflow` values plywood sets (chant `CiWorkflow`). */
@@ -51,6 +52,8 @@ export interface ChantCiSettings {
   prEnvironment?: { template: string; ttl?: string };
   /** chant's gate policy over the change set, read at base (chant#4294). */
   policy?: ChantPolicySettings;
+  /** chant's plan and apply identities per cloud, Pulumi Cloud's included (chant#4296, #4549). */
+  identity?: ChantIdentitySettings;
   branches?: Record<string, string[]>;
   labels?: Record<string, string[]>;
 }

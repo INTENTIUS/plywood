@@ -3,7 +3,8 @@
  * stage in process (chant#4550 ruling C). `check`, `preview` and `ci` are
  * built (src/stages.ts), and `up`, `approve` and `override` (src/up.ts);
  * `drift` says it is not built yet and exits with chant's `failed` code. `config check` reads plywood.yml
- * (src/config-check.ts). chant's own verbs (`components`, `ci <sub>`, `run`,
+ * (src/config-check.ts), and `config identities` and `forge check` the
+ * identities (src/identities.ts). chant's own verbs (`components`, `ci <sub>`, `run`,
  * `lock`, `unlock`) pass to chant unchanged with plywood's words, for the
  * lines the generated jobs run through the bin.
  *
@@ -12,6 +13,7 @@
  */
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
+import { configIdentities, forgeCheck } from "./identities";
 import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
@@ -66,6 +68,9 @@ export function helpText(): string {
     "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
+    "  config identities [--file <path>] [--env <env>]",
+    "                                the preview and up identity each stack takes, per cloud",
+    "  forge check                   the identities next to the forge and cloud setup (needs chant)",
     "",
     "Options:",
     "  --json     print one JSON object on stdout",
@@ -93,8 +98,10 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     emit({ command: "version", ok: true, exitCode: table.done, version: VERSION, exitCodes: source }, VERSION);
     return table.done;
   }
-  if (verb === "config") return config(args.slice(1), table, emit);
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
+  if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
+  if (verb === "config") return config(args.slice(1), table, emit);
+  if (verb === "forge") return forgeCheck(args.slice(1), json, table, stageIo);
   if (verb === "init") {
     const interactive = !json && !args.includes("--yes") && !args.includes("-y") && process.stdin.isTTY === true && process.stderr.isTTY === true;
     const initIo: InitIo = interactive ? { ...stageIo, ask: askOnTerminal } : stageIo;
@@ -170,7 +177,7 @@ function config(args: string[], table: ExitTable, emit: Emit): number {
   const fileAt = rest.indexOf("--file");
   const file = fileAt >= 0 ? rest[fileAt + 1] : undefined;
   if (sub !== "check" || (fileAt >= 0 && !file)) {
-    const message = sub !== "check" ? `unknown config command '${sub ?? ""}'. Run '${PRODUCT} config check'.` : "--file takes a path";
+    const message = sub !== "check" ? `unknown config command '${sub ?? ""}'. Run '${PRODUCT} config check' or '${PRODUCT} config identities'.` : "--file takes a path";
     emit({ command, ok: false, exitCode: table.failed, error: message }, `${PRODUCT}: ${message}`, true);
     return table.failed;
   }

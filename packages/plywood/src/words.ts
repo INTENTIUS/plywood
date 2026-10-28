@@ -101,3 +101,19 @@ export function crossGuardRuleId(pack: string, policy: string): string {
 
 /** How a denial's rule ids read, for the line after a denied preview or update. */
 export const POLICY_RULE_FORMS = "a CrossGuard rule is crossguard.<pack>.<policy>, a Rego rule <package>.<rule>";
+
+/**
+ * Identity in plywood's words (plywood#14): the two stages that hold one,
+ * and what each may do. chant's `ci.identity` trades the forge's OIDC token
+ * for them before the program is checked out.
+ */
+export const IDENTITY_STAGES = {
+  preview: "the preview job, which runs the pull request's program: read-only, and never the up identity",
+  up: "the update job, which runs the merged program",
+} as const;
+
+/** The clouds' names in plywood's lines. */
+export const CLOUD_NAMES = { aws: "AWS", gcp: "GCP", azure: "Azure", pulumi: "Pulumi Cloud" } as const;
+
+/** What a stack with no identity for a cloud runs as, for `plywood config identities`. */
+export const NO_IDENTITY = "the job's own credentials (no OIDC trade)";

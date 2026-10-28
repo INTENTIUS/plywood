@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
-import { chantNext, hasChantApprovalStatus, hasChantPrLoopFlags, hasChantRespond, type ChantNext } from "./chant-next";
+import { chantNext, hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond, type ChantNext } from "./chant-next";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -373,8 +373,9 @@ export function workflowPlan(
   const respond = respondOptions(chant, pipeline, shape.applyBeforeMerge, notes);
   // chant#4636: apply.merge: auto merges after the update before merge.
   const applyMerge = shape.applyBeforeMerge && pipeline.applyMerge ? (next?.applyMerge ? pipeline.applyMerge : (notes.push(APPLY_MERGE_NEEDS_CHANT), undefined)) : undefined;
-  // chant#4630: the generator posts plywood/approval only for pr-review waves; plywood's waves approve through the pull request (ruling B), so say so.
-  if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
+  // chant#4630: a chant that posts plywood/approval only for pr-review waves gets the note, since plywood's waves approve
+  // through the pull request (ruling B). From APPROVAL_STATUS_PULL_REQUEST_FLOOR chant posts it for those waves too.
+  if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant) && !hasChantPullRequestApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
   const words = wordsForJobs(shape.jobs);
   // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
   const requires = shape.applyBeforeMerge ? requiresArgv(chant, doc) : [];
@@ -414,7 +415,7 @@ export function workflowPlan(
 /** What plywood ci says under apply.merge: auto on a chant without chant#4636. */
 export const APPLY_MERGE_NEEDS_CHANT = "apply.merge is auto, and the installed chant has no pr-apply --merge auto (chant#4636), so a person merges after each update before merge";
 
-/** What plywood ci says under approval: pr-review on a chant with chant#4630. */
+/** What plywood ci says under approval: pr-review on a chant with chant#4630 and without its pull-request floor. */
 export const APPROVAL_STATUS_NOTE =
   `approval is pr-review, and chant posts its approval status only for waves that wait on pr-review; plywood's waves wait on the pull request's own approval, so no ${PRODUCT}/approval status is posted before merge`;
 

@@ -28,6 +28,7 @@ import { locksOf } from "./config/locks";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { writeWorkflow } from "./init/workflow";
+import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { writeWaveJobs } from "./waves-workflow";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
@@ -199,6 +200,8 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   const output = outFlag.value ?? WORKFLOW_FILE[forge];
 
   return withChant(`${PRODUCT} ci`, table, io, async (chant) => {
+    const reviewStacks = await chantReviewStacks();
+    if (config.doc.review_stacks !== undefined && !reviewStacks) io.err(`${PRODUCT}: ${REVIEW_STACKS_NEED_CHANT}`);
     let waves: unknown;
     try {
       waves = readWavesSpec(io.cwd);
@@ -207,7 +210,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     }
     let plan: WorkflowPlan;
     try {
-      plan = workflowPlan(chant, config.doc, forge, env, waves);
+      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;
@@ -260,7 +263,7 @@ export interface WorkflowPlan {
  * against the jobs and throws when they disagree. `extra` goes on the build
  * line (`--image`, `--before-script`, from src/images.ts).
  */
-export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, env: string, waves: unknown, extra: string[] = []): WorkflowPlan {
+export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, env: string, waves: unknown, extra: string[] = [], opts: { reviewStacks?: boolean } = {}): WorkflowPlan {
   const shape = pipelineShape(doc, forge, waves);
   const words = wordsForJobs(shape.jobs);
   const jobs = chant.productPipelineJobs(forge, env, {
@@ -273,6 +276,8 @@ export function workflowPlan(chant: ChantProduct, doc: RawConfig, forge: ForgeKi
   const argv = [
     "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
     ...(shape.applyBeforeMerge ? ["--apply-before-merge"] : []),
+    // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
+    ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
     ...extra,
   ];
   return { jobs, words, prWords, argv };

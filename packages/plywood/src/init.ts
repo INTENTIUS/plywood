@@ -78,6 +78,7 @@ import {
   type InitStack,
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
+import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, type StageIo } from "./stages";
 import { template } from "./templates";
@@ -461,7 +462,7 @@ async function workflowStep(
   let plan;
   try {
     // The build takes no product engine lines over argv, so they go to --before-script.
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)));
+    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks() });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }
@@ -469,7 +470,11 @@ async function workflowStep(
   const argv = plan.argv.map((a, i) => (i === 1 && a === "." ? root : a));
   const written = await writeWorkflow(chant, { root, forge, output, argv, words: plan.prWords });
   if (written.status === "failed") return [{ file: output, status: "failed", note: `chant's generator exited ${written.code}; the old file is back as it was` }];
-  const out: InitFile[] = [{ file: output, status: written.status, ...(written.kept.length ? { note: `kept your own jobs: ${written.kept.join(", ")}` } : {}) }];
+  const notes = [
+    ...(written.kept.length ? [`kept your own jobs: ${written.kept.join(", ")}`] : []),
+    ...(doc.review_stacks !== undefined && !plan.argv.includes("--pr-env") ? [REVIEW_STACKS_NEED_CHANT] : []),
+  ];
+  const out: InitFile[] = [{ file: output, status: written.status, ...(notes.length ? { note: notes.join("; ") } : {}) }];
   if (plan.jobs.waves) {
     const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root });
     if (code !== table.done) out.push({ file: WAVES_OUTPUT_DIR[forge], status: "failed", note: `the waves workflow: chant exited ${code}` });

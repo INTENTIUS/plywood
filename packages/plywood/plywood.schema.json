@@ -433,9 +433,9 @@
         },
         "name": {
           "type": "string",
-          "pattern": "\\{number\\}",
+          "pattern": "^pr-\\{number\\}(?:-[a-z0-9][a-z0-9-]*)?$",
           "default": "pr-{number}",
-          "description": "The review stack's name; {number} is the pull request's number."
+          "description": "The review stack's name: pr-{number}, or pr-{number}-<suffix>. Only stacks named so are destroyed."
         },
         "ttl": {
           "type": "string",

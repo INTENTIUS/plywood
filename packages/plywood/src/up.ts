@@ -8,7 +8,9 @@
  *   plywood approve <gate> --plan <digest>
  *       chant approve <op> <gate> --plan <digest>. The gate `up` is the pull
  *       request's, recorded under op pr-<n> (pr-<n>-<stack> for one stack);
- *       a wave gate `wave-<k>` is recorded under op pulumi-up. At a terminal
+ *       a wave gate `wave-<k>` is recorded under op pulumi-up, and the gate
+ *       `review` is a review stack's (plywood#15), chant's pr-env under op
+ *       pr-<n>. At a terminal
  *       chant shows the plan and asks for the target's name before it
  *       records anything (chant#4575); --yes skips the question.
  *   plywood override <stack> --rule <id>... --reason <text>
@@ -34,6 +36,7 @@ import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
+import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
 
@@ -56,6 +59,12 @@ export function approveTarget(
   if (opts.op) return { op: opts.op, gate };
   // `plywood approve pr-12` names the pull request's op; its gate is `up`.
   if (PR_OP.test(gate)) return { op: gate, gate: PR_GATE };
+  // `plywood approve review --pr 12`: the review stack's update, chant's gate pr-env under op pr-12 (plywood#15).
+  if (gate === REVIEW_GATE_WORD || gate === REVIEW_GATE) {
+    if (!opts.pr) return { error: `a review stack is a pull request's: name it with --pr <n> (or PR_NUMBER)` };
+    if (!/^\d+$/.test(opts.pr)) return { error: `--pr takes a pull request number, not '${opts.pr}'` };
+    return { op: reviewOp(opts.pr), gate: REVIEW_GATE };
+  }
   if (gate === PR_GATE) {
     if (!opts.pr) return { error: `the ${PR_GATE} gate is a pull request's: name it with --pr <n> (or PR_NUMBER), or approve pr-<n>` };
     if (!/^\d+$/.test(opts.pr)) return { error: `--pr takes a pull request number, not '${opts.pr}'` };

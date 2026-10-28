@@ -41,6 +41,7 @@ drift: { schedule: "0 6 * * *" }
 | `review_stacks` | off | `template` and `name` |
 | `control` | off | the control repo, as `host/owner/name` or a mapping with `repo` and `op` |
 | `notify`, `telemetry`, `review`, `agent` | off | see their guides |
+| `agent.token_env` | the job token | the secret, or on GitLab the protected variable, holding the token the agent's push job pushes with; a GitHub push with the job token starts no workflow, so name a user's or app's token here for the agent's commit to get a preview |
 | `pulumi`, `plunge` | the image's | CLI version pins |
 
 plywood turns each key into chant's workspace settings, so `plywood.yml` holds no chant key. A `ci.` key there is refused with the name of the plywood key that sets it.

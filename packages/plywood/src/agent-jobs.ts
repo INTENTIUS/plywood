@@ -11,8 +11,8 @@
  *                   drift agent on each scheduled drift Op (src/drift.ts):
  *                   after a drift run, the agent opens or updates a pull
  *                   request from plywood/agent/<op>
- *   agent.command, agent.key_env, agent.timeout, agent.max_runs
- *                   chant's command, keyEnv, timeout and maxRuns
+ *   agent.command, agent.key_env, agent.timeout, agent.max_runs, agent.token_env
+ *                   chant's command, keyEnv, timeout, maxRuns and tokenEnv
  *
  * The agent may not change plywood.yml or the policy directory, beside
  * chant's own guarded paths.
@@ -65,6 +65,8 @@ export function chantAgentOptions(a: AgentSettings, doc: RawConfig): Record<stri
     keyEnv: a.keyEnv,
     ...(a.timeout !== undefined ? { timeout: a.timeout } : {}),
     ...(a.maxRuns !== undefined ? { maxRuns: a.maxRuns } : {}),
+    // chant#4616's push token; without it the push job uses the job token, whose GitHub push starts no workflow.
+    ...(a.tokenEnv !== undefined ? { tokenEnv: a.tokenEnv } : {}),
     guarded: agentGuarded(doc),
   };
 }
@@ -146,6 +148,8 @@ export async function writeAgentJobs(chant: ChantProduct, forge: ForgeKind, env:
     : [];
   for (const f of files) io.err(`${PRODUCT} ci: agent jobs at ${join(outDir, f).replace(/^\.\//, "")}, answering /${PRODUCT} agent <ask>`);
   io.err(`${PRODUCT} ci: the agent job reads the model's key from ${a.keyEnv}; set it from a secret${a.maxRuns === undefined ? ", and set agent.max_runs to limit how often it runs" : ""}`);
+  if (forge === "github" && a.tokenEnv === undefined) io.err(`${PRODUCT} ci: the push job pushes with the job token, which starts no workflow on GitHub, so the agent's commit gets no preview; set agent.token_env to a secret holding a user's or app's token`);
+  else if (a.tokenEnv !== undefined) io.err(`${PRODUCT} ci: the push job pushes with ${a.tokenEnv}; set it from a secret`);
   if (forge === "gitlab") io.err(`${PRODUCT} ci: on GitLab a pipeline of the default branch started with CHANT_AGENT_PR and CHANT_AGENT_ASK runs the agent; scope CHANT_FORGE_TOKEN to environment ${AGENT_OP}-push`);
   return table.done;
 }

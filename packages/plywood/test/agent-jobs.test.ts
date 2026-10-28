@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_NEEDS_CHANT, AGENT_OP, AGENT_SPEC_FILE, agentGuarded, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
+import { AGENT_NEEDS_CHANT, AGENT_OP, AGENT_SPEC_FILE, agentGuarded, chantAgentOptions, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
+import { agentOf } from "../src/config/agents";
 import type { ChantProduct, ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { driftOpSpec } from "../src/drift";
@@ -97,5 +98,19 @@ describe("the drift agent and the drift runner", () => {
     expect(stageRunner({ default: "a", drift: "b" }, "drift")).toBe("b");
     expect(stageRunner({ default: "a" }, "drift")).toBe("a");
     expect(stageRunner(undefined, "drift")).toBeUndefined();
+  });
+});
+
+describe("agent.token_env (chant#4616's push token)", () => {
+  it("maps onto chant's tokenEnv, and is left out when unset", () => {
+    const doc = parseConfig("agent:\n  comment: true\n  max_runs: 5\n  token_env: PLYWOOD_AGENT_TOKEN\n").doc;
+    expect(chantAgentOptions(agentOf(doc)!, doc)).toMatchObject({ tokenEnv: "PLYWOOD_AGENT_TOKEN" });
+    const plain = parseConfig("agent:\n  comment: true\n  max_runs: 5\n").doc;
+    expect(chantAgentOptions(agentOf(plain)!, plain)).not.toHaveProperty("tokenEnv");
+  });
+
+  it("names a variable, never the token", () => {
+    const problems = checkConfig(parseConfig("agent:\n  comment: true\n  max_runs: 5\n  token_env: ghp_abc-123\n")).filter((p) => p.severity === "error");
+    expect(problems.map((p) => p.key)).toContain("agent.token_env");
   });
 });

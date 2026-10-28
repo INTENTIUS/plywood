@@ -1,7 +1,7 @@
 ---
 title: 'The control repo'
 description: 'One home for the approvers and pins of many repositories.'
-needs: [plywood#18, chant#4541, chant#4550]
+needs: [plywood#18, chant#4541, chant#4550, chant#4617]
 draft: true
 ---
 
@@ -15,4 +15,4 @@ The control repo keeps one entry per repository, and one for the defaults, as re
 
 `plywood control reconcile --apply` then opens a pull request on each repository whose `plywood.yml` differs from its entry. Nothing writes a repository's default branch.
 
-Once a repository updates on merge, `plywood control dispatch` tells the control repo so. The control repo then runs the repositories that depend on it. `plywood control init` writes the control repo's workflow for that.
+Once a repository's update on merge has run its last wave, the waves workflow `plywood ci` writes tells the control repo how it ended: `applied`, `partial`, `unchanged`, `waiting` or `failed`. The control repo records each one and runs the repositories that depend on it when a stack applied. `plywood control init` writes the control repo's workflow for that. `plywood control dispatch` sends the same from a job of your own.

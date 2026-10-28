@@ -25,6 +25,11 @@
  *       in a repository: tell plywood.yml's control repo that this commit
  *       applied (dispatchControl), for a job of the repository's own
  *
+ * With a chant that has chant#4617, `plywood ci` puts plywood.yml's
+ * `control` into the waves spec ({@link wavesControl}), and chant's op-wave
+ * generator adds the job that tells the control repo how the waves ended,
+ * so the repository needs no dispatch job of its own.
+ *
  * An entry's settings are plywood.yml keys, only those in CONTROLLED_KEYS:
  * the gate, the approvers (approval, approval_rules) and the pins (pulumi,
  * plunge, image). Entries are records on the control repo's ledger; nothing
@@ -124,6 +129,42 @@ export interface ChantControl {
     options: { mode: "dry-run" | "apply"; project?: string; words?: unknown; generate: (dir: string, target: ReconcileTarget) => Promise<FileChange[]>; env?: Record<string, string | undefined> },
   ): Promise<Outcome[]>;
   describeReconcile(outcomes: readonly Outcome[], mode: "dry-run" | "apply"): string;
+  /** Present when the op-waves spec takes `control` and its dispatch carries the outcome (chant#4617). */
+  recordControlAppliedFromEnv?: (...args: unknown[]) => unknown;
+  CONTROL_APPLIED_FLOOR?: string;
+}
+
+/**
+ * Whether the installed chant's op waves take `control` (chant#4617). It
+ * landed with the control repo's apply records on `ci-control`, so
+ * `recordControlAppliedFromEnv` there is the check, and plywood needs no
+ * import of chant's op-waves module.
+ */
+export function hasWavesControl(chant: ChantControl): boolean {
+  return typeof chant.recordControlAppliedFromEnv === "function";
+}
+
+/** The `ControlSettingsInput` keys an op waves spec's `control` carries, with `member`. */
+const WAVES_CONTROL_KEYS = ["repo", "op", "forge", "member", "tokenSecret", "readTokenSecret", "ref", "apiBase"] as const;
+
+/**
+ * plywood.yml's `control` as the waves spec's `control` (chant#4617): its
+ * settings with `member` resolved, since a spec has no repository name to
+ * default it to. `none` when plywood.yml has no control key, `missing` when
+ * the installed chant's op waves take no `control`.
+ */
+export async function wavesControl(cwd: string): Promise<{ control: Record<string, unknown>; repo: string } | { none: true } | { missing: string } | { error: string }> {
+  const file = findConfig(cwd);
+  if (!file || controlOf(loadConfig(file).doc) === undefined) return { none: true };
+  const chant = await chantControl();
+  if (!chant) return { missing: CONTROL_NEEDS_CHANT };
+  if (!hasWavesControl(chant)) return { missing: "the waves workflow tells the control repo with a chant that has chant#4617" };
+  const target = await controlTarget(chant, cwd);
+  if ("error" in target) return target;
+  const settings: Record<string, unknown> = { ...(controlOf(loadConfig(file).doc) as unknown as Record<string, unknown>), member: target.member };
+  const control: Record<string, unknown> = {};
+  for (const key of WAVES_CONTROL_KEYS) if (settings[key] !== undefined) control[key] = settings[key];
+  return { control, repo: target.repo };
 }
 
 /** chant#4568's presence check: these three present means the rest is too. */

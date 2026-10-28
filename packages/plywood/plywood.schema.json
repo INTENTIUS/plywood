@@ -710,6 +710,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "The most agent runs per day."
+        },
+        "token_env": {
+          "type": "string",
+          "description": "The secret (GitHub, Forgejo) or protected variable (GitLab) holding the token the push job pushes the agent's branch with. Default: the job token on GitHub and Forgejo, CHANT_FORGE_TOKEN on GitLab. A GitHub push with the job token starts no workflow, so the agent's commit gets no preview."
         }
       }
     },

@@ -1,0 +1,27 @@
+---
+// plywood's pixel-art saw (public/brand/plywood-saw.svg, 28x17, wood handle and
+// steel blade), used as a small mark beside a role link or the agent prompt's
+// label. Board.astro stays the logo. The image is referenced by URL, not
+// imported, and scaled nearest-neighbour. `size` is the rendered width in px;
+// the height keeps the art's 28:17 ratio. Decorative by default (alt=""),
+// since the text beside it carries the meaning.
+interface Props {
+	size?: number;
+	alt?: string;
+	class?: string;
+}
+const { size = 16, alt = '', class: className } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const src = `${base}/brand/plywood-saw.svg`;
+const height = Math.round((size * 17) / 28);
+---
+<img class:list={['pw-saw', className]} src={src} width={size} height={height} alt={alt} decoding="async" />
+
+<style>
+	.pw-saw {
+		display: inline-block;
+		max-width: none;
+		vertical-align: middle;
+		image-rendering: pixelated;
+	}
+</style>

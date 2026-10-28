@@ -6,6 +6,7 @@
 // on the server, so the card reads the same without script. A production build
 // shows only rooms whose page it publishes, and no picker when it has none.
 import Board from './Board.astro';
+import Saw from './Saw.astro';
 import { BACKENDS, ROLES, SHAPES, room } from '../data/rooms';
 import { href, live } from '../lib/links';
 
@@ -49,7 +50,7 @@ const show = tiles.length > 0 && shapeTiles.length > 0;
 		{roles.length > 0 && (
 			<nav class="roles" aria-label="By role">
 				<span>Or start from your role</span>
-				{roles.map((r) => <a class="role" href={href(roomHref(r.room))}><Board size={16} />{r.label}</a>)}
+				{roles.map((r) => <a class="role" href={href(roomHref(r.room))}><Saw size={16} />{r.label}</a>)}
 			</nav>
 		)}
 		<script type="application/json" data-picker-data set:html={JSON.stringify(data).replace(/</g, '\\u003c')} />

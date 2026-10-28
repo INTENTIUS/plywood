@@ -64,7 +64,7 @@ export function helpText(): string {
     "  up --pr <n> [--base <rev>]                          update an open pull request (apply.when: pull-request)",
     "",
     "Approvals:",
-    "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request) or wave-<k>",
+    "  approve <gate> --plan <digest> [--pr <n>] [--yes]   approve up (a pull request), review (its review stack) or wave-<k>",
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
     "Config:",

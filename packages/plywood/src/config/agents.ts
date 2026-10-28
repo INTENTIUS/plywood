@@ -20,9 +20,9 @@
  *                          drifted stack (respond.drift: pull-request)
  *   agent.command, agent.key_env, agent.timeout   as for review
  *   agent.max_runs         the most agent runs per day, the spend limit
- *     -> pipeline.agent. chant has no job yet that runs an agent and opens a
- *        pull request, so these keys check clean and generate nothing; a
- *        warning says so.
+ *     -> pipeline.agent, and chant's agent job (chant#4616, src/agent-jobs.ts):
+ *        `plywood ci` writes the comment agent's jobs and puts the drift
+ *        agent on each scheduled drift Op, on a chant that has the job
  */
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 
@@ -130,10 +130,8 @@ export const agents: ConfigGroup = {
         out.push(...onlyKeys(a, AGENT_KEYS, "agent"), ...modelKeys(a, "agent"));
         for (const k of ["comment", "drift"] as const) if (a[k] !== undefined && typeof a[k] !== "boolean") out.push(error(`agent.${k}`, "is true or false"));
         if (a.max_runs !== undefined && (typeof a.max_runs !== "number" || !Number.isInteger(a.max_runs) || a.max_runs < 1)) out.push(error("agent.max_runs", "is a whole number of runs per day, 1 or more"));
-        if (a.comment === true || a.drift === true) {
-          out.push(warning("agent", "is accepted, and no job answers it yet: chant has no agent job that runs a model and opens a pull request"));
-          if (a.max_runs === undefined) out.push(warning("agent.max_runs", "is not set, so nothing limits how often an agent runs"));
-        }
+        if ((a.comment === true || a.drift === true) && a.max_runs === undefined) out.push(warning("agent.max_runs", "is not set, so nothing limits how often an agent runs"));
+        if (a.drift === true && !(isObject(doc.respond) && doc.respond.drift === "pull-request")) out.push(warning("agent.drift", "is true and respond.drift is not pull-request, so no drift run starts the agent"));
       }
     }
     const respond = isObject(doc.respond) ? doc.respond.drift : undefined;

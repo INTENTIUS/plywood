@@ -37,6 +37,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
 import { driftOpFields, hasChantAgent } from "./agent-jobs";
+import type { JobSettings } from "./config/jobs";
+import { chantNotifyOf, type ChantNotifyConfig } from "./config/observe";
+import { chantDriftNotify, notifiesDrift, sendDriftNotice, type DriftNotice } from "./drift-notify";
+import { environmentFor, jobVariables, secretReference } from "./jobs";
 import type { ChantProduct, ForgeKind } from "./chant-product";
 import { driftResponseOf, driftSettingsOf, driftStacksOf, DRIFT_RESPONSES, type DriftResponse } from "./config/drift";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -218,6 +222,9 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
       );
     }
 
+    // plywood#30: one signed drift event per run through chant's notify, unless the finding is the last run's.
+    const notice = await driftNotice(chant, doc, results, envFlag.value, io);
+
     const drifted = results.filter((r) => r.drifted > 0).map((r) => r.stack);
     let upCode: number | undefined;
     if (respond === "up" && drifted.length) {
@@ -234,8 +241,9 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     const failed = results.some((r) => !r.ok) || upkeepFailed;
     const code = failed ? table.failed : upCode !== undefined && upCode !== table.done ? upCode : drifted.length ? table.drift : table.done;
     if (json) {
-      io.out(JSON.stringify({ command: "drift", ok: code === table.done, exitCode: code, respond, stacks: results }));
+      io.out(JSON.stringify({ command: "drift", ok: code === table.done, exitCode: code, respond, stacks: results, ...(notice ? { notify: notice } : {}) }));
     } else {
+      if (notice) io.err(`${PRODUCT} drift: ${notice.sent ? `sent the drift event, fingerprint ${notice.fingerprint}` : notice.reason}`);
       for (const r of results) {
         if (!r.ok) io.out(`${r.stack}: the drift read failed: ${r.error}`);
         else if (r.drifted === 0) io.out(`${r.stack}: matches its state${r.issue && r.issue.action === "closed" ? `; closed issue #${r.issue.number}` : ""}`);
@@ -247,6 +255,29 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     }
     return code;
   });
+}
+
+/** The run's drift event (src/drift-notify.ts): sent through chant's notify with plywood's words, or why not. */
+async function driftNotice(chant: ChantProduct, doc: RawConfig, results: StackDrift[], environment: string | undefined, io: StageIo): Promise<DriftNotice | undefined> {
+  const notify = chantNotifyOf(doc);
+  const loaded = notifiesDrift(notify) ? await chantDriftNotify() : undefined;
+  return sendDriftNotice({
+    notify,
+    results,
+    stackFingerprint: driftFingerprint,
+    chant: loaded ? { ...loaded, words: chant.assertProductWords(PRODUCT_WORDS) } : undefined,
+    env: io.env,
+    ...(environment ? { environment } : {}),
+    log: io.err,
+    ...(notifyFetch ? { fetch: notifyFetch } : {}),
+  });
+}
+
+let notifyFetch: unknown;
+
+/** Tests send the drift event to a loopback webhook through this fetch; `reset` goes back to the global one. */
+export function setDriftNotifyFetchForTests(fetch: unknown): void {
+  notifyFetch = fetch === "reset" ? undefined : fetch;
 }
 
 /** One stack's read: chant's `workspace drift`, written to a file plywood reads back. */
@@ -306,13 +337,39 @@ export function driftOpSpec(doc: RawConfig, forge: ForgeKind, stacks: readonly s
   const pipeline = toChantSettings({ doc }).pipeline;
   const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
   return {
-    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond) })),
+    ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))) })),
     options: {
       runCommand: [...BIN.split(/\s+/), "drift", "--op", "{name}", "--forge", forge],
       beforeScript: [SNAPSHOTS_FETCH, ...(engine.beforeScript ?? [])],
       ...(engine.image ? { image: engine.image } : {}),
     },
   };
+}
+
+/** plywood.yml's env, pass and environments on one stack's drift Op (plywood#29): its variables and forge environment. */
+export function driftJobFields(forge: ForgeKind, jobs: JobSettings | undefined, stack: string): Record<string, unknown> {
+  if (!jobs) return {};
+  const variables = jobVariables(forge, jobs);
+  const environment = forge === "forgejo" ? undefined : environmentFor(stack, jobs);
+  return { ...(Object.keys(variables).length ? { variables } : {}), ...(environment ? { environment: { ...environment } } : {}) };
+}
+
+/**
+ * The variables the drift job reads its notify webhooks and keys from
+ * (plywood#30), each mapped from the forge secret of the same name, as the
+ * waves workflow maps them. GitLab jobs have every CI/CD variable already.
+ * None unless plywood.yml's notify takes the drift event.
+ */
+export function driftNotifyVariables(forge: ForgeKind, notify: ChantNotifyConfig | undefined): Record<string, string> {
+  if (!notifiesDrift(notify) || forge === "gitlab") return {};
+  const names = [notify!.webhook, notify!.key, notify!.slack, notify!.teams].filter((n): n is string => typeof n === "string");
+  return Object.fromEntries(names.map((n) => [n, secretReference(forge, n)]));
+}
+
+/** `fields` with `notify` added to its variables; a variable plywood.yml's env or pass already sets stays. */
+function withNotifyVariables(fields: Record<string, unknown>, notify: Record<string, string>): Record<string, unknown> {
+  if (Object.keys(notify).length === 0) return fields;
+  return { ...fields, variables: { ...notify, ...((fields.variables as Record<string, string> | undefined) ?? {}) } };
 }
 
 /** Where chant's Op generator writes for each forge (chant run-generate.ts `DEFAULT_OP_PIPELINE_DIRS`). */

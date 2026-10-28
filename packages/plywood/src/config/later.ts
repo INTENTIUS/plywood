@@ -7,12 +7,7 @@
  */
 import type { ConfigGroup } from "./types";
 
-export const LATER_KEYS: Readonly<Record<string, string>> = {
-  env: "plywood#5",
-  pass: "plywood#5",
-  parallelism: "plywood#5",
-  environments: "plywood#5",
-};
+export const LATER_KEYS: Readonly<Record<string, string>> = {};
 
 export const later: ConfigGroup = {
   name: "later",

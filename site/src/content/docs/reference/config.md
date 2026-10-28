@@ -34,6 +34,7 @@ drift: { schedule: "0 6 * * *" }
 | `policy.namespace` | every package (conftest), `main` (opa) | the Rego package to read |
 | `policy.command` | the engine's own | the argv to run in place of the engine's; `{policy}` is the rules' directory at base, `{input}` the change set |
 | `policy.source` | none | a shared rule set from another repository: `repo`, `ref` and `path` (default `policy`); `packs` are then paths inside it |
+| `policy.providers` | none | the provider packages a stack may use; `plywood init` writes them as `deny_provider_package` in `policy.rego` and as the CrossGuard pack `policy/plywood-providers` |
 | `policy.packs` | none | CrossGuard packs the preview and the update run with `--policy-pack`; mandatory violations deny, advisory ones are note lines |
 | `identity.preview`, `identity.up` | the job's own credentials | each job's identity per cloud: `aws` a role ARN, `gcp` a service account, `azure` a client id, `pulumi` a Pulumi Cloud token (`team:<name>`, `user:<login>`, `organization` or `organization:admin`) |
 | `identity.stacks` | none | stack glob to its own `preview` and `up` identities; the first glob that matches wins |
@@ -68,6 +69,10 @@ drift: { schedule: "0 6 * * *" }
 | `pulumi`, `plunge` | the image's release | the engine release the jobs run: one for every stack, or a map of stack glob to release |
 | `image` | plywood's image for each stack's engine | an image pinned by digest, or a mapping with `name` and the `plugins` it carries |
 | `runners` | chant's default runner | a label, a list of labels or a GitHub runner group; or `default`, `preview`, `up` and `drift` each mapped to one |
+| `env` | none | variable to value, set in the preview, up and drift jobs; values are written into the workflow, so a secret goes under `pass` |
+| `pass` | none | secrets the jobs read as variables, by name: a list of secret names, or a mapping of variable to secret; the workflow names the secret and never holds its value |
+| `parallelism` | a preview runs a wave's stacks at once, an update one at a time | the most stacks a preview or an update runs at once in a wave |
+| `environments` | none | stack glob to the forge deployment environment its up jobs run in, a name or a mapping with `name` and `url`; the first glob that matches wins, a wave whose stacks are in different environments runs one job per environment, and `plywood forge check` checks each up job against it (GitHub and GitLab) |
 | `control` | off | the control repo this repository tells after each update on merge: a project key or URL, or a mapping with `repo`, `op` (default `pulumi-up`), `member`, `forge`, `token_secret`, `read_token_secret`, `ref` and `api_base` |
 
 plywood turns each key into chant's workspace settings, so `plywood.yml` holds no chant key. A `ci` key there is refused with the name of the plywood key that sets it.

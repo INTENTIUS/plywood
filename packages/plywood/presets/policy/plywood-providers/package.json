@@ -1,0 +1,10 @@
+{
+  "name": "plywood-providers",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "@pulumi/policy": "^1.13.0",
+    "@pulumi/pulumi": "^3.0.0"
+  }
+}

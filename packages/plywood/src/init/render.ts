@@ -139,6 +139,8 @@ export interface WavesSpecInput {
   branch: string;
   runner?: ChantRunnerSpec;
   quorum?: unknown[];
+  /** chant's `NotifyConfig` (plywood.yml `notify`): who hears when a wave waits or fails. */
+  notify?: Record<string, unknown>;
 }
 
 /**
@@ -157,6 +159,7 @@ export function wavesSpec(input: WavesSpecInput): Record<string, unknown> {
     ...(input.runner !== undefined ? { runner: input.runner } : {}),
     step: { kind: "pulumi-up" },
     ...(input.quorum && input.quorum.length > 0 ? { approvals: { quorum: input.quorum } } : {}),
+    ...(input.notify ? { notify: input.notify } : {}),
     waves: waves.map((w) => {
       const gate = w.stacks.map((s) => s.gate ?? input.gate).reduce((a, b) => (STRICTNESS[b] > STRICTNESS[a] ? b : a));
       return { name: w.name, gate, runs: w.stacks.map((s) => ({ target: s.key, input: stepInput(s) })) };

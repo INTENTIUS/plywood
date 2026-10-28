@@ -7,7 +7,7 @@
  *
  *   ci       chant's workspace `ci` block, under chant's own key names
  *            (`ci.workflow`, `ci.locks`, `ci.lockGrain`, `ci.prEnvironment`,
- *            `ci.policy`, `ci.identity`, `ci.branches`, `ci.labels`).
+ *            `ci.policy`, `ci.identity`, `ci.reportUrl`, `ci.branches`, `ci.labels`).
  *   members  one entry per stack, as a Pulumi member: its directory, and the
  *            engine and backend chant's pulumi lexicon takes as the member's
  *            config (chant#4559, the first rule `pulumiMemberEngine` asks);
@@ -25,6 +25,7 @@
  */
 import { GROUPS, type PlywoodConfig } from "./config/index";
 import type { ChantIdentitySettings } from "./config/identity";
+import type { ChantNotifyConfig } from "./config/observe";
 import type { ChantPolicySettings, PolicyPack } from "./config/policy";
 
 /** chant's `ci.workflow` values plywood sets (chant `CiWorkflow`). */
@@ -54,6 +55,8 @@ export interface ChantCiSettings {
   policy?: ChantPolicySettings;
   /** chant's plan and apply identities per cloud, Pulumi Cloud's included (chant#4296, #4549). */
   identity?: ChantIdentitySettings;
+  /** Where chant keeps each run's HTML report (chant#4554). */
+  reportUrl?: string;
   branches?: Record<string, string[]>;
   labels?: Record<string, string[]>;
 }
@@ -102,6 +105,8 @@ export interface ChantPipelineSettings {
   runner?: ChantRunner;
   /** CrossGuard packs every stack's pulumi-up step runs, relative to the repository root (chant#4541). */
   policyPacks?: PolicyPack[];
+  /** The waves spec's notify (chant `NotifyConfig`): the variables holding each webhook. */
+  notify?: ChantNotifyConfig;
 }
 
 export interface ChantSettings {

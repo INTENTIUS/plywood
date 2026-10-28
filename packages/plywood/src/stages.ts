@@ -39,8 +39,8 @@ export interface StageIo {
   env: NodeJS.ProcessEnv;
 }
 
-/** chant's verbs the generated jobs run through plywood's bin. `ci` is chant's only with a subcommand. */
-export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock"] as const;
+/** chant's verbs the generated jobs run through plywood's bin, and `query` and `ledger` for reading the ledger (plywood#20). `ci` is chant's only with a subcommand. */
+export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock", "query", "ledger"] as const;
 
 /** Flags whose next argument is a value, for splitting a command line. */
 const VALUED = new Set(["--base", "--pr", "--forge", "--env", "--output", "-o", "--stack", "--file", "--head", "--gate", "--branch", "--report-url"]);

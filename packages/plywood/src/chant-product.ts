@@ -43,6 +43,8 @@ export interface ProductPipelineJobs {
   preview?: { jobName: string; noteJobName: string; comment: string };
   /** The stale marking's job (chant#4628), with `staleNotes`. */
   stale?: { command: string; env: Record<string, string> };
+  /** The action job (chant#4654), with `actionJob`: the comment and the dispatch inputs it answers, and `plywood action --from-event`. */
+  action?: { jobName: string; comment: string; inputs: { member: string; action: string }; command: string };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */
@@ -73,7 +75,12 @@ export interface ProductPipelineOptions {
   decide?: { backend: string; model: string };
   /** Merge the pull request once its update before merge applied (chant#4636); a chant before it ignores the option. */
   applyMerge?: { tokenEnv: string; method?: string };
+  /** The job that answers `/plywood action <stack> <name>` and a dispatch with `stack` and `action` inputs (chant#4654); a chant before it ignores the option. */
+  actionJob?: boolean | { inputs?: { member?: string; action?: string } };
 }
+
+/** What an action job was asked for, as chant's `productActionFromEnv` reads it (chant#4654). */
+export type ProductActionRequest = { kind: "action"; member: string; address: string; from: "comment" | "dispatch" } | { kind: "refused"; reason: string };
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
 export interface ChantProduct {
@@ -117,6 +124,15 @@ export interface ChantProduct {
   APPROVAL_STATUS_PULL_REQUEST_FLOOR?: string;
   /** Whether an op waves spec gets the approval status jobs: a `pr-review` or `pull-request` wave (chant#4630). */
   opWavesPostsApprovalStatus?(spec: unknown): boolean;
+  /** Present when the product pipeline has the action job and the `action` command (chant#4654). */
+  PRODUCT_ACTIONS_FLOOR?: string;
+  /** The stack and action an action job was started for, from `CHANT_ACTION_COMMENT`, or `CHANT_ACTION_MEMBER` and `CHANT_ACTION` (chant#4654). */
+  productActionFromEnv?(words: ProductWords, env: Record<string, string | undefined>): ProductActionRequest;
+}
+
+/** Whether the installed chant has chant#4654's action job and reads what it was asked for. */
+export function hasChantActions(chant: ChantProduct): boolean {
+  return typeof chant.PRODUCT_ACTIONS_FLOOR === "string" && typeof chant.productActionFromEnv === "function";
 }
 
 /**

@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { chantProduct, hasChant4607, hasChant4620, hasChantActions, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
 import { chantNext, hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond, type ChantNext } from "./chant-next";
 import { approvalOf } from "./config/approval";
@@ -28,6 +28,7 @@ import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
 import { locksOf } from "./config/locks";
+import { hasActions } from "./config/stacks";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { writeWorkflow } from "./init/workflow";
@@ -286,6 +287,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       comments: jobs.comments,
       ...(jobs.waves ? { waves: { specFile: jobs.waves.specFile, jobs: jobs.waves.jobs.map((j) => j.command.join(" ")) } } : {}),
       ...("control" in control ? { control: control.repo } : {}),
+      ...(jobs.action ? { action: { command: jobs.action.command, comment: jobs.action.comment, inputs: jobs.action.inputs } } : {}),
     };
     if (json && dryRun) io.out(JSON.stringify({ command: "ci", ok: true, exitCode: table.done, dryRun, ...summary }));
     else if (!json) {
@@ -298,6 +300,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       for (const [command, line] of Object.entries(jobs.comments)) io.err(`  comment   ${line} (${command})`);
       for (const job of summary.waves?.jobs ?? []) io.err(`  wave      ${job}`);
       if (jobs.stale) io.err(`  stale     ${jobs.stale.command} (on each push to the target branch)`);
+      if (jobs.action) io.err(`  action    ${jobs.action.command} (${jobs.action.comment} <stack> <name>, or a dispatch with inputs ${jobs.action.inputs.member} and ${jobs.action.inputs.action})`);
     }
     if (!json && "control" in control) io.err(`  control   after the last wave, tells ${control.repo} how the waves ended`);
     else if (!json && "missing" in control) io.err(`  control   the waves workflow sends no dispatch: ${control.missing}; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
@@ -376,7 +379,10 @@ export function workflowPlan(
   // chant#4630: a chant that posts plywood/approval only for pr-review waves gets the note, since plywood's waves approve
   // through the pull request (ruling B). From APPROVAL_STATUS_PULL_REQUEST_FLOOR chant posts it for those waves too.
   if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant) && !hasChantPullRequestApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
-  const words = wordsForJobs(shape.jobs);
+  // plywood#39: with actions declared, chant's action job answers /plywood action and a dispatch with stack and action inputs (chant#4654).
+  const actionJob = actionJobFor(chant, doc, forge, notes);
+  const jobsWanted: ChantCommand[] = actionJob ? [...shape.jobs, "action"] : shape.jobs;
+  const words = wordsForJobs(jobsWanted);
   // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
   const requires = shape.applyBeforeMerge ? requiresArgv(chant, doc) : [];
   // chant#4620: `/plywood preview` previews the pull request again, once the installed chant has the job.
@@ -395,8 +401,9 @@ export function workflowPlan(
     ...(staleNotes ? { staleNotes: true } : {}),
     ...respond.options,
     ...(applyMerge ? { applyMerge } : {}),
+    ...(actionJob ? { actionJob: true } : {}),
   });
-  const prWords = shape.applyBeforeMerge ? words : wordsForJobs(shape.jobs.filter((j) => j !== "apply"));
+  const prWords = shape.applyBeforeMerge ? words : wordsForJobs(jobsWanted.filter((j) => j !== "apply"));
   const argv = [
     "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
     ...(shape.applyBeforeMerge ? ["--apply-before-merge", ...requires] : []),
@@ -404,12 +411,29 @@ export function workflowPlan(
     ...respond.argv,
     ...(previewComment ? ["--preview-comment"] : []),
     ...(staleNotes ? ["--stale-notes"] : []),
+    ...(actionJob ? ["--action-job"] : []),
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
     ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
     ...extra,
   ];
   return { jobs, words, prWords, argv, notes, ...(applyMerge ? { applyMerge } : {}) };
+}
+
+/** What plywood ci says when plywood.yml declares actions and the installed chant has no action job. */
+export const ACTIONS_NEED_CHANT =
+  "plywood.yml declares actions, and the installed chant has no action job (chant#4654), so the workflow answers no /plywood action comment; run 'plywood action <stack> <name>' by hand";
+
+/** What plywood ci says when plywood.yml declares actions on GitLab. */
+export const ACTIONS_NOT_ON_GITLAB =
+  "plywood.yml declares actions, and a GitLab pipeline starts on no comment or dispatch with inputs, so it has no action job; run 'plywood action <stack> <name>' from a pipeline of your own";
+
+/** Whether the workflow gets chant's action job: actions declared, GitHub or Forgejo, and a chant with chant#4654. `notes` says why not. */
+export function actionJobFor(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, notes: string[]): boolean {
+  if (!hasActions(doc)) return false;
+  if (forge === "gitlab") return (notes.push(ACTIONS_NOT_ON_GITLAB), false);
+  if (!hasChantActions(chant)) return (notes.push(ACTIONS_NEED_CHANT), false);
+  return true;
 }
 
 /** What plywood ci says under apply.merge: auto on a chant without chant#4636. */

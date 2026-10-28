@@ -10,7 +10,7 @@ import { BASE_OVERLAYS_DIR, SCENARIOS_DIR, SCENARIO_CLAIMS, lintPlywoodScenario,
 const ROOT = join(import.meta.dirname, "..", "..");
 
 describe("plywood's scenarios", () => {
-  it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside", () => {
+  it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside, and plywood#39's, whose scenario waits on the bench's command resource", () => {
     expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-adopt", "pw-canary", "pw-disjoint", "pw-drift", "pw-moved-plan", "pw-moved-preview", "pw-one-note"]);
     expect(SCENARIO_CLAIMS).toEqual({
       "pw-disjoint": "plunge/disjoint-updates",
@@ -20,6 +20,7 @@ describe("plywood's scenarios", () => {
       "pw-moved-preview": "gate/moved-preview",
       "pw-canary": "wave/canary",
       "pw-drift": "drift/issue",
+      "pw-action": "action/gated-replace",
     });
   });
 

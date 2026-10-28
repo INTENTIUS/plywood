@@ -66,7 +66,7 @@ export function plywoodMcpTools(ctx: { cwd: string }): PlywoodMcpTool[] {
   return [
     {
       name: "stacks",
-      description: "The stacks plywood.yml lists, each with its directory, gate and backend, and the waves they update in.",
+      description: "The stacks plywood.yml lists, each with its directory, gate, backend and actions, and the waves they update in.",
       inputSchema: none,
       readOnly: true,
       handler: async () => {

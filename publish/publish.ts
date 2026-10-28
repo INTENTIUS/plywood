@@ -88,8 +88,9 @@ export const images = new Job({
     checkout(),
     new Step({ name: "Setup Node.js", uses: SETUP_NODE, with: { "node-version": NODE_VERSION, cache: "npm" } }),
     new Step({ name: "Install", run: "npm ci" }),
-    // The images copy the bundle (.dockerignore keeps the context to it).
+    // The images install the packed package with its runtime dependencies (.dockerignore keeps the context to the tarball).
     new Step({ name: "Build the bundle", run: "npm run build" }),
+    new Step({ name: "Pack the package for the images", run: "npm pack -w @intentius/plywood --pack-destination images/pack" }),
     new Step({
       name: "Log in to GHCR",
       env: { GH_TOKEN: "${{ github.token }}" },
@@ -100,7 +101,7 @@ export const images = new Job({
       run: [
         "set -eu",
         // arm64 builds under emulation on the amd64 runner.
-        "docker run --privileged --rm tonistiigi/binfmt --install arm64",
+        "docker run --privileged --rm tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 --install arm64",
         "docker buildx create --use --name plywood",
         "node packages/plywood/scripts/build-images.mjs --tags | while read -r engine ref; do",
         '  if docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then',

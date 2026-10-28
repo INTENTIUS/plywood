@@ -1,6 +1,6 @@
 # Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.
 # Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root
-# after npm run build (just images); nothing pushes it.
+# after npm pack -w @intentius/plywood --pack-destination images/pack (just images); nothing pushes it.
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS fetch
 ARG TARGETARCH
 ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.1.0/plunge-v0.1.0-checksums.txt
@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 RUN git config --system --add safe.directory '*' && mkdir -p /opt/plywood/pulumi-home && chmod 1777 /opt/plywood/pulumi-home
 COPY --from=fetch /out/opt/plywood/ /opt/plywood/
 RUN ln -s /opt/plywood/plunge-0.1.0/plunge /usr/local/bin/plunge && plunge version
-COPY --chmod=0755 packages/plywood/dist/plywood.mjs /usr/local/bin/plywood
+COPY images/pack/intentius-plywood-0.0.0.tgz /tmp/intentius-plywood-0.0.0.tgz
+RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-0.0.0.tgz && rm -f /tmp/intentius-plywood-0.0.0.tgz && npm cache clean --force && plywood --version
 LABEL org.opencontainers.image.title="plywood-plunge"
 LABEL org.opencontainers.image.description="plunge 0.1.0 and the plywood CLI"
 LABEL org.opencontainers.image.version="0.0.0"

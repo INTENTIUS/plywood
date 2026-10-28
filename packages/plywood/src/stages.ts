@@ -32,7 +32,7 @@ import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
-import { writeWaveJobs } from "./waves-workflow";
+import { unwrapWavesSpec, wavesEngine, writeWaveJobs } from "./waves-workflow";
 import { writeDriftJobs } from "./drift";
 import { writeReviewJobs } from "./agents";
 import { writeAgentJobs } from "./agent-jobs";
@@ -180,7 +180,7 @@ export const WORKFLOW_FILE: Readonly<Record<ForgeKind, string>> = {
 /** The waves spec the merge applies, `.chant/op-waves/pulumi-up.spec.json`, when the repository has one. */
 export function readWavesSpec(cwd: string): unknown {
   const file = join(cwd, ".chant/op-waves", `${OP_NAME}.spec.json`);
-  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined;
+  return existsSync(file) ? unwrapWavesSpec(JSON.parse(readFileSync(file, "utf8"))) : undefined;
 }
 
 /** What the pipeline has jobs for, from plywood.yml and the forge. */
@@ -311,7 +311,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       if (!json) io.err(`${PRODUCT} ci: chant's generator exited ${written.code} and wrote no ${output}; any file there before is back as it was`);
       return written.code;
     }
-    const wavesCode = waveJobs ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io) : table.done;
+    const wavesCode = waveJobs ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io, wavesEngine(toChantSettings(config).pipeline)) : table.done;
     if (wavesCode !== table.done) return wavesCode;
     // The scheduled drift jobs, when plywood.yml sets drift.schedule (plywood#8).
     const driftCode = await writeDriftJobs(chant, forge, config.doc, plan.words, table, io, env);

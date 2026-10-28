@@ -42,6 +42,7 @@ import { hasChant4607, type ChantProduct, type PendingGateByPlan } from "./chant
 import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
 import { APPLY_MERGE_NEEDS_CHANT, applyMergeArgv, positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
+import { unwrapWavesSpec } from "./waves-workflow";
 
 /** chant's op for policy overrides (`OVERRIDE_GATE_OP`, chant op/gate-name.ts). */
 export const OVERRIDE_OP = "policy-override";
@@ -159,7 +160,7 @@ function wavesSpecAt(cwd: string, file = WAVES_SPEC_FILE): Record<string, unknow
   const path = join(cwd, file);
   if (!existsSync(path)) return undefined;
   try {
-    const spec: unknown = JSON.parse(readFileSync(path, "utf8"));
+    const spec: unknown = unwrapWavesSpec(JSON.parse(readFileSync(path, "utf8")));
     return spec && typeof spec === "object" && !Array.isArray(spec) ? (spec as Record<string, unknown>) : undefined;
   } catch {
     return undefined;
@@ -297,7 +298,7 @@ export function readUpSpec(cwd: string, file = WAVES_SPEC_FILE): UpSpec | { erro
   if (!existsSync(path)) return { error: `no ${file}; '${PRODUCT} init' writes it from plywood.yml's waves` };
   let spec: unknown;
   try {
-    spec = JSON.parse(readFileSync(path, "utf8"));
+    spec = unwrapWavesSpec(JSON.parse(readFileSync(path, "utf8")));
   } catch (e) {
     return { error: `${file}: ${(e as Error).message}` };
   }

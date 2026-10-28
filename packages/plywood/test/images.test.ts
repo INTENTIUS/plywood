@@ -7,6 +7,7 @@ import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { globMatches, pinFor } from "../src/config/images";
 import {
+  AWS_CLI,
   chantPipelineOptions,
   dockerfile,
   dockerfiles,
@@ -139,6 +140,27 @@ describe("Dockerfiles", () => {
     expect(text).toMatch(/^FROM node:22-bookworm-slim@sha256:[0-9a-f]{64}$/m);
     // Each download is checked in the same RUN line, before the node stage copies it.
     for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");
+  });
+
+  it("carry the AWS CLI for s3:// reports, a release that reads AWS_ENDPOINT_URL, checked by plywood's sum (plywood#22)", () => {
+    for (const engine of ["pulumi", "plunge"] as const) {
+      const text = dockerfile(engine);
+      expect(text).toContain(`https://awscli.amazonaws.com/awscli-exe-linux-$a-${AWS_CLI.version}.zip`);
+      expect(text).toContain(AWS_CLI.sha256.aarch64);
+      expect(text).toContain(AWS_CLI.sha256.x86_64);
+      expect(text).toContain("COPY --from=fetch /opt/plywood/aws-cli/ /opt/plywood/aws-cli/");
+      expect(text).toContain("RUN ln -s /opt/plywood/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version");
+    }
+    const [major, minor] = AWS_CLI.version.split(".").map(Number);
+    expect(major === 2 && minor! >= 13).toBe(true);
+  });
+
+  it("fails the AWS CLI fetch on an archive whose sum is not plywood's", () => {
+    const dir = mkdtempSync(join(tmpdir(), "plywood-images-"));
+    writeFileSync(join(dir, "awscli.zip"), "not the archive");
+    const run = dockerfile("plunge").split("\n").find((l) => l.startsWith("RUN set -e;") && l.includes("awscli"))!.slice(4)
+      .replace(/curl -fsSLo "\$t\/awscli.zip" "[^"]+"/, `cp "${dir}/awscli.zip" "$t/awscli.zip"`);
+    expect(() => execFileSync("sh", ["-c", run], { env: { ...process.env, TARGETARCH: "arm64" }, stdio: "pipe" })).toThrow();
   });
 
   it("fails the fetch on a tampered checksums file", () => {

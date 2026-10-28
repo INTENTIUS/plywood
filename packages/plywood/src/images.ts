@@ -321,7 +321,8 @@ export function dockerfile(engine: EngineName): string {
     `ARG TARGETARCH`,
     `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
     `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*`,
-    `RUN set -e; ${fetchScript(engine, version, `/out${dir}`, `"$(case "$TARGETARCH" in arm64) echo arm64 ;; *) echo x64 ;; esac)"`, `"$CHECKSUMS_URL"`)}`,
+    // Each case pattern opens with "(": bash 3.2 (macOS sh) cannot parse a bare "arm64)" inside $(...).
+    `RUN set -e; ${fetchScript(engine, version, `/out${dir}`, `"$(case "$TARGETARCH" in (arm64) echo arm64 ;; (*) echo x64 ;; esac)"`, `"$CHECKSUMS_URL"`)}`,
     `FROM ${BASE_IMAGES.node}`,
     // A forge may run the job as a uid with no passwd entry; Go then reads $USER and $HOME.
     `ENV USER=plywood HOME=/tmp PULUMI_HOME=${IMAGE_PULUMI_HOME} PULUMI_SKIP_UPDATE_CHECK=true`,

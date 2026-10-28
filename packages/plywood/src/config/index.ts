@@ -20,6 +20,7 @@ import { drift } from "./drift";
 import { engine } from "./engine";
 import { identity } from "./identity";
 import { images } from "./images";
+import { jobs } from "./jobs";
 import { later } from "./later";
 import { locks } from "./locks";
 import { observe } from "./observe";
@@ -31,7 +32,7 @@ import { error, isObject, type ConfigGroup, type ConfigProblem, type JsonSchema,
 
 export type { ConfigGroup, ConfigProblem, RawConfig } from "./types";
 
-export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, identity, reviewStacks, observe, drift, agents, routing, images, control, later];
+export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, identity, reviewStacks, observe, drift, agents, routing, images, jobs, control, later];
 
 /** The names chant's pulumi lexicon also looks for (chant#4559, member-engine.ts `PLYWOOD_FILES`). */
 export const CONFIG_NAMES = ["plywood.yml", "plywood.yaml"] as const;

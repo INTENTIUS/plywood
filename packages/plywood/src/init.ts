@@ -60,6 +60,7 @@ import { stacksOf as configuredStacks } from "./config/stacks";
 import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
+import { hasChant4625, prJobsFor, withJobSettings } from "./jobs";
 import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, needsBucketCheckMessage, type BucketReport } from "./init/backend";
 import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
 import { detect, repoName, slug, type Detected } from "./init/detect";
@@ -382,9 +383,18 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     const message = needsChantMessage("Writing the waves spec and the workflow");
     files.push({ file: WAVES_SPEC_FILE, status: "skipped", note: message }, { file: WORKFLOW_FILE[forge.kind], status: "skipped", note: "needs the same chant" });
   } else {
-    const spec = wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves);
-    if (stacks.length > 0) files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
-    files.push(...(await workflowStep(chant, root, doc, settings, forge.kind, opts, stacks.length > 0 ? spec : undefined, table, io)));
+    let spec: Record<string, unknown> | undefined = wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves);
+    // plywood#29: env, pass, parallelism and environments on each wave (src/jobs.ts).
+    if (settings.pipeline.jobs) {
+      try {
+        spec = withJobSettings(spec, settings.pipeline.jobs, forge.kind, { parallelism: await hasChant4625() });
+      } catch (e) {
+        files.push({ file: WAVES_SPEC_FILE, status: "failed", note: (e as Error).message });
+        spec = undefined;
+      }
+    }
+    if (spec && stacks.length > 0) files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
+    if (spec) files.push(...(await workflowStep(chant, root, doc, settings, forge.kind, opts, stacks.length > 0 ? spec : undefined, table, io)));
   }
 
   // The bucket each self-managed stack keeps its state in.
@@ -481,13 +491,14 @@ async function workflowStep(
   io: InitIo,
 ): Promise<InitFile[]> {
   const output = WORKFLOW_FILE[forge];
+  const prJobs = await prJobsFor(settings.pipeline);
   let plan;
   try {
     // The build takes no product engine lines over argv, so they go to --before-script.
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const control = await noteControlTarget(doc, root);
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), ...(control ? { control } : {}) });
+    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, ...(control ? { control } : {}) });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }
@@ -498,6 +509,7 @@ async function workflowStep(
   const notes = [
     ...(written.kept.length ? [`kept your own jobs: ${written.kept.join(", ")}`] : []),
     ...(doc.review_stacks !== undefined && !plan.argv.includes("--pr-env") ? [REVIEW_STACKS_NEED_CHANT] : []),
+    ...prJobs.notes,
   ];
   const out: InitFile[] = [{ file: output, status: written.status, ...(notes.length ? { note: notes.join("; ") } : {}) }];
   if (plan.jobs.waves) {

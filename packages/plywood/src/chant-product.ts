@@ -58,6 +58,11 @@ export interface ProductPipelineOptions {
   control?: { target: unknown };
   /** The `/plywood preview` comment's jobs (chant#4620); a chant before it ignores the option. */
   previewComment?: boolean;
+  /** The pull request jobs' runner by stage, variables, passed secrets and parallelism (chant#4625); src/jobs.ts gives them only to a chant with it. */
+  runners?: unknown;
+  variables?: Record<string, string>;
+  secrets?: Record<string, string>;
+  parallelism?: number;
 }
 
 /** What plywood calls from `@intentius/chant/ci-product`. */

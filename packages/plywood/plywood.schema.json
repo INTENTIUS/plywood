@@ -916,6 +916,76 @@
         }
       ]
     },
+    "env": {
+      "description": "Variables every job runs with: the waves, the drift jobs and the pull request jobs. Values are written into the workflow, so put a secret under pass.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      }
+    },
+    "pass": {
+      "description": "Secrets the jobs read as variables, named and never written: a list of secret names, each passed under its own name, or a map of variable to secret.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "uniqueItems": true
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          }
+        }
+      ]
+    },
+    "parallelism": {
+      "description": "The most stacks a pull request previews at once in a wave, and the most a wave updates at once. Default: every stack of a wave at once in a preview, one at a time in an update.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "environments": {
+      "description": "Stack glob to the forge deployment environment its update jobs run in (GitHub and GitLab): a name, or a map with name and url. The first glob that matches a stack wins; stacks of one wave in different environments run in one job each.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    },
     "control": {
       "description": "The control repo this repository tells after each update on merge: its project key or URL, or a mapping.",
       "oneOf": [
@@ -969,18 +1039,6 @@
           }
         }
       ]
-    },
-    "env": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "pass": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "parallelism": {
-      "description": "Read by a later plywood; accepted as written."
-    },
-    "environments": {
-      "description": "Read by a later plywood; accepted as written."
     }
   }
 }

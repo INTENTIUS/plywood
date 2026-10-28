@@ -50,6 +50,8 @@ images-render:
 images platform="" checksums="": build
     #!/usr/bin/env bash
     set -euo pipefail
+    mkdir -p images/pack
+    npm pack -w @intentius/plywood --pack-destination images/pack >/dev/null
     version="$(node -p 'require("./packages/plywood/package.json").version')"
     for engine in pulumi plunge; do
       tool="$(node -e 'const s=require("fs").readFileSync("packages/plywood/src/images.ts","utf8");const m=new RegExp(process.argv[1]+": \"([^\"]+)\"").exec(s);console.log(m[1])' "$engine")"

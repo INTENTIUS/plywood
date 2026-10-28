@@ -44,6 +44,8 @@ jobs:
         run: npm ci
       - name: Build the bundle
         run: npm run build
+      - name: Pack the package for the images
+        run: npm pack -w @intentius/plywood --pack-destination images/pack
       - name: Log in to GHCR
         env:
           GH_TOKEN: '${{ github.token }}'
@@ -51,7 +53,7 @@ jobs:
       - name: Push both platforms, with provenance and an SBOM
         run: |
           set -eu
-          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          docker run --privileged --rm tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 --install arm64
           docker buildx create --use --name plywood
           node packages/plywood/scripts/build-images.mjs --tags | while read -r engine ref; do
             if docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then

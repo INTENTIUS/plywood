@@ -293,6 +293,14 @@ export const BASE_IMAGES = {
 /** Where the images keep Pulumi's home, so plugins a derived image installs serve every uid. */
 export const IMAGE_PULUMI_HOME = "/opt/plywood/pulumi-home";
 
+/** Where npm pack leaves the package tarball the images install, from the repository root. */
+export const PACK_DIR = "images/pack";
+
+/** The tarball name npm pack gives the package at this version. */
+export function packName(version = PLYWOOD_VERSION): string {
+  return `intentius-plywood-${version}.tgz`;
+}
+
 /**
  * One image's Dockerfile. The fetch stage downloads the engine and checks
  * it; the build argument `CHECKSUMS_URL` names another checksums file, which
@@ -308,7 +316,7 @@ export function dockerfile(engine: EngineName): string {
   return [
     `# Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.`,
     `# Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root`,
-    `# after npm run build (just images); nothing pushes it.`,
+    `# after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR} (just images); nothing pushes it.`,
     `FROM ${BASE_IMAGES.debian} AS fetch`,
     `ARG TARGETARCH`,
     `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
@@ -322,7 +330,10 @@ export function dockerfile(engine: EngineName): string {
     `RUN git config --system --add safe.directory '*' && mkdir -p ${IMAGE_PULUMI_HOME} && chmod 1777 ${IMAGE_PULUMI_HOME}`,
     `COPY --from=fetch /out/opt/plywood/ /opt/plywood/`,
     `RUN ln -s ${dir}/${engine} /usr/local/bin/${engine} && ${engine} version`,
-    `COPY --chmod=0755 packages/plywood/dist/plywood.mjs /usr/local/bin/plywood`,
+    // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm
+    // fetches its exact-pinned runtime dependencies. The tarball is made by npm pack (just images).
+    `COPY ${PACK_DIR}/${packName()} /tmp/${packName()}`,
+    `RUN npm install -g --omit=dev --no-audit --no-fund /tmp/${packName()} && rm -f /tmp/${packName()} && npm cache clean --force && plywood --version`,
     `LABEL org.opencontainers.image.title="${name}"`,
     `LABEL org.opencontainers.image.description="${engineTitle} and the plywood CLI"`,
     `LABEL org.opencontainers.image.version="${PLYWOOD_VERSION}"`,

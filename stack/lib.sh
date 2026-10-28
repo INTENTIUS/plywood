@@ -57,8 +57,20 @@ CORPUS_PATH="tests/plunge-corpus/aws-ts"
 # version is the one the corpus program pins (@pulumi/pulumi 3.272.0).
 PULUMI_IMAGE="${PLYWOOD_TUTORIAL_PULUMI_IMAGE:-pulumi/pulumi-nodejs:3.272.0}"
 # The image the runner starts jobs in, under both labels a workflow may ask
-# for. plywood#12's CI images replace it once they exist.
-JOB_IMAGE="${PLYWOOD_TUTORIAL_JOB_IMAGE:-public.ecr.aws/docker/library/node:22-bookworm}"
+# for: plywood's pulumi image as `just images` tags it in the local Docker
+# daemon (plywood#28), ghcr.io/intentius/plywood-pulumi:<plywood>-pulumi<pulumi>,
+# with the plywood CLI and the pinned Pulumi in it. The tag is read from
+# packages/plywood/package.json and the Pulumi pin in packages/plywood/src/images.ts,
+# the two `just images` reads. The runner never pulls it (force_pull: false),
+# so build it before `just tutorial-up`; PLYWOOD_TUTORIAL_JOB_IMAGE names another.
+plywood_image_tag() { # engine (pulumi|plunge)
+  local version tool
+  version="$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' "$REPO_ROOT/packages/plywood/package.json" | head -n 1)"
+  tool="$(sed -n "s/^  $1: \"\([^\"]*\)\".*/\1/p" "$REPO_ROOT/packages/plywood/src/images.ts" | head -n 1)"
+  [ -n "$version" ] && [ -n "$tool" ] || return 1
+  echo "ghcr.io/intentius/plywood-$1:$version-$1$tool"
+}
+JOB_IMAGE="${PLYWOOD_TUTORIAL_JOB_IMAGE:-$(plywood_image_tag pulumi || echo ghcr.io/intentius/plywood-pulumi)}"
 
 # The self-managed backend: an S3 bucket on floci, path-style.
 BUCKET="plywood-tutorial-state"
@@ -83,6 +95,16 @@ die() { log "FAIL: $*"; exit 1; }
 need_docker() {
   command -v docker >/dev/null 2>&1 || die "docker is not installed"
   docker info >/dev/null 2>&1 || die "the docker daemon is not reachable"
+}
+
+# The job image must be in the local daemon, since the runner does not pull
+# it: plywood's own image comes from `just images`, and nothing pushes it.
+need_job_image() {
+  docker image inspect "$JOB_IMAGE" >/dev/null 2>&1 && return 0
+  case "$JOB_IMAGE" in
+    ghcr.io/intentius/plywood-*) die "the job image $JOB_IMAGE is not in the local Docker daemon; run 'just images' first, or set PLYWOOD_TUTORIAL_JOB_IMAGE" ;;
+    *) die "the job image $JOB_IMAGE is not in the local Docker daemon; docker pull it, or set PLYWOOD_TUTORIAL_JOB_IMAGE" ;;
+  esac
 }
 
 wait_http() { # url, label, tries (2s apart)

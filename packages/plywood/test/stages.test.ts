@@ -122,6 +122,23 @@ describe("plywood preview", () => {
     const o = io(repo());
     expect(await preview(["--base", "a", "--pr", "1", "--target", "urn:x"], false, FALLBACK_EXIT, o)).toBe(1);
     expect(chant.calls).toEqual([]);
+    expect(o.stderr.join("\n")).toContain("chant#4620");
+  });
+
+  it("passes each --target to pr-plan on a chant with chant#4620, beside a named stack (plywood#28)", async () => {
+    const chant = fakeChant();
+    setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    const urn = "urn:pulumi:prod::shop::aws:sqs/queue:Queue::events";
+    expect(await preview(["shop/prod", "--base", "a", "--pr", "1", "--target", urn, "--target", "urn:y"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    const argv = chant.calls[0]!.argv;
+    expect(argv).toEqual(expect.arrayContaining(["--member", "shop/prod", "--target", urn, "--target", "urn:y"]));
+    expect(argv.filter((a) => a === "shop/prod")).toHaveLength(1);
+  });
+
+  it("still refuses --refresh, and a --target with no value", async () => {
+    setChantProductForTests({ ...fakeChant().api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    expect(await preview(["--base", "a", "--pr", "1", "--refresh"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await preview(["--base", "a", "--pr", "1", "--target"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
   });
 
   it("needs a base and a pull request", async () => {
@@ -171,6 +188,20 @@ describe("plywood ci", () => {
       "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up",
       "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
+  });
+
+  it("asks for the /plywood preview comment's jobs on a chant with chant#4620 (plywood#28), and not before", async () => {
+    const chant = fakeChant();
+    setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    const dir = repo();
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(chant.pipelines[0]!.options.previewComment).toBe(true);
+    expect(chant.calls[0]!.argv).toContain("--preview-comment");
+    const old = fakeChant();
+    setChantProductForTests(old.api);
+    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(old.pipelines[0]!.options.previewComment).toBeUndefined();
+    expect(old.calls[0]!.argv).not.toContain("--preview-comment");
   });
 
   it("writes nothing with --dry-run", async () => {

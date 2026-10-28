@@ -2,7 +2,7 @@
 title: 'Boot the example'
 description: 'One command starts a local forge and an AWS emulator with an example repository. Nothing reaches a real cloud account.'
 prompt: |
-  Follow https://intentius.io/plywood/tutorial/ on this machine: start the bench with `just tutorial-up` and report the three addresses it prints.
+  Follow https://intentius.io/plywood/tutorial/ on this machine: build the images with `just images`, start the bench with `just tutorial-up` and report the three addresses it prints.
   Never run `pulumi up`, `plunge up`, `pulumi destroy` or `plywood approve`, override a policy denial, use `--mode up`, or merge; never touch `.chant/allowed_signers` or `chant/lifecycle`.
 ---
 
@@ -17,11 +17,14 @@ The tutorial runs on your laptop. It uses the `aws-ts` program from the [plunge 
 
 ## Start the bench
 
-From a checkout of plywood:
+From a checkout of plywood, build plywood's images into your local Docker, then start the bench:
 
 ```sh
+just images
 just tutorial-up
 ```
+
+Every job runs in the `plywood-pulumi` image that `just images` builds. It has Pulumi and the plywood CLI installed. The runner never pulls that image. Without it, `just tutorial-up` stops before it starts anything. `PLYWOOD_TUTORIAL_JOB_IMAGE` names another image.
 
 The command starts Forgejo with its runner and floci on `127.0.0.1` only, then prints three addresses:
 

@@ -31,13 +31,16 @@ export interface ProductWords {
 export interface ProductPipelineJobs {
   words: ProductWords;
   plan: { jobName: string; command: string };
-  post: { command: string };
+  /** `control`: the note job's read of the control repo (chant#4619), when the options name one; a chant before it gives none. */
+  post: { command: string; control?: { stepName: string; env: Record<string, string>; script: string } };
   record?: { jobName: string; command: string };
   applyBeforeMerge?: { jobName: string; command: string };
   comments: Partial<Record<ChantCommand, string>>;
   waves?: { spec: unknown; specFile: string; jobs: Array<{ command: string[] }> };
   /** The agent's Op spec for `/plywood agent` (chant#4616), when the options ask for the agent. */
   agent?: { comment: string; name: string; spec: Record<string, unknown> };
+  /** The `/plywood preview` comment's jobs (chant#4620), with `previewComment`. */
+  preview?: { jobName: string; noteJobName: string; comment: string };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */
@@ -51,6 +54,10 @@ export interface ProductPipelineOptions {
   applyRequires?: string[];
   /** The agent's settings (chant#4616 `ProductAgentOptions`); a chant before it ignores the option. */
   agent?: boolean | Record<string, unknown>;
+  /** The control repo (chant#4568's `ControlTarget`); with chant#4619 `post.control` reads it. */
+  control?: { target: unknown };
+  /** The `/plywood preview` comment's jobs (chant#4620); a chant before it ignores the option. */
+  previewComment?: boolean;
 }
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
@@ -77,6 +84,19 @@ export interface ChantProduct {
   pendingGatesByPlan?(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
   /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */
   parseRequiresList?(values: readonly string[]): { checks: string[] } | { error: string };
+  /** The comment preview's jobs (chant#4620); with {@link PR_PREVIEW_FLOOR} it says `pr-plan` takes `--target`. */
+  prCommentPreviewJob?: (...args: unknown[]) => unknown;
+  /** Present when chant has the comment preview and `pr-plan --target` (chant#4620). */
+  PR_PREVIEW_FLOOR?: string;
+}
+
+/**
+ * Whether the installed chant has chant#4620: the product pipeline's
+ * comment preview job (`build --pr-loop --preview-comment`) and `pr-plan
+ * --target`, which landed together.
+ */
+export function hasChant4620(chant: ChantProduct): boolean {
+  return typeof chant.prCommentPreviewJob === "function" && typeof chant.PR_PREVIEW_FLOOR === "string";
 }
 
 /** One standing pending gate a digest matched (chant's `PendingGateByPlan`, chant#4607). */

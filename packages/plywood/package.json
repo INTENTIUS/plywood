@@ -1,7 +1,7 @@
 {
   "name": "@intentius/plywood",
   "version": "0.0.0",
-  "description": "Pull request automation for Pulumi",
+  "description": "CI Automation for Pulumi",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {

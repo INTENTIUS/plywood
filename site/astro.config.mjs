@@ -83,7 +83,7 @@ export default defineConfig({
 				ThemeProvider: './src/components/ThemeProvider.astro',
 				ThemeSelect: './src/components/ThemeSelect.astro',
 			},
-			description: 'Pull request automation for Pulumi',
+			description: 'CI Automation for Pulumi',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/INTENTIUS/plywood' }],
 			editLink: {
 				baseUrl: 'https://github.com/INTENTIUS/plywood/edit/main/site/',

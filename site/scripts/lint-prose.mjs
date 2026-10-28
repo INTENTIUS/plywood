@@ -77,9 +77,11 @@ function frontmatterProse(src) {
   const out = [];
   for (const key of ["title", "description"]) {
     const m = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(fm);
-    if (m) out.push(m[1].replace(/^['"]|['"]$/g, ""));
+    if (m) out.push("- " + m[1].replace(/^['"]|['"]$/g, ""));
   }
-  return out.join("\n\n");
+  // Title and description are labels shown apart (page title, tagline), so
+  // they lint as list items, as the string literals above do.
+  return out.join("\n");
 }
 
 // A page's raw text for the house rules, which also cover tables and component

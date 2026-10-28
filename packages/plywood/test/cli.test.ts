@@ -20,7 +20,7 @@ describe("plywood CLI", () => {
     const io = capture();
     expect(await main(["--help"], io)).toBe(0);
     for (const v of RULED) expect(io.stdout.join("\n")).toMatch(new RegExp(`^  ${v}\\s`, "m"));
-    expect(helpText()).toContain("Pull request automation for Pulumi");
+    expect(helpText()).toContain("CI Automation for Pulumi");
   });
 
   it("prints one JSON object with --json", async () => {

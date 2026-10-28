@@ -77,13 +77,13 @@
 }
 
 /*
- * Pixel art in the logo's grid, drawn as masks so they follow the theme: a plank
- * with two nails marks each section heading and stands in for a horizontal rule,
- * and a small isometric block is the list bullet.
+ * Pixel art in the logo's grid: a small saw in wood and steel marks each section
+ * heading and stands in for a horizontal rule, and a small isometric block drawn
+ * as a mask is the list bullet.
  */
 :root {
-	/* The small board from the logo, used as the section mark and the divider. */
-	--pw-divider: image-set(url('/plywood/brand/plywood-divider.png') 1x, url('/plywood/brand/plywood-divider@2x.png') 2x) center / 28px 17px no-repeat;
+	/* The saw (28x17, wood handle and steel blade), used as the section mark and the divider. */
+	--pw-divider: url('/plywood/brand/plywood-saw.svg') center / 28px 17px no-repeat;
 	--pw-block: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' width='10' height='10' shape-rendering='crispEdges'><path d='M4 1h2v1h-2zM2 2h6v1h-6zM1 3h8v1h-8zM1 4h8v4h-8zM2 8h6v1h-6zM4 9h2v1h-2z'/></svg>");
 }
 

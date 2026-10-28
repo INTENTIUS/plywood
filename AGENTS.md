@@ -10,7 +10,7 @@
 - Nobody runs `npm publish` or pushes an image by hand, apart from the maintainer's one-time first publish below. Releases go through `.github/workflows/publish.yml` on a `v*` tag.
 - The CI workflows are `ci/ci.ts` (ci.yml) and `publish/publish.ts` (publish.yml); `chant-ci-green.yml` is chant's, written by `chant ci workflow --token-secret CI_GREEN_TOKEN` from `chant.workspace.json`'s `ci.green`. `just ci` renders all three.
 - Every check runs on local builds, fakes, loopback servers or the floci emulator. Pulumi backends are `file://`, `plunge+file://` or S3 on floci; never a real cloud, Pulumi Cloud or the default Pulumi backend.
-- The tagline is "Pull request automation for Pulumi", word for word.
+- The tagline is "CI Automation for Pulumi", word for word.
 - The site is for users. Notes about this repo, issue links and build status stay out of it; contributor material goes in CONTRIBUTING.md.
 
 ## Releasing

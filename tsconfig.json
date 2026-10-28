@@ -12,6 +12,7 @@
   },
   "include": [
     "ci/**/*.ts",
+    "publish/**/*.ts",
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
     "chant.config.ts",

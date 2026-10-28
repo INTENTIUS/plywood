@@ -5,7 +5,9 @@
  * and `drift` (src/drift.ts). `config check` reads plywood.yml
  * (src/config-check.ts), and `config identities` and `forge check` the
  * identities (src/identities.ts). `estate` (src/estate.ts) and `notify
- * relay` (src/notify.ts) are chant's estate and relay with plywood's words. chant's own verbs (`components`, `ci <sub>`, `run`,
+ * relay` (src/notify.ts) are chant's estate and relay with plywood's words.
+ * `upgrade` (src/upgrade.ts) moves the repository's plywood and chant pins
+ * and writes the workflow again with the new release. chant's own verbs (`components`, `ci <sub>`, `run`,
  * `lock`, `unlock`) pass to chant unchanged with plywood's words, for the
  * lines the generated jobs run through the bin.
  *
@@ -29,6 +31,7 @@ import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from
 import { tipById, tipLines, TIPS } from "./tips";
 import { useChantInstallLines } from "./images";
 import { approve, override, resume, up } from "./up";
+import { upgrade } from "./upgrade";
 import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
@@ -63,6 +66,8 @@ export function helpText(): string {
     "                                                      plywood.yml, the stacks and the workflow, from the repository",
     "                                                      --from reads pulumi-actions, deployments, spacelift or env0 settings",
     "  init --print-prompt                                 the prompt that has a coding agent set plywood up",
+  "  upgrade [<version>] [--chant <version>] [--forge <kind>] [--env <env>] [--no-install] [--dry-run]",
+  "                                                      move plywood and chant to a release, install, and write the workflow again",
     "",
     "Stages:",
     "  check [--base <rev>] [<target>...]                  plywood.yml, then the check hooks at base",
@@ -151,7 +156,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   await useChantPolicySource();
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
-  if (verb !== "config" && verb !== "init" && verb !== "tips") await applyTelemetry(stageIo.cwd, stageIo.env);
+  if (verb !== "config" && verb !== "init" && verb !== "tips" && verb !== "upgrade") await applyTelemetry(stageIo.cwd, stageIo.env);
   if (verb === "audit") return audit(args.slice(1), json, table, stageIo);
   if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
   if (verb === "config") return config(args.slice(1), table, emit);
@@ -164,6 +169,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     const initIo: InitIo = interactive ? { ...stageIo, ask: askOnTerminal } : stageIo;
     return init(args.slice(1), json, table, initIo);
   }
+  if (verb === "upgrade") return upgrade(args.slice(1), json, table, stageIo);
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);
   if (verb === "up") return up(args.slice(1), json, table, stageIo);

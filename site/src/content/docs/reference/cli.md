@@ -8,6 +8,7 @@ draft: true
 | Command | Does |
 |---|---|
 | `plywood init [--gate] [--engine] [--forge] [--from]` | writes `plywood.yml` and the pipeline |
+| `plywood upgrade [<version>] [--chant] [--no-install] [--dry-run]` | moves `@intentius/plywood` and the chant packages to a release, installs them, and writes the workflow again with it |
 | `plywood check` | validates `plywood.yml`, each stack's config and the program's dependencies |
 | `plywood preview [--stack] [--target]` | previews each stack and writes the report |
 | `plywood up [--wave]` | updates the stacks of an approved wave |

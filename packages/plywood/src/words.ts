@@ -117,3 +117,38 @@ export const CLOUD_NAMES = { aws: "AWS", gcp: "GCP", azure: "Azure", pulumi: "Pu
 
 /** What a stack with no identity for a cloud runs as, for `plywood config identities`. */
 export const NO_IDENTITY = "the job's own credentials (no OIDC trade)";
+
+/**
+ * The stack operations' words (plywood#16). They are commands beside the
+ * ruled verbs, listed under their own heading in --help. Each is a gated request on the
+ * workspace ledger, run by chant's pulumi lexicon once a second person
+ * approves it (src/stack-ops.ts).
+ */
+export const STACK_OP_WORDS = {
+  usage: {
+    export: `${PRODUCT} export <project/stack> --out <file>`,
+    cancel: `${PRODUCT} cancel <project/stack> --lock <id>`,
+    move: `${PRODUCT} move <urn>... --from <project/stack> --to <project/stack>, or ${PRODUCT} move <project/stack> --onto plunge`,
+    rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback --release <name> --env <env>`,
+  },
+  waiting: (verb: "export" | "cancel" | "move", approve: string): string =>
+    `The ${verb} waits for a second person's approval, and your own does not count. They run '${approve}', then you run this command again to carry it out.`,
+  spent: (verb: "export" | "cancel" | "move"): string =>
+    `This ${verb} ran once already under its approval, and a request runs once. Run the command again to ask for a new one.`,
+  exported: (stack: string, r: { file: string; sha256: string; bytes: number; resources: number }): string =>
+    `Exported ${stack} to ${r.file} (${r.resources} resources, ${r.bytes} bytes, sha256 ${r.sha256}). The file is readable by you alone; the ledger keeps its digest and size, never its content.`,
+  cancelled: (stack: string, lock: string, checked: boolean): string =>
+    `Released lock ${lock} on ${stack}.${checked ? "" : " The backend's lock could not be read, so it was not checked against the approved one first."}`,
+  moved: (from: string, to: string, r: { engine: string; moved: string[] }): string =>
+    `Moved ${r.moved.length} resource${r.moved.length === 1 ? "" : "s"} from ${from} to ${to} on ${r.engine}. Both stacks preview no change.`,
+  needsLock:
+    "cancel needs --lock <id>, the lock the stack holds: the id pulumi printed when it refused the update, or the file name under .pulumi/locks/ on a file:// backend",
+  noAdoptOp: (file: string): string =>
+    `no ${file}. '${PRODUCT} init --engine plunge' writes it with each stack's adopt preview; run that first.`,
+  adoptAll: (stack: string): string =>
+    `${PRODUCT} move --onto plunge runs the adopt Op over every stack it lists, ${stack} among them. Each stack waits at its own gate.`,
+  adoptWaiting: `Each stack's adoption waits for an approval of its preview's digest. Approve it with the line chant printed (${PRODUCT} approve <gate> --op plywood-adopt --plan <digest>), then run this command again.`,
+  rollbackWaiting: `The rollback's preview waits at the release gate. Approve its digest with the line chant printed, then run this command again.`,
+  releaseIsEnvWide: (stack: string, env: string): string =>
+    `--release rolls back every stack the release records in an environment, so it takes --env, not a stack. Run '${PRODUCT} rollback --release <name> --env ${env}', or '${PRODUCT} rollback ${stack}' for this stack's previous release.`,
+} as const;

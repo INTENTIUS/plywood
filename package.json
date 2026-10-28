@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pull request automation for Pulumi",
+  "description": "CI Automation for Pulumi",
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "git+https://github.com/INTENTIUS/plywood.git" },
   "homepage": "https://intentius.io/plywood/",

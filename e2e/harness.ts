@@ -85,6 +85,7 @@ export interface TimedSpan {
 export type ScenarioOutcome =
   | { report: { status?: string; components?: Record<string, string>; only?: boolean } }
   | { ledger: { op: string; status?: "ok" | "fail" | "gated" | "waiting"; count?: number } }
+  | { gated: { op: string; status?: "gated" | "ok" | "failed"; count?: number } }
   | { comment: string }
   | { issue: { title: string; open?: boolean } }
   | { exit: number };
@@ -202,7 +203,7 @@ export interface DriverPorts {
   chant: { approve(input: ApproveInput): Promise<void> };
   clock: Clock;
   overlay(name: string): Record<string, string>;
-  ledger?: { runs(env: string, op: string): Promise<LedgerRecord[]> };
+  ledger?: { runs(env: string, op: string): Promise<LedgerRecord[]>; gatedRequests?(op: string): Promise<unknown[]> };
   jobs?: { kill(match?: string): Promise<boolean> };
   outOfBand?: { run(command: string[]): Promise<number> };
   reset?(): Promise<void>;

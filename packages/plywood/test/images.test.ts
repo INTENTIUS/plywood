@@ -10,6 +10,7 @@ import {
   chantPipelineOptions,
   dockerfile,
   dockerfiles,
+  IMAGE_PLUGINS,
   engineBin,
   imageFor,
   imageRecipe,
@@ -130,6 +131,16 @@ describe("runners", () => {
 describe("Dockerfiles", () => {
   it("match the committed images/*/Dockerfile", () => {
     for (const [path, text] of Object.entries(dockerfiles())) expect(readFileSync(join(ROOT, path), "utf8"), path).toBe(text);
+  });
+
+  it("carry the command provider at its pin in the Pulumi home, installed by the image's engine once it is on PATH", () => {
+    expect(IMAGE_PLUGINS).toEqual([{ kind: "resource", name: "command", version: "1.0.1" }]);
+    for (const engine of ["pulumi", "plunge"] as const) {
+      const lines = dockerfile(engine).split("\n");
+      const install = lines.findIndex((l) => l === `RUN ${engine} plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home`);
+      expect(install, engine).toBeGreaterThan(lines.findIndex((l) => l.startsWith(`RUN ln -s /opt/plywood/${engine}-`)));
+      expect(install, engine).toBeGreaterThan(lines.findIndex((l) => l.startsWith("ENV ") && l.includes("PULUMI_HOME=/opt/plywood/pulumi-home")));
+    }
   });
 
   it("verify each archive against the release checksums and plywood's pinned sum", () => {

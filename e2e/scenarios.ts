@@ -25,10 +25,11 @@
  *
  * | scenario  | claim                | what the BREAK arm changes                                  |
  * |-----------|----------------------|-------------------------------------------------------------|
- * | pw-action | action/gated-replace | a resource reads the command's output, so two are replaced  |
+ * | pw-action | action/gated-replace | main changes the command's input after the approval         |
  *
- * pw-action (plywood#39) has its claim and no scenario file yet: the shop
- * program has no command resource and the job image no command provider.
+ * pw-action (plywood#39, plywood#44) runs on prod-us's command resource
+ * rotate, which the seed adds to the shop program (./action.ts), with the
+ * command provider from plywood's images.
  *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.

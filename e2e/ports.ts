@@ -8,7 +8,8 @@
  *              member); the driver reads `<pr>/<head>/pr-plan.json`, so the
  *              bucket port falls back to the one member report below it
  *   ledger     the shop repository's chant/lifecycle, fetched from the forge
- *              and read with chant's own readers
+ *              and read with chant's own readers, its gated requests
+ *              too (the harness's gated outcome)
  *   outOfBand  `plywood-e2e <check>` runs in process (./checks.ts) or in a
  *              job container; anything else runs through the harness's
  *              SafeRun. `${NAME:-default}` in a word comes from the arm's
@@ -23,6 +24,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { readRunLedger } from "@intentius/chant/lifecycle/run-ledger";
 import { readGateLedger } from "@intentius/chant/lifecycle/gate-ledger";
+import { readGatedRequests, type GatedRequestRead } from "@intentius/chant/lifecycle/gated-request";
+import { actionScript } from "./action";
 import { BUCKETS, FLOCI_NET, FORGEJO_NET, ORG, PROJECT, REPO, jobEnv, plungeStoreUrl, s3BackendUrl } from "./bench";
 import {
   canaryFirst,
@@ -162,6 +165,12 @@ export class ForgeLedger {
     const cwd = await this.fetch();
     const { pending } = await readGateLedger(op, { cwd });
     return pending.filter((p) => p.timestamp >= since).pop();
+  }
+
+  /** The gated requests of `op`, oldest first, for the harness's gated outcome (a gated request writes no op-run record). */
+  async gatedRequests(op: string): Promise<GatedRequestRead[]> {
+    const cwd = await this.fetch();
+    return readGatedRequests(op, { cwd });
   }
 }
 
@@ -346,6 +355,7 @@ export const COMMANDS: Record<string, string> = {
   markers: "<stack> <name>: a queue on floci carries plunge's markers for <name>",
   job: "<word>...: the words as a command in a job container on a clone of main",
   "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container",
+  action: "<stack> <name>: plywood action shop/<stack> <name> as the author on the stack's backend, in a job container; a call that waits must print the approve line",
   "approve-pending": "<op>: the reviewer approves the newest pending gate of <op> with the plan it binds",
   configure: "<base overlay>: lay it over main, run plywood ci and push main, in a job container as the admin",
   push: "<branch> <overlay>: push the overlay as one more commit on the arm's pull request branch",
@@ -416,6 +426,11 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       });
       const script = [...config, `plunge up --yes --non-interactive --stack ${quote(stack!)}`].join("\n");
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: plungeStoreUrl(BUCKETS.records, FLOCI_NET) } }, script));
+    }
+    case "action": {
+      need(2);
+      const env = { PULUMI_BACKEND_URL: stockBackend(a[0]!) };
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, actionScript(a[0]!, a[1]!, c.author.login)));
     }
     case "approve-pending": {
       need(1);

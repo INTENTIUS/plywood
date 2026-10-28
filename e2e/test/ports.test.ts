@@ -114,6 +114,17 @@ describe("plywood-e2e commands", () => {
     expect(await runCommand(ctx({ pending: { gate: "g" } }).c, ["approve-pending", "plywood-adopt"])).toBe(1);
   });
 
+  it("runs plywood action as the author on the stack's own backend, in a job container", async () => {
+    const { c, ran } = ctx();
+    expect(await runCommand(c, ["action", "prod-us", "rotate"])).toBe(0);
+    const argv = ran[0]!;
+    expect(argv).toContain("PULUMI_BACKEND_URL=s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true");
+    const script = argv[argv.length - 1]!;
+    expect(script).toContain("plywood action 'shop/prod-us' 'rotate' --by 'tutor'");
+    expect(script).toContain("tutor:t0k@forgejo:3000");
+    await expect(runCommand(c, ["action", "dev", "rotate"])).rejects.toThrow(/not a stock Pulumi stack/);
+  });
+
   it("refuses a command it does not know", async () => {
     await expect(runCommand(ctx().c, ["teardown"])).rejects.toThrow(/no command teardown/);
   });

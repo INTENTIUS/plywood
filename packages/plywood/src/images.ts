@@ -60,6 +60,16 @@ export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
   plunge: "0.1.0",
 };
 
+/**
+ * The provider plugins both images carry in their Pulumi home. The command
+ * provider is the one `plywood action` needs: a day-2 action is a
+ * `command:local:Command` or `command:remote:Command` resource, and its
+ * replacement runs offline in a job from these images. The engine installs
+ * it from the release at build time, as a prepared image's plugins are
+ * (imageRecipe); plywood records no sum for it.
+ */
+export const IMAGE_PLUGINS: readonly PluginPin[] = [{ kind: "resource", name: "command", version: "1.0.1" }];
+
 /** The archive's architecture word, as both projects name their Linux builds. */
 export type Arch = "x64" | "arm64";
 export const ARCHES: readonly Arch[] = ["x64", "arm64"];
@@ -331,6 +341,7 @@ export function dockerfile(engine: EngineName): string {
     `RUN git config --system --add safe.directory '*' && mkdir -p ${IMAGE_PULUMI_HOME} && chmod 1777 ${IMAGE_PULUMI_HOME}`,
     `COPY --from=fetch /out/opt/plywood/ /opt/plywood/`,
     `RUN ln -s ${dir}/${engine} /usr/local/bin/${engine} && ${engine} version`,
+    pluginInstallLine(engine, IMAGE_PLUGINS),
     // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm
     // fetches its exact-pinned runtime dependencies. The tarball is made by npm pack (just images).
     `COPY ${PACK_DIR}/${packName()} /tmp/${packName()}`,
@@ -383,6 +394,11 @@ export function imageRecipe(engine: EngineName, plugins: readonly PluginPin[], f
     `RUN chmod -R a+rX ${IMAGE_PULUMI_HOME}`,
     "",
   ].join("\n");
+}
+
+/** The Dockerfile line that installs `plugins` into the image's Pulumi home, readable by every uid. */
+export function pluginInstallLine(engine: EngineName, plugins: readonly PluginPin[]): string {
+  return `RUN ${[...plugins.map((p) => `${engine} plugin install ${p.kind} ${p.name} ${p.version}`), `chmod -R a+rX ${IMAGE_PULUMI_HOME}`].join(" && ")}`;
 }
 
 // ---------------------------------------------------------------------------

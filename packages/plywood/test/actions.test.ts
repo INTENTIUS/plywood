@@ -8,9 +8,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { action, actionSubject, needsActionsMessage, setChantStackActionForTests, type ActionResult, type ChantStackAction } from "../src/actions";
-import { setChantNextForTests } from "../src/chant-next";
 import { main, type Io } from "../src/cli";
 import { chantProduct, hasChantActions, setChantProductForTests, type ChantProduct, type ProductActionRequest, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
@@ -114,12 +113,10 @@ function fakeChant(actions = true) {
   return { api, pipelines, calls };
 }
 
-beforeEach(() => setChantNextForTests({}));
 afterEach(() => {
   setChantStackActionForTests("reset");
   setChantStackOpsForTests("reset");
   setChantProductForTests("reset");
-  setChantNextForTests("reset");
 });
 
 describe("plywood.yml's actions", () => {

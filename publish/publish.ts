@@ -90,7 +90,7 @@ export const images = new Job({
     new Step({ name: "Install", run: "npm ci" }),
     // The images install the packed package with its runtime dependencies (.dockerignore keeps the context to the tarball).
     new Step({ name: "Build the bundle", run: "npm run build" }),
-    new Step({ name: "Pack the package for the images", run: "npm pack -w @intentius/plywood --pack-destination images/pack" }),
+    new Step({ name: "Pack the package for the images", run: "mkdir -p images/pack && npm pack -w @intentius/plywood --pack-destination images/pack" }),
     new Step({
       name: "Log in to GHCR",
       env: { GH_TOKEN: "${{ github.token }}" },

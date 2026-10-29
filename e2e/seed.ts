@@ -171,7 +171,10 @@ export function cloudScript(commit: boolean): string {
       ? [
           `${env(state)} plywood init --forge forgejo --yes`,
           "git add -A",
-          "git commit -q -m 'plywood init, and the stacks created on the bench' || true",
+          // [skip ci]: the seed deployed every stack itself, and each scenario's reset force-pushes this commit back
+          // onto main, whose `before` is then a commit the record job cannot fetch. Neither push is a change to plan
+          // or record, so neither starts the record or the waves workflow (plywood#22).
+          "git commit -q -m 'plywood init, and the stacks created on the bench [skip ci]' || true",
           "git push -q origin HEAD:main",
         ]
       : []),

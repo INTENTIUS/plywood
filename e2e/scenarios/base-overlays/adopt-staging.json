@@ -1,0 +1,5 @@
+{
+  "files": {
+    "plywood.adopt.op.ts": "import { PulumiAdoptOp } from \"@intentius/chant-lexicon-pulumi\";\n\n/**\n * Written by plywood init --engine plunge. Adopts each stack onto plunge's\n * per-resource records: the bucket check, the stock export kept as the\n * back-out copy, then per stack the adopt preview, a gate bound to it, and\n * plunge stack adopt --yes.\n *\n *   npx chant run plywood-adopt             stops at each stack's gate\n *   npx chant approve plywood-adopt <gate>  after reading that stack's preview\n *   npx chant run plywood-adopt             adopts the approved stacks\n *\n * Delete this file once every stack is adopted.\n */\nexport const { op } = PulumiAdoptOp({\n  name: \"plywood-adopt\",\n  stacks: [\n    { member: \"shop\", dir: \".\", stack: \"staging\", backend: \"plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true\" },\n  ],\n});\n"
+  }
+}

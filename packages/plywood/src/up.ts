@@ -32,7 +32,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyMergeOf, applyWhenOf } from "./config/apply";
-import { chantNext, hasChantPullRequestApprovalStatus } from "./chant-next";
+import { hasChantPullRequestApprovalStatus } from "./chant-next";
 import type { RawConfig } from "./config/types";
 import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
@@ -40,8 +40,9 @@ import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
 import { hasChant4607, type ChantProduct, type PendingGateByPlan } from "./chant-product";
 import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
-import { APPLY_MERGE_NEEDS_CHANT, applyMergeArgv, positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
+import { applyMergeArgv, positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
+import { unwrapWavesSpec } from "./waves-workflow";
 
 /** chant's op for policy overrides (`OVERRIDE_GATE_OP`, chant op/gate-name.ts). */
 export const OVERRIDE_OP = "policy-override";
@@ -159,7 +160,7 @@ function wavesSpecAt(cwd: string, file = WAVES_SPEC_FILE): Record<string, unknow
   const path = join(cwd, file);
   if (!existsSync(path)) return undefined;
   try {
-    const spec: unknown = JSON.parse(readFileSync(path, "utf8"));
+    const spec: unknown = unwrapWavesSpec(JSON.parse(readFileSync(path, "utf8")));
     return spec && typeof spec === "object" && !Array.isArray(spec) ? (spec as Record<string, unknown>) : undefined;
   } catch {
     return undefined;
@@ -297,7 +298,7 @@ export function readUpSpec(cwd: string, file = WAVES_SPEC_FILE): UpSpec | { erro
   if (!existsSync(path)) return { error: `no ${file}; '${PRODUCT} init' writes it from plywood.yml's waves` };
   let spec: unknown;
   try {
-    spec = JSON.parse(readFileSync(path, "utf8"));
+    spec = unwrapWavesSpec(JSON.parse(readFileSync(path, "utf8")));
   } catch (e) {
     return { error: `${file}: ${(e as Error).message}` };
   }
@@ -395,22 +396,17 @@ async function upBeforeMerge(number: string, args: string[], json: boolean, tabl
       "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
       "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,
       ...requiresArgv(chant, config.doc),
-      ...(await mergeArgv(config.doc, io)),
+      ...mergeArgv(config.doc),
       ...(json ? ["--json"] : []),
     ];
     return explainRefusal(await chant.runChantInProcess(argv, PRODUCT_WORDS), table, io.err, { pr: number });
   });
 }
 
-/** `--merge auto` for `apply.merge: auto` on a chant with chant#4636; on one without it, a line that a person merges. */
-async function mergeArgv(doc: RawConfig, io: StageIo): Promise<string[]> {
+/** `--merge auto` for `apply.merge: auto` (chant#4636). */
+function mergeArgv(doc: RawConfig): string[] {
   const merge = applyMergeOf(doc);
-  if (!merge) return [];
-  if (!(await chantNext()).applyMerge) {
-    io.err(`${PRODUCT}: ${APPLY_MERGE_NEEDS_CHANT}`);
-    return [];
-  }
-  return applyMergeArgv(merge);
+  return merge ? applyMergeArgv(merge) : [];
 }
 
 /**

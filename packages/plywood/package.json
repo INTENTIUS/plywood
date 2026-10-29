@@ -1,6 +1,6 @@
 {
   "name": "@intentius/plywood",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "CI Automation for Pulumi",
   "license": "Apache-2.0",
   "type": "module",
@@ -34,10 +34,10 @@
     "prepack": "node scripts/build-cli.mjs"
   },
   "dependencies": {
-    "@intentius/chant": "0.124.55",
-    "@intentius/chant-lexicon-forgejo": "0.124.55",
-    "@intentius/chant-lexicon-github": "0.124.55",
-    "@intentius/chant-lexicon-gitlab": "0.124.55",
-    "@intentius/chant-lexicon-pulumi": "0.124.55"
+    "@intentius/chant": "0.124.57",
+    "@intentius/chant-lexicon-forgejo": "0.124.57",
+    "@intentius/chant-lexicon-github": "0.124.57",
+    "@intentius/chant-lexicon-gitlab": "0.124.57",
+    "@intentius/chant-lexicon-pulumi": "0.124.57"
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { disjointTogether, expandWord, hasMarkers, lockishKeys, movedNotGated, urnName, waveRuns, writtenResources } from "../checks";
+import { busyTasks, disjointTogether, expandWord, hasMarkers, lockishKeys, movedNotGated, urnName, waveRuns, writtenResources } from "../checks";
 import type { LedgerRecord, TimedSpan } from "../harness";
 
 const SINCE = "2026-10-28T10:00:00.000Z";
@@ -112,5 +112,13 @@ describe("the small pieces", () => {
     expect(hasMarkers({ "plunge-urn": urn("worker-3"), "plunge-stack": "shop/dev" }, "worker-3", "dev")).toBe(true);
     expect(hasMarkers({ "plunge-urn": urn("worker-3") }, "worker-3", "dev")).toBe(false);
     expect(hasMarkers({ "plunge-urn": urn("worker-30"), "plunge-stack": "dev" }, "worker-3", "dev")).toBe(false);
+  });
+});
+
+describe("the reset waits for Forgejo's tasks (plywood#22 finding 10)", () => {
+  it("counts running, waiting and blocked tasks as busy, and finished ones as not", () => {
+    const tasks = ["success", "running", "failure", "waiting", "cancelled", "blocked", "skipped"].map((status, id) => ({ id, status }));
+    expect(busyTasks(tasks).map((t) => t.status)).toEqual(["running", "waiting", "blocked"]);
+    expect(busyTasks([])).toEqual([]);
   });
 });

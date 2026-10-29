@@ -347,7 +347,7 @@ export function driftJobScript(stack: string): string {
 
 /** The commands `plywood-e2e` takes, with their arguments. */
 export const COMMANDS: Record<string, string> = {
-  "wait-runs": "<op> <count>: wait until the ledger holds <count> wave jobs of <op> since the arm started",
+  "wait-runs": "<op> <count> [<stack>]: wait until the ledger holds <count> wave jobs of <op> since the arm started, only those that targeted <stack> when given",
   disjoint: "<op> <stack> <first> <second>: two jobs wrote one resource each and overlapped (./checks.ts disjointTogether)",
   moved: "<op> <stack>: the newest job refused with chant's moved code (./checks.ts movedNotGated)",
   applied: "<op> <stack>: the newest job applied <stack> with exit 0",
@@ -383,11 +383,14 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     case "wait-runs": {
       need(2);
       const want = Number(a[1]);
+      // plywood#22 finding 10: with a stack, only the wave jobs that targeted it count.
+      const stack = a[2];
+      const of = stack ? ` on ${stack}` : "";
       const deadline = c.clock.now() + c.waitLimit * 1000;
       for (;;) {
-        const n = finishedRuns(await c.ledger.runs(c.env, a[0]!), a[0]!, c.since(), true);
-        if (n >= want) return say(c, { code: 0, line: `${n} ${a[0]} wave jobs on the ledger` });
-        if (c.clock.now() >= deadline) return say(c, { code: 124, line: `${n} of ${want} ${a[0]} wave jobs after ${c.waitLimit}s` });
+        const n = finishedRuns(await c.ledger.runs(c.env, a[0]!), a[0]!, c.since(), true, stack);
+        if (n >= want) return say(c, { code: 0, line: `${n} ${a[0]} wave jobs${of} on the ledger` });
+        if (c.clock.now() >= deadline) return say(c, { code: 124, line: `${n} of ${want} ${a[0]} wave jobs${of} after ${c.waitLimit}s` });
         await c.clock.sleep(5000);
       }
     }

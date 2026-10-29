@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BUCKETS, FLOCI_NET, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
-import { NeedsChantHarness, harness, isHarness, requireHarness, setHarnessForTests, type HarnessStackShape } from "../harness";
+import { BUCKETS, FLOCI_NET, JOB_IMAGE, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
+import { harness, setHarnessForTests, type HarnessStackShape } from "../harness";
 import { bucketCalls, makeBucket, type Fetch } from "../secure-bucket";
 import { setYamlKeys, overlayFiles } from "../overlays";
 import { cloudScript } from "../seed";
@@ -12,21 +12,10 @@ const ROOT = join(import.meta.dirname, "..", "..");
 afterEach(() => setHarnessForTests("reset"));
 
 describe("reaching chant's harness", () => {
-  it("finds no harness on the pinned chant and refuses with the floor and the fallback bench", async () => {
-    expect(await harness()).toBeUndefined();
-    const err = await requireHarness("0.124.55").catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(NeedsChantHarness);
-    expect(String((err as Error).message)).toMatch(/needs .*@intentius\/chant\/e2e-harness/);
-    expect(String((err as Error).message)).toContain("just tutorial-up");
-  });
-
-  it("takes a module only when it has the floor and every piece the bench calls", () => {
-    expect(isHarness({})).toBe(false);
-    expect(isHarness({ E2E_HARNESS_FLOOR: "0.125.0" })).toBe(false);
-    const full = Object.fromEntries(
-      ["harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"].map((k) => [k, () => undefined]),
-    );
-    expect(isHarness({ ...full, E2E_HARNESS_FLOOR: "0.125.0" })).toBe(true);
+  it("loads every piece the bench calls from the pinned chant", async () => {
+    const h = (await harness()) as unknown as Record<string, unknown>;
+    expect(h.E2E_HARNESS_FLOOR).toBe("0.124.56");
+    for (const k of ["harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"]) expect(h[k], k).toBeDefined();
   });
 });
 
@@ -77,13 +66,33 @@ describe("the bench's stack", () => {
   });
 
   it("builds the job image from plywood's plunge image, with stock Pulumi and a local plunge on PATH", () => {
-    const d = jobImageDockerfile({ plungeImage: "ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0", pulumiImage: "ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0", pulumiVersion: "3.272.0" });
+    const d = jobImageDockerfile({ plungeImage: "ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0", pulumiImage: "ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0", pulumiVersion: "3.272.0", plungeVersion: "0.1.0" });
     expect(d).toContain("FROM ghcr.io/intentius/plywood-pulumi:0.0.0-pulumi3.272.0 AS pulumi");
     expect(d).toContain("FROM ghcr.io/intentius/plywood-plunge:0.0.0-plunge0.1.0\n");
     expect(d).toContain("COPY --from=pulumi /opt/plywood/pulumi-3.272.0/ /opt/plywood/pulumi-3.272.0/");
     expect(d).toContain("COPY plunge /opt/plywood/plunge-local/plunge");
     expect(d).toMatch(/ln -sf \/opt\/plywood\/plunge-local\/plunge \/usr\/local\/bin\/plunge/);
     expect(d).toMatch(/plunge version; pulumi version/);
+    // The jobs' install line links /usr/local/bin/plunge to the release's path, which names the local build too.
+    expect(d).toContain("ln -sf /opt/plywood/plunge-local/plunge /opt/plywood/plunge-0.1.0/plunge");
+    expect(d).not.toContain("chant-local");
+  });
+
+  it("puts the local chant's tarballs under the global plywood when chant-local packed them", () => {
+    const d = jobImageDockerfile({
+      plungeImage: "p",
+      pulumiImage: "q",
+      pulumiVersion: "3.272.0",
+      plungeVersion: "0.1.0",
+      chantTarballs: ["intentius-chant.tgz", "intentius-chant-lexicon-pulumi.tgz"],
+    });
+    expect(d).toContain("COPY chant-local/intentius-chant.tgz chant-local/intentius-chant-lexicon-pulumi.tgz /tmp/chant-local/");
+    expect(d).toContain('cd "$(npm root -g)/@intentius/plywood" && npm install --no-save --omit=dev --no-audit --no-fund --legacy-peer-deps /tmp/chant-local/intentius-chant.tgz /tmp/chant-local/intentius-chant-lexicon-pulumi.tgz');
+  });
+
+  it("the bench's plywood.yml runs every generated job in the job image", () => {
+    const yml = readFileSync(join(ROOT, "e2e", "scenarios", "base", "plywood.yml"), "utf8");
+    expect(yml).toMatch(new RegExp(`^image: ${JOB_IMAGE.replace(/[.]/g, "\\.")}$`, "m"));
   });
 });
 
@@ -155,6 +164,11 @@ describe("the seed", () => {
     expect(first).toContain("plywood init --forge forgejo --yes");
     expect(cloudScript(false)).not.toContain("plywood init");
     expect(cloudScript(false)).not.toContain("git push");
+  });
+
+  it("commits plywood init with [skip ci], so neither the seed's push nor a reset's force-push of that commit starts the record or waves workflow", () => {
+    const commit = cloudScript(true).split("\n").find((l) => l.startsWith("git commit"))!;
+    expect(commit).toContain("[skip ci]");
   });
 
   it("builds the repository with stack/seed-repo.sh at plunge's main after plunge#55, the knobs far apart", () => {

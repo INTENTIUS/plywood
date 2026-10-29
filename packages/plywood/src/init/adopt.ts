@@ -159,7 +159,7 @@ export function adoptLines(previews: readonly AdoptPreview[], chant: ChantAdopt 
     }
     const count = `${v.resources.length} resource${v.resources.length === 1 ? "" : "s"}`;
     if (v.status === "refused") {
-      out.push(`  ${p.key}: plunge refuses to adopt it:`);
+      out.push(`  ${p.key}: plunge refuses to adopt it, so the adopt Op leaves it out:`);
       for (const r of v.refusals) out.push(`    ${r.code}: ${r.reason}${r.urn ? ` (${r.urn})` : ""}`);
     } else if (v.status === "already-adopted") {
       out.push(`  ${p.key}: already on plunge's records (${count})`);
@@ -172,9 +172,17 @@ export function adoptLines(previews: readonly AdoptPreview[], chant: ChantAdopt 
   return out;
 }
 
-/** The stacks the Op adopts: those with a plunge URL whose preview did not say they are adopted already. */
+/**
+ * The stacks the Op adopts: those with a plunge URL whose preview neither said
+ * they are adopted already nor was refused. A refused stack would fail the
+ * Op's own preview step before the stacks after it ran; init's notes list it
+ * with plunge's refusals instead (plywood#22).
+ */
 export function stacksToAdopt<T extends { key: string }>(stacks: readonly T[], previews: readonly AdoptPreview[]): T[] {
-  return stacks.filter((s) => previews.find((p) => p.key === s.key)?.view?.status !== "already-adopted");
+  return stacks.filter((s) => {
+    const status = previews.find((p) => p.key === s.key)?.view?.status;
+    return status !== "already-adopted" && status !== "refused";
+  });
 }
 
 /** The gate chant's PulumiAdoptOp names for a stack (`approve-<op>`, or `approve-<op>-<member>-<stack>` with several). */

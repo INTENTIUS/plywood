@@ -1,8 +1,6 @@
 ---
 title: 'Merge once the update is done'
 description: 'apply.merge: auto merges the pull request after /plywood up updates it.'
-needs: [chant#4636]
-draft: true
 ---
 
 With updates before merge, a person merges once `/plywood up` is done. `apply.merge: auto` has the update job merge the pull request itself:

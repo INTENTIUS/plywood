@@ -11,6 +11,7 @@ import { approvalStatusTarget, approve, approveTarget, carryArgv, override, read
 import { parseConfig } from "../src/config/index";
 import { binLines, withBinLines } from "../src/waves-workflow";
 import { PRODUCT_WORDS } from "../src/words";
+import { unwrapWavesSpec } from "../src/waves-workflow";
 
 /** A fake chant: records each in-process call and answers from `codes` in turn (then 0). */
 function fakeChant(codes: number[] = [], onCall?: (argv: string[]) => void) {
@@ -357,7 +358,7 @@ describe("wave jobs in the generated workflow", () => {
     const workflow = readFileSync(join(dir, ".github/workflows/pulumi-up.yml"), "utf8");
     expect(workflow).toContain("run: npx --no-install plywood run wave --spec");
     expect(workflow).not.toContain("run: chant run wave");
-    expect(JSON.parse(readFileSync(join(dir, WAVES_SPEC_FILE), "utf8"))).toMatchObject({ approvals: { pullRequest: { gate: "up" } } });
+    expect(unwrapWavesSpec(JSON.parse(readFileSync(join(dir, WAVES_SPEC_FILE), "utf8")))).toMatchObject({ approvals: { pullRequest: { gate: "up" } } });
   });
 });
 

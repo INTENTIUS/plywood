@@ -2,17 +2,26 @@
 #
 # plywood.yml of the bench's tutor/shop repository (e2e/seed.ts writes it
 # before plywood init). dev runs on plunge's record store; staging is a
-# stock stack in the same bucket until pw-adopt moves it onto plunge's
-# records; prod-us and prod-eu stay on stock Pulumi. prod-us declares the
-# day-2 action rotate, its command resource (e2e/action.ts). Every URL is
-# floci as a job on the bench's network sees it.
+# stock stack in the same bucket, declared on its stock backend, until
+# pw-adopt adopts it and points it at plunge's records (base overlay
+# staging-on-plunge); prod-us and prod-eu stay on stock Pulumi. prod-us
+# declares the day-2 action rotate, its command resource (e2e/action.ts).
+# Every URL is floci as a job on the bench's network sees it.
+#
+# Every generated job runs in the bench's job image (e2e/bench.ts JOB_IMAGE,
+# built by `just e2e image`): plywood from this checkout, the local plunge
+# build and stock Pulumi. Without it the jobs get node:22, which has no
+# plywood, until a release records the images' digests (plywood#22).
+# plywood.yml's check warns that the tag is not a digest; the image is never
+# pushed, so there is no digest to pin.
+image: plywood-tutorial-job:local
 stacks:
   shop/dev:
     dir: .
     backend: plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true
   shop/staging:
     dir: .
-    backend: plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true
+    backend: s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&use_path_style=true
   shop/prod-us:
     dir: .
     backend: s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true

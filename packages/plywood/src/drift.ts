@@ -42,7 +42,7 @@
  */
 import { createHash } from "node:crypto";
 import { resolveTargetCloudIdentity } from "@intentius/chant/ci-identity";
-import { chantAudit, chantNext, type ChantAudit } from "./chant-next";
+import { chantAudit, type ChantAudit } from "./chant-next";
 import { globMatches } from "./config/images";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -323,20 +323,12 @@ export interface Attribute {
   logs: Record<string, string>;
 }
 
-/** The attribution's reads, when plywood.yml sets drift.audit_log; on a chant without chant#4632 a line says none ran. */
+/** The attribution's reads, when plywood.yml sets drift.audit_log. */
 async function attributionFor(doc: RawConfig, io: StageIo): Promise<Attribute | undefined> {
   const logs = driftSettingsOf(doc).auditLogs;
   if (!logs) return undefined;
-  const audit = await chantAudit();
-  if (!audit) {
-    io.err(`${PRODUCT} drift: ${ATTRIBUTION_NEEDS_CHANT}`);
-    return undefined;
-  }
-  return { audit, logs };
+  return { audit: await chantAudit(), logs };
 }
-
-/** What `plywood drift` says under drift.audit_log on a chant without chant#4632. */
-export const ATTRIBUTION_NEEDS_CHANT = "drift.audit_log is set, and the installed chant has no audit-log reads (chant#4632), so no drifted attribute was attributed";
 
 /** The audit log drift.audit_log gives `stack`: the first glob that matches it. */
 export function auditLogFor(logs: Record<string, string>, stack: string): string | undefined {
@@ -498,9 +490,8 @@ export async function writeDriftJobs(chant: ChantProduct, forge: ForgeKind, doc:
     io.err(`${PRODUCT} ci: drift.schedule is set and plywood.yml lists no stacks, so no drift job was written`);
     return table.done;
   }
-  const next = await chantNext();
   if (writeIfChanged(io.cwd, DRIFT_OP_FILE, driftOpFile(doc, settings.stacks, settings.schedule))) io.err(`${PRODUCT} ci: wrote ${DRIFT_OP_FILE}; commit it with the workflow`);
-  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant, { cloud: next.scheduledOpCloud, contentsWrite: next.updateContentsWrite, env }), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
+  if (writeIfChanged(io.cwd, DRIFT_SPEC_FILE, JSON.stringify(driftOpSpec(doc, forge, settings.stacks, settings.schedule, chant, { cloud: true, contentsWrite: true, env }), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${DRIFT_SPEC_FILE}`);
   const outDir = OP_OUTPUT_DIR[forge];
   const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", DRIFT_SPEC_FILE, "--output", outDir], words);
   if (code !== table.done) return code;

@@ -1,13 +1,9 @@
 /**
  * chant's e2e harness (`@intentius/chant/e2e-harness`, chant#4587), as the
- * plywood bench reaches it. The harness is newer than plywood's chant pin,
- * so it is imported lazily and used only when the installed chant exports
- * `E2E_HARNESS_FLOOR`. On a chant without it, every harness command refuses
- * with the floor it needs and points at plywood's own bench in stack/
- * (`just tutorial-up`), which keeps working on the pin.
+ * plywood bench reaches it. It is imported on first use, so commands that
+ * never touch the harness do not load it.
  *
- * The types below are the part of the harness the bench calls, written out
- * so this directory typechecks against the pinned chant. They follow
+ * The types below are the part of the harness the bench calls. They follow
  * packages/core/src/e2e-harness/ at chant 88cd947616.
  */
 
@@ -295,52 +291,15 @@ export interface HarnessModule {
   realClock: Clock;
 }
 
-/** The chant release the harness first ships in, as chant names it before the release. */
-export const HARNESS_FLOOR_WORD = "the first chant release with @intentius/chant/e2e-harness (chant#4587)";
+let loaded: Promise<HarnessModule> | undefined;
 
-/** Why the bench cannot run on the installed chant, and what works instead. */
-export class NeedsChantHarness extends Error {
-  constructor(readonly installed: string | undefined) {
-    super(
-      `the plywood bench on chant's e2e harness needs ${HARNESS_FLOOR_WORD}; the installed chant is ${installed ?? "unknown"}. ` +
-        "Build against a local chant with `just chant-local`, or use plywood's own bench: just tutorial-up.",
-    );
-  }
-}
-
-const NEEDED = ["E2E_HARNESS_FLOOR", "harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"] as const;
-
-/** Whether `m` carries what the bench calls. */
-export function isHarness(m: unknown): m is HarnessModule {
-  if (typeof m !== "object" || m === null) return false;
-  const r = m as Record<string, unknown>;
-  return typeof r.E2E_HARNESS_FLOOR === "string" && NEEDED.every((k) => r[k] !== undefined);
-}
-
-let loaded: Promise<HarnessModule | undefined> | undefined;
-
-/** chant's e2e harness, or undefined when the installed chant has none. */
-export function harness(): Promise<HarnessModule | undefined> {
-  loaded ??= (async () => {
-    try {
-      // @ts-ignore: the subpath is missing from chant 0.124.55 (chant#4587).
-      const m: unknown = await import("@intentius/chant/e2e-harness");
-      return isHarness(m) ? m : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's e2e harness, loaded on first use. */
+export function harness(): Promise<HarnessModule> {
+  loaded ??= import("@intentius/chant/e2e-harness").then((m) => m as unknown as HarnessModule);
   return loaded;
 }
 
-/** The harness, or a {@link NeedsChantHarness} refusal naming the installed chant. */
-export async function requireHarness(installed?: string): Promise<HarnessModule> {
-  const h = await harness();
-  if (!h) throw new NeedsChantHarness(installed);
-  return h;
-}
-
-/** Tests stand in a harness, or none; `reset` goes back to the real import. */
-export function setHarnessForTests(fake: HarnessModule | undefined | "reset"): void {
+/** Tests stand in a harness; `reset` goes back to the real import. */
+export function setHarnessForTests(fake: HarnessModule | "reset"): void {
   loaded = fake === "reset" ? undefined : Promise.resolve(fake);
 }

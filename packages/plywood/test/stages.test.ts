@@ -1,8 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { setChantNextForTests } from "../src/chant-next";
+import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { FALLBACK_EXIT } from "../src/exit-codes";
@@ -56,11 +55,8 @@ function repo(yml = "stacks:\n  shop/dev: {}\n  shop/prod: {}\n"): string {
   return dir;
 }
 
-// The parity features newer than the pin read as missing, so the argv below is the same on the pin and a local chant.
-beforeEach(() => setChantNextForTests({}));
 afterEach(() => {
   setChantProductForTests("reset");
-  setChantNextForTests("reset");
 });
 
 describe("words", () => {
@@ -141,11 +137,8 @@ describe("plywood preview", () => {
     expect(argv.filter((a) => a === "shop/prod")).toHaveLength(1);
   });
 
-  it("refuses --refresh on a chant without chant#4627, and a --target with no value", async () => {
+  it("refuses a --target with no value", async () => {
     setChantProductForTests({ ...fakeChant().api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
-    const o = io(repo());
-    expect(await preview(["--base", "a", "--pr", "1", "--refresh"], false, FALLBACK_EXIT, o)).toBe(1);
-    expect(o.stderr.join("\n")).toContain("chant#4627");
     expect(await preview(["--base", "a", "--pr", "1", "--target"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
   });
 
@@ -193,7 +186,7 @@ describe("plywood ci", () => {
     expect(chant.pipelines).toHaveLength(1);
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
-      "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up",
+      "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up", "--stale-notes",
       "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
   });

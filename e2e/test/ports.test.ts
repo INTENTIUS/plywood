@@ -81,6 +81,16 @@ describe("plywood-e2e commands", () => {
     expect(no.logged.pop()).toMatch(/1 of 2 pulumi-up wave jobs after 60s/);
   });
 
+  it("with a stack, counts only the wave jobs that targeted it (plywood#22 finding 10)", async () => {
+    const staging = (started: string): LedgerRecord => ({ ...wave(started), wave: { ...wave(started).wave!, name: "staging", applied: ["shop/staging"], targets: { "shop/staging": { startedAt: started, durationMs: 1 } } } });
+    // One merge's staging and prod records do not stand in for the other merge's dev job.
+    const one = ctx({ records: [wave("2026-10-28T10:01:00.000Z"), staging("2026-10-28T10:02:00.000Z")] });
+    expect(await runCommand(one.c, ["wait-runs", "pulumi-up", "2", "dev"])).toBe(124);
+    expect(one.logged.pop()).toMatch(/1 of 2 pulumi-up wave jobs on dev after 60s/);
+    const two = ctx({ records: [wave("2026-10-28T10:01:00.000Z"), staging("2026-10-28T10:02:00.000Z"), wave("2026-10-28T10:03:00.000Z")] });
+    expect(await runCommand(two.c, ["wait-runs", "pulumi-up", "2", "dev"])).toBe(0);
+  });
+
   it("checks the newest job applied a stack", async () => {
     expect(await runCommand(ctx({ records: [wave("2026-10-28T10:01:00.000Z")] }).c, ["applied", "pulumi-up", "dev"])).toBe(0);
     expect(await runCommand(ctx({ records: [] }).c, ["applied", "pulumi-up", "dev"])).toBe(1);

@@ -300,6 +300,39 @@ export const BASE_IMAGES = {
   debian: "debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251",
 } as const;
 
+/**
+ * The AWS CLI the images carry (plywood#22): chant uploads an `s3://`
+ * `reports.url` with `aws s3 cp`, which takes its credentials, region and
+ * endpoint from the job's environment. A release from 2.13 on reads
+ * `AWS_ENDPOINT_URL`, so a job pointed at an emulator stays on it; Debian
+ * bookworm's package (2.9) does not, which is why the images fetch AWS's own
+ * build, checked against these sums, rather than apt's.
+ */
+export const AWS_CLI = {
+  version: "2.22.0",
+  sha256: {
+    x86_64: "f315aa564190a12ae05a05bd8ab7b0645dd4a1ad71ce9e47dae4ff3dfeee8ceb",
+    aarch64: "c932ac00901ea3c430f3829140b8dc00fa6e9b8b99d6891929a4795947de7f3e",
+  },
+} as const;
+
+/** Where the images install the AWS CLI; `/usr/local/bin/aws` links into it. */
+export const AWS_CLI_DIR = "/opt/plywood/aws-cli";
+
+/** The fetch stage's line for the AWS CLI: download for the build's architecture, check the sum, install under {@link AWS_CLI_DIR}. */
+export function awsCliFetchLine(): string {
+  const { version, sha256 } = AWS_CLI;
+  return [
+    `a="$(case "$TARGETARCH" in (arm64) echo aarch64 ;; (*) echo x86_64 ;; esac)"`,
+    `case "$a" in (aarch64) want=${sha256.aarch64} ;; (*) want=${sha256.x86_64} ;; esac`,
+    `t="$(mktemp -d)"`,
+    `curl -fsSLo "$t/awscli.zip" "https://awscli.amazonaws.com/awscli-exe-linux-$a-${version}.zip"`,
+    `echo "$want  $t/awscli.zip" | sha256sum -c - >/dev/null`,
+    `unzip -q "$t/awscli.zip" -d "$t"`,
+    `"$t/aws/install" -i ${AWS_CLI_DIR} -b ${AWS_CLI_DIR}/bin`,
+  ].join(" && ");
+}
+
 /** Where the images keep Pulumi's home, so plugins a derived image installs serve every uid. */
 export const IMAGE_PULUMI_HOME = "/opt/plywood/pulumi-home";
 
@@ -330,9 +363,11 @@ export function dockerfile(engine: EngineName): string {
     `FROM ${BASE_IMAGES.debian} AS fetch`,
     `ARG TARGETARCH`,
     `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
-    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*`,
+    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*`,
     // Each case pattern opens with "(": bash 3.2 (macOS sh) cannot parse a bare "arm64)" inside $(...).
     `RUN set -e; ${fetchScript(engine, version, `/out${dir}`, `"$(case "$TARGETARCH" in (arm64) echo arm64 ;; (*) echo x64 ;; esac)"`, `"$CHECKSUMS_URL"`)}`,
+    // The AWS CLI chant uploads an s3:// reports.url with, checked against plywood's sums (AWS_CLI).
+    `RUN set -e; ${awsCliFetchLine()}`,
     `FROM ${BASE_IMAGES.node}`,
     // A forge may run the job as a uid with no passwd entry; Go then reads $USER and $HOME.
     `ENV USER=plywood HOME=/tmp PULUMI_HOME=${IMAGE_PULUMI_HOME} PULUMI_SKIP_UPDATE_CHECK=true`,
@@ -342,12 +377,14 @@ export function dockerfile(engine: EngineName): string {
     `COPY --from=fetch /out/opt/plywood/ /opt/plywood/`,
     `RUN ln -s ${dir}/${engine} /usr/local/bin/${engine} && ${engine} version`,
     pluginInstallLine(engine, IMAGE_PLUGINS),
+    `COPY --from=fetch ${AWS_CLI_DIR}/ ${AWS_CLI_DIR}/`,
+    `RUN ln -s ${AWS_CLI_DIR}/v2/current/bin/aws /usr/local/bin/aws && aws --version`,
     // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm
     // fetches its exact-pinned runtime dependencies. The tarball is made by npm pack (just images).
     `COPY ${PACK_DIR}/${packName()} /tmp/${packName()}`,
     `RUN npm install -g --omit=dev --no-audit --no-fund /tmp/${packName()} && rm -f /tmp/${packName()} && npm cache clean --force && plywood --version`,
     `LABEL org.opencontainers.image.title="${name}"`,
-    `LABEL org.opencontainers.image.description="${engineTitle} and the plywood CLI"`,
+    `LABEL org.opencontainers.image.description="${engineTitle}, the AWS CLI ${AWS_CLI.version} and the plywood CLI"`,
     `LABEL org.opencontainers.image.version="${PLYWOOD_VERSION}"`,
     `LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"`,
     `LABEL org.opencontainers.image.licenses="Apache-2.0"`,

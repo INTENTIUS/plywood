@@ -55,6 +55,7 @@ import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyP
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
+import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import { stacksOf as configuredStacks } from "./config/stacks";
@@ -82,9 +83,8 @@ import {
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
-import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, writeWaveJobs } from "./waves-workflow";
+import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, wavesEngine, wavesSpecText, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
-import { chantNext } from "./chant-next";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
 import { importLines, mergeKeys, parseFrom, runImport, type FromFlag, type ImportResult } from "./import/index";
 import { template } from "./templates";
@@ -258,6 +258,7 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
     const own = listed[key] ?? {};
     const backend = own.backend ?? (typeof doc.backend === "string" ? doc.backend : undefined);
     const engine = engineOf(doc, backend)?.engine;
+    const grain = lockGrainFor(doc, engine);
     const stackDir = own.dir ?? dir;
     const packs = packsForStack(stepPolicyPacksOf(doc), stackDir);
     const pin = pinned.get(key);
@@ -267,9 +268,14 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
       stack,
       dir: stackDir,
       ...(engine ? { engine } : {}),
+      // plywood#22: the step's backend, so a preview and an update read this stack's store, not the job's PULUMI_BACKEND_URL.
+      ...(backend ? { backend } : {}),
       ...(pin ? { engineVersion: pin.engineVersion!, ...(pin.engineRoot ? { engineRoot: pin.engineRoot } : {}) } : {}),
       ...(own.gate ? { gate: own.gate } : {}),
       ...(packs.length ? { policyPacks: packs } : {}),
+      // chant's ledger lock (ruling for ci-products 2026-10-28): each stack's grain on its step, so a plunge stack on the
+      // resource grain leases its resource rows and never waits, and a stock stack (or locks.grain: stack) waits for its stack row.
+      ...(grain !== "per-engine" ? { lockGrain: LOCK_GRAIN_OF[grain] as "resource" | "target" } : {}),
     });
     seen.add(key);
   };
@@ -399,7 +405,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
       }
     }
     if (spec && stacks.length > 0) {
-      files.push(put(root, WAVES_SPEC_FILE, jsonText(spec), opts.dryRun));
+      files.push(put(root, WAVES_SPEC_FILE, wavesSpecText(spec, wavesEngine(settings.pipeline)), opts.dryRun));
       // plywood#22: the Op the spec names, which chant's waves generator discovers from a *.op.ts file.
       files.push(put(root, UP_OP_FILE, upOpFile(spec), opts.dryRun));
     }
@@ -529,7 +535,7 @@ async function workflowStep(
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const control = await noteControlTarget(doc, root);
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, next: await chantNext(), ...(control ? { control } : {}) });
+    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, ...(control ? { control } : {}) });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }
@@ -546,7 +552,7 @@ async function workflowStep(
   ];
   const out: InitFile[] = [{ file: output, status: written.status, ...(notes.length ? { note: notes.join("; ") } : {}) }];
   if (plan.jobs.waves) {
-    const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root });
+    const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root }, wavesEngine(settings.pipeline));
     if (code !== table.done) out.push({ file: WAVES_OUTPUT_DIR[forge], status: "failed", note: `the waves workflow: chant exited ${code}` });
   }
   return out;

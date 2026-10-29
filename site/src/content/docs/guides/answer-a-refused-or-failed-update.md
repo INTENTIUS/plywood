@@ -1,8 +1,6 @@
 ---
 title: 'Read why an update stopped'
 description: 'A refused wave posts its change since the approval, and a failed update posts the failure.'
-needs: [chant#4629]
-draft: true
 ---
 
 A stopped wave gets a comment on the pull request that merged its commit. With no such pull request the comment goes on an issue.
@@ -27,4 +25,4 @@ decide:
 
 The check reads `chant.config.ts` at the target branch, so a pull request cannot change the service. It only comments and never gates an update.
 
-The waves workflow reads `wave_refused` and `apply_failed` from the waves spec `plywood ci` writes. `plywood ci` also puts all three keys on the pull request's own jobs. `decide` reaches those jobs only with `description: check`; `plywood check` warns when it is set without the check, and `plywood ci` leaves it off. With an older chant the pull request's jobs keep the defaults, and `plywood ci` prints a line for each key they do not take.
+The waves workflow reads `wave_refused` and `apply_failed` from the waves spec `plywood ci` writes. `plywood ci` also puts all three keys on the pull request's own jobs. `decide` reaches those jobs only with `description: check`; `plywood check` warns when it is set without the check, and `plywood ci` leaves it off.

@@ -5,6 +5,10 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.2.0
+
+The self-service work (plywood#39, plywood#44): the bench command resource, the command provider pinned at 1.0.1 in both images, and gated day-2 actions. It pins chant 0.124.58, and its CI images are `ghcr.io/intentius/plywood-pulumi:0.2.0-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.2.0-plunge0.1.0`, which the package names by digest.
+
 ## In 0.1.0
 
 The first release of `@intentius/plywood` on npm. It pins chant 0.124.58, and its CI images are `ghcr.io/intentius/plywood-pulumi:0.1.0-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.1.0-plunge0.1.0`, which the package names by digest.

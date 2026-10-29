@@ -16,11 +16,11 @@ RUN ln -s /opt/plywood/pulumi-3.272.0/pulumi /usr/local/bin/pulumi && pulumi ver
 RUN pulumi plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home
 COPY --from=fetch /opt/plywood/aws-cli/ /opt/plywood/aws-cli/
 RUN ln -s /opt/plywood/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
-COPY images/pack/intentius-plywood-0.1.0.tgz /tmp/intentius-plywood-0.1.0.tgz
-RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-0.1.0.tgz && rm -f /tmp/intentius-plywood-0.1.0.tgz && npm cache clean --force && plywood --version
+COPY images/pack/intentius-plywood-0.2.0.tgz /tmp/intentius-plywood-0.2.0.tgz
+RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-0.2.0.tgz && rm -f /tmp/intentius-plywood-0.2.0.tgz && npm cache clean --force && plywood --version
 LABEL org.opencontainers.image.title="plywood-pulumi"
 LABEL org.opencontainers.image.description="Pulumi 3.272.0, the AWS CLI 2.22.0 and the plywood CLI"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="0.2.0"
 LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 CMD ["bash"]

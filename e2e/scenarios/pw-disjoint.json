@@ -20,7 +20,7 @@
       "id": "both-updates",
       "do": "out-of-band",
       "label": "both merges' update jobs are on the ledger",
-      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "2"],
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "2", "dev"],
       "expect": [{ "exit": 0 }, { "ledger": { "op": "pulumi-up", "status": "ok", "count": 2 } }]
     },
     {

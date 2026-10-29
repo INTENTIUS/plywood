@@ -6,7 +6,7 @@ import { ADOPT_OP_FILE, adoptOpFile } from "../../packages/plywood/src/init/adop
 import { BUCKETS, FLOCI_NET, plungeStoreUrl, s3BackendUrl } from "../bench";
 import { claimsProblems } from "../claims";
 import { harness, type Scenario } from "../harness";
-import { dryRun, lint } from "../main";
+import { dryRun, jobLogCopies, lint } from "../main";
 import { BASE_OVERLAYS_DIR, SCENARIOS_DIR, SCENARIO_CLAIMS, lintPlywoodScenario, readScenario, scenarioFiles } from "../scenarios";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -170,5 +170,15 @@ describe("the claims page data", () => {
     expect(claimsProblems({ product: "plywood", rows: [row] }, SCENARIO_CLAIMS)).toEqual([]);
     const found = claimsProblems({ product: "plywood", rows: [{ ...row, productCommit: "", date: "" }, { ...row, safeRun: "REAL-CLOUD" }, { ...row, claim: "x" }, { ...row, scenario: "nope" }] }, SCENARIO_CLAIMS).join("\n");
     for (const w of ["no run commit", "no run date", "not CLEAN", "claim x", "no plywood scenario nope"]) expect(found).toContain(w);
+  });
+});
+
+describe("the job-log collector", () => {
+  it("copies the compressed and the uncompressed logs, each as task<id>.log", () => {
+    const listed = ["/data/gitea/actions_log/tutor/shop/1f/31.log.zst", "/data/gitea/actions_log/tutor/shop/20/32.log", "/data/gitea/actions_log/tutor/shop/20/notes.txt", ""];
+    expect(jobLogCopies(listed, "/out")).toEqual([
+      { from: "/data/gitea/actions_log/tutor/shop/1f/31.log.zst", to: "/out/task31.log", zst: true },
+      { from: "/data/gitea/actions_log/tutor/shop/20/32.log", to: "/out/task32.log", zst: false },
+    ]);
   });
 });

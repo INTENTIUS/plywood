@@ -110,3 +110,27 @@ describe("each stack's backend on its step (plywood#22)", () => {
     expect(stepInput(stacks[0]!)).not.toHaveProperty("backend");
   });
 });
+
+describe("each stack's lock grain on its step (chant's ledger lock, ruling for ci-products 2026-10-28)", () => {
+  const store = "plunge+s3://plywood-tutorial-plunge?region=us-east-1&endpoint=http://floci:4566&s3ForcePathStyle=true";
+  const state = "s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true";
+  const grains = (yml: string[]) => {
+    const stacks = initStacks(detected(["shop/dev", "shop/staging"]), parseConfig(yml.join("\n"), "plywood.yml").doc);
+    const spec = wavesSpec({ stacks, gate: "on-destructive", branch: "main" }) as { waves: Array<{ runs: Array<{ target: string; input: Record<string, unknown> }> }> };
+    return Object.fromEntries(spec.waves.flatMap((w) => w.runs).map((r) => [r.target, r.input.lockGrain]));
+  };
+
+  it("a plunge stack takes the resource grain and never waits; a stack on stock Pulumi takes target and waits for its stack row", () => {
+    // A plunge+ backend says plunge; an s3 backend leaves the engine to chant, whose stock default is target.
+    expect(grains(["stacks:", "  shop/dev:", `    backend: ${store}`, "  shop/staging:", `    backend: ${state}`, ""])).toEqual({ "shop/dev": "resource", "shop/staging": undefined });
+    expect(grains(["engine: pulumi", "stacks:", "  shop/dev: {}", "  shop/staging:", `    backend: ${state}`, ""])).toEqual({ "shop/dev": "target", "shop/staging": "target" });
+  });
+
+  it("locks.grain: stack puts every stack on target, plunge ones too", () => {
+    expect(grains(["locks:", "  grain: stack", "stacks:", "  shop/dev:", `    backend: ${store}`, "  shop/staging:", `    backend: ${state}`, ""])).toEqual({ "shop/dev": "target", "shop/staging": "target" });
+  });
+
+  it("a stack whose engine chant detects gets no grain of plywood's, so its lexicon's default holds", () => {
+    expect(grains(["stacks:", "  shop/dev: {}", "  shop/staging: {}", ""])).toEqual({ "shop/dev": undefined, "shop/staging": undefined });
+  });
+});

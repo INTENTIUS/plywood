@@ -45,7 +45,7 @@ jobs:
       - name: Build the bundle
         run: npm run build
       - name: Pack the package for the images
-        run: npm pack -w @intentius/plywood --pack-destination images/pack
+        run: mkdir -p images/pack && npm pack -w @intentius/plywood --pack-destination images/pack
       - name: Log in to GHCR
         env:
           GH_TOKEN: '${{ github.token }}'

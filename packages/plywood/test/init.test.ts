@@ -218,7 +218,7 @@ describe("golden files", () => {
       name: expect.any(String),
       schema: 1,
       members: [{ name: "shop", dir: "infra", kind: "pulumi" }],
-      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.57" }],
+      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.58" }],
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
     });
     const components = readFileSync(join(root, "plywood.component.ts"), "utf8");

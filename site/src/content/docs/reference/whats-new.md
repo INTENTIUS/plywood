@@ -7,7 +7,7 @@ Each release lists its changes here, newest first.
 
 ## In 0.2.0
 
-This release carries the self-service work from plywood#39 and plywood#44: the bench gains a command resource and gated day-2 actions, and both images now install version 1.0.1 of the command provider. It moves to chant 0.124.58, and the images it pins by digest are `ghcr.io/intentius/plywood-pulumi:0.2.0-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.2.0-plunge0.1.0`, rebuilt for this release.
+This release carries the self-service work: the bench gains a command resource and gated day-2 actions, and both images now install version 1.0.1 of the command provider. It moves to chant 0.124.58, and the images it pins by digest are `ghcr.io/intentius/plywood-pulumi:0.2.0-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.2.0-plunge0.1.0`, rebuilt for this release.
 
 ## In 0.1.0
 

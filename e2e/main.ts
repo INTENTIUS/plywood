@@ -10,8 +10,8 @@
  *   just e2e up                 start the harness's stack and seed it
  *   just e2e claim <id>         the plain run and the BREAK run, the scan, and
  *                               on a CLEAN scan the row on the bench's claims
- *                               ledger and site/src/data/claims.json
- *   just e2e render             claims.json again from the ledger
+ *                               ledger and EVIDENCE.md
+ *   just e2e render             EVIDENCE.md again from the ledger
  *   just e2e down               stop the stack and remove its volumes
  *
  * Everything but lint, dry-run and image needs chant's harness
@@ -249,7 +249,7 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
   const version = (await sh("docker", ["run", "--rm", "-e", "PULUMI_BACKEND_URL=file:///tmp/plywood-tutorial-backend", "-e", "PULUMI_SKIP_UPDATE_CHECK=true", "--entrypoint", "plunge", JOB_IMAGE, "version"])).trim().split("\n")[0]!.trim();
   const productCommit = (await sh("git", ["-C", ROOT, "rev-parse", "HEAD"])).trim();
   const { row } = await recordAndRender({ h, root: ROOT, state, scenario, run: result, safe, engine: { binary: "plunge", version }, productCommit, chant: installedChant() ?? "unknown" });
-  log(`${id}: recorded ${row.claim} (plain ${row.plain}, break ${row.break}) and rendered site/src/data/claims.json`);
+  log(`${id}: recorded ${row.claim} (plain ${row.plain}, break ${row.break}) and rendered EVIDENCE.md`);
   return row.plain === "pass" && row.break === "caught" ? 0 : 1;
 }
 

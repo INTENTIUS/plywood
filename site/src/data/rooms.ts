@@ -20,8 +20,6 @@ export type Room = {
 	reference: Link[];
 };
 
-export const PLUNGE_CLAIMS = 'https://intentius.io/plunge/claims/';
-
 /** Every room can count on these, whatever backend or engine it runs. */
 export const ASSUMED: Link[] = [
 	{ label: 'One preview note on every pull request', href: '/getting-started/' },
@@ -87,7 +85,6 @@ const locking = { label: 'Locking and staleness', href: '/concepts/locking-and-s
 const config = { label: 'Configuration', href: '/reference/config/' };
 const backends = { label: 'Backends', href: '/reference/backends/' };
 const stages = { label: 'Stages', href: '/reference/stages/' };
-const claims = { label: 'Claims and runs', href: '/reference/validation/' };
 const threat = { label: 'Threat model', href: '/reference/threat-model/' };
 
 export const ROOMS: Room[] = [
@@ -140,7 +137,7 @@ export const ROOMS: Room[] = [
 		first: { label: 'Choose pulumi or plunge', href: '/guides/choose-an-engine/' },
 		howto: [{ label: 'The same repo on plunge', href: '/tutorial/plunge/' }, { label: 'Watch an update on plunge', href: '/guides/watch-a-plunge-update/' }, { label: 'Change a stack\'s backend', href: '/guides/move-a-stack-backend/' }],
 		explain: [locking],
-		reference: [stages, { label: 'Exit codes', href: '/reference/exit-codes/' }, { label: 'plunge claims', href: PLUNGE_CLAIMS }],
+		reference: [stages, { label: 'Exit codes', href: '/reference/exit-codes/' }],
 	},
 	{
 		id: 'many-stacks',
@@ -227,11 +224,11 @@ export const ROOMS: Room[] = [
 			'An approval that stops counting once its preview moves',
 			'Waves, drift and an audit trail with no service to host',
 		],
-		differs: ['Each claim on the claims page names its recorded run.'],
-		first: claims,
+		differs: [],
+		first: howItWorks,
 		howto: [firstNote, { label: 'Boot the example', href: '/tutorial/' }],
 		explain: [howItWorks],
-		reference: [claims],
+		reference: [stages],
 	},
 ];
 

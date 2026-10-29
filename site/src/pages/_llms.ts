@@ -31,6 +31,6 @@ export const PREAMBLE = `# plywood
 
 plywood runs Pulumi previews and updates from pull requests on GitHub, GitLab or Forgejo. It posts one preview note for every stack a change reaches, binds each approval to a preview digest, and rolls changes out in waves. It runs on chant's runtime, and plunge, the Pulumi fork from the team behind plywood, adds resource-level features.
 
-The source is at https://github.com/INTENTIUS/plywood. Recorded runs are at https://intentius.io/plywood/reference/validation/.
+The source is at https://github.com/INTENTIUS/plywood.
 
 A page's prompt sits under "Optional: hand this page to your coding agent" and in llms.txt under the page. Every prompt ends with this rule, left out below: ${neverLine}`;

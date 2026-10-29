@@ -30,6 +30,6 @@ Then write the workflow again with `npx plywood ci --forge forgejo`.
 
 Open two pull requests on `Pulumi.dev.yaml`. The first sets `corpus:eventsRetentionSeconds` to 7200 and changes the `events` queue. The second sets `corpus:workerCount` to 4 and adds `worker-3`. plywood locks per resource, so each pull request holds only the URNs its preview touches. Approve and merge both.
 
-<WithPlunge claim="concurrent-updates" feature="two updates to different resources of one stack that run side by side, with no stack lock" />
+<WithPlunge feature="two updates to different resources of one stack that run side by side, with no stack lock" />
 
 Each `up` applies a saved plan. The plan carries the version of each record it read, so a record another update moved makes `plunge up` refuse with exit 40. plywood reports that as chant's moved-plan code, the same code a stock stack gets for a moved preview.

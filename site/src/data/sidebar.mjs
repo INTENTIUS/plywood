@@ -41,10 +41,6 @@ export const SIDEBAR = [
 		page('pulumi/actions in GitHub Actions', 'guides/from-pulumi-actions'),
 		page('Change a stack\'s backend', 'guides/move-a-stack-backend'),
 	]),
-	group('Proof', [
-		page('Claims and runs', 'reference/validation'),
-		page('Scale', 'reference/scale'),
-	]),
 	group('How-to guides', [
 		group('Add plywood', [
 			page('Add plywood to a repo', 'guides/add-to-a-repo'),

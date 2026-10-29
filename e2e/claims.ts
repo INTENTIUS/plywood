@@ -2,21 +2,18 @@
  * plywood's claim rows: a scenario's plain and BREAK runs recorded through
  * the harness (`recordClaimRow`, which refuses unless the no-real-cloud scan
  * was CLEAN) as an `e2e-claim` run record on a ledger in the bench's state
- * directory, and rendered (`renderClaims`, e2e-claims/v1) into
- * site/src/data/claims.json, the file the site's claims check and pages
- * read (plywood#22). The site holds rendered rows only; nobody edits them by
- * hand.
+ * directory, and rendered (`renderClaims`, e2e-claims/v1) into the repo's
+ * EVIDENCE.md (plywood#22). The docs site no longer shows the rows, and
+ * nothing is rendered into site/. Nobody edits the rows by hand.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { appendRunRecord, readRunLedger } from "@intentius/chant/lifecycle/run-ledger";
 import type { ClaimRow, ClaimRun, ClaimsDoc, HarnessModule, LedgerRecord, Scenario, SafeRunInstance } from "./harness";
+import { writeEvidence } from "./evidence";
 import { sh } from "./ports";
 
 export const PRODUCT = "plywood";
-
-/** The site file the rows are rendered into. */
-export const claimsFile = (root: string): string => join(root, "site", "src", "data", "claims.json");
 
 /** The ledger the rows are recorded on: a git repository in the state directory. */
 export const claimsLedger = (state: string): string => join(state, "claims-ledger");
@@ -26,7 +23,7 @@ async function ensureLedger(dir: string): Promise<void> {
   await sh("git", ["init", "-q", "-b", "main", dir]);
 }
 
-/** Record one claim run, then render every row into the site file. Returns the row. */
+/** Record one claim run, then render every row into EVIDENCE.md. Returns the row. */
 export async function recordAndRender(o: {
   h: HarnessModule;
   root: string;
@@ -49,17 +46,17 @@ export async function recordAndRender(o: {
   return { row, doc };
 }
 
-/** Render the ledger's rows into site/src/data/claims.json. */
+/** Render the ledger's rows into EVIDENCE.md. */
 export async function renderFromLedger(h: HarnessModule, root: string, state: string): Promise<ClaimsDoc> {
   const ledger = claimsLedger(state);
   await ensureLedger(ledger);
   const { records } = await readRunLedger("local", h.CLAIM_OP, { cwd: ledger });
   const doc = h.renderClaims(PRODUCT, h.claimRowsOf(records as unknown as LedgerRecord[]));
-  writeFileSync(claimsFile(root), `${JSON.stringify(doc, null, 2)}\n`);
+  writeEvidence(root, doc.rows);
   return doc;
 }
 
-/** Problems with a rendered claims document, as the site build reads it (site/scripts/check-claims.mjs holds the same rules). */
+/** Problems with a rendered claims document, as the bench records it. */
 export function claimsProblems(doc: unknown, scenarios: Readonly<Record<string, string>>): string[] {
   const out: string[] = [];
   const d = doc as Partial<ClaimsDoc>;

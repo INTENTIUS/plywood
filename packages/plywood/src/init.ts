@@ -85,7 +85,6 @@ import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
 import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, wavesEngine, wavesSpecText, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
-import { chantNext } from "./chant-next";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
 import { importLines, mergeKeys, parseFrom, runImport, type FromFlag, type ImportResult } from "./import/index";
 import { template } from "./templates";
@@ -536,7 +535,7 @@ async function workflowStep(
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const control = await noteControlTarget(doc, root);
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, next: await chantNext(), ...(control ? { control } : {}) });
+    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, ...(control ? { control } : {}) });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }

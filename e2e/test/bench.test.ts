@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { BUCKETS, FLOCI_NET, JOB_IMAGE, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
-import { NeedsChantHarness, harness, isHarness, requireHarness, setHarnessForTests, type HarnessStackShape } from "../harness";
+import { harness, setHarnessForTests, type HarnessStackShape } from "../harness";
 import { bucketCalls, makeBucket, type Fetch } from "../secure-bucket";
 import { setYamlKeys, overlayFiles } from "../overlays";
 import { cloudScript } from "../seed";
@@ -12,21 +12,10 @@ const ROOT = join(import.meta.dirname, "..", "..");
 afterEach(() => setHarnessForTests("reset"));
 
 describe("reaching chant's harness", () => {
-  it("finds no harness on the pinned chant and refuses with the floor and the fallback bench", async () => {
-    expect(await harness()).toBeUndefined();
-    const err = await requireHarness("0.124.55").catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(NeedsChantHarness);
-    expect(String((err as Error).message)).toMatch(/needs .*@intentius\/chant\/e2e-harness/);
-    expect(String((err as Error).message)).toContain("just tutorial-up");
-  });
-
-  it("takes a module only when it has the floor and every piece the bench calls", () => {
-    expect(isHarness({})).toBe(false);
-    expect(isHarness({ E2E_HARNESS_FLOOR: "0.125.0" })).toBe(false);
-    const full = Object.fromEntries(
-      ["harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"].map((k) => [k, () => undefined]),
-    );
-    expect(isHarness({ ...full, E2E_HARNESS_FLOOR: "0.125.0" })).toBe(true);
+  it("loads every piece the bench calls from the pinned chant", async () => {
+    const h = (await harness()) as unknown as Record<string, unknown>;
+    expect(h.E2E_HARNESS_FLOOR).toBe("0.124.56");
+    for (const k of ["harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"]) expect(h[k], k).toBeDefined();
   });
 });
 

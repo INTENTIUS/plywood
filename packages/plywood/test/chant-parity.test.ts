@@ -1,20 +1,19 @@
 /**
- * plywood on chant's parity features (chant#4624 to #4636), each behind its
- * feature-detect: the chant path with the feature stood in, and the
- * fallback without it.
+ * plywood on chant's parity features (chant#4624 to #4636). Those read off
+ * the ci-product entry are stood in with and without their floor.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
-import { acceptsContentsWrite, chantNext, setChantAuditForTests, setChantNextForTests, type ChantAudit } from "../src/chant-next";
+import { setChantAuditForTests, type ChantAudit } from "../src/chant-next";
 import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { toChantSettings } from "../src/chant-config";
 import { attributeStack, driftCloudFields, driftOpSpec, DRIFT_SPEC_FILE, specHasUpdate } from "../src/drift";
 import { FALLBACK_EXIT } from "../src/exit-codes";
-import { APPLY_MERGE_NEEDS_CHANT, APPROVAL_STATUS_NOTE, DECIDE_LEFT_OFF, ci, preview, respondArgv, writtenNotes, type StageIo } from "../src/stages";
+import { APPROVAL_STATUS_NOTE, DECIDE_LEFT_OFF, ci, preview, respondArgv, writtenNotes, type StageIo } from "../src/stages";
 import { up } from "../src/up";
 import { driftIssueBody, PRODUCT_WORDS } from "../src/words";
 
@@ -64,29 +63,22 @@ function repo(yml = "stacks:\n  shop/dev: {}\n"): string {
 
 const problems = (yml: string) => checkConfig(parseConfig(yml)).map((p) => `${p.severity} ${p.key}`);
 
-beforeEach(() => setChantNextForTests({}));
 afterEach(() => {
   setChantProductForTests("reset");
-  setChantNextForTests("reset");
   setChantAuditForTests("reset");
 });
 
 describe("plywood preview --refresh and --target-dependents (chant#4627)", () => {
-  it("passes both to pr-plan on a chant with chant#4627", async () => {
-    setChantNextForTests({ planFlags: true });
+  it("passes both to pr-plan", async () => {
     const chant = fakeChant({ prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
     setChantProductForTests(chant.api);
     expect(await preview(["shop/dev", "--base", "a", "--pr", "1", "--refresh", "--target", "urn:x", "--target-dependents"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]).toEqual(expect.arrayContaining(["components", "pr-plan", "--member", "shop/dev", "--refresh", "--target", "urn:x", "--target-dependents"]));
   });
 
-  it("refuses them on a chant without it, and --target-dependents without a --target", async () => {
+  it("refuses --target-dependents without a --target", async () => {
     const chant = fakeChant({ prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
     setChantProductForTests(chant.api);
-    const o = io(repo());
-    expect(await preview(["--base", "a", "--pr", "1", "--target", "urn:x", "--target-dependents"], false, FALLBACK_EXIT, o)).toBe(1);
-    expect(o.stderr.join("\n")).toContain("--target-dependents needs a chant whose pr-plan passes it to the pulumi-up step (chant#4627)");
-    setChantNextForTests({ planFlags: true });
     const p = io(repo());
     expect(await preview(["--base", "a", "--pr", "1", "--target-dependents"], false, FALLBACK_EXIT, p)).toBe(1);
     expect(p.stderr.join("\n")).toContain("give a --target");
@@ -95,8 +87,7 @@ describe("plywood preview --refresh and --target-dependents (chant#4627)", () =>
 });
 
 describe("plywood ci on the parity features", () => {
-  it("turns on the stale marking with chant#4628, and not before", async () => {
-    setChantNextForTests({ staleNotes: true });
+  it("turns on the stale marking (chant#4628)", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo());
@@ -104,12 +95,6 @@ describe("plywood ci on the parity features", () => {
     expect(chant.pipelines[0]!.staleNotes).toBe(true);
     expect(chant.calls[0]).toContain("--stale-notes");
     expect(o.stderr.join("\n")).toContain("stale     npx --no-install plywood components pr-post --stale");
-    setChantNextForTests({});
-    const old = fakeChant();
-    setChantProductForTests(old.api);
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
-    expect(old.pipelines[0]!.staleNotes).toBeUndefined();
-    expect(old.calls[0]).not.toContain("--stale-notes");
   });
 
   it("hands chant the responses and the decide service with chant#4629, and says the pull request jobs keep chant's defaults", async () => {
@@ -168,9 +153,8 @@ describe("plywood ci on the parity features", () => {
     expect(o.stderr.join("\n")).toContain("respond.description reaches no pull request job yet");
   });
 
-  it("asks for the merge after an update before merge with chant#4636, and says when the file lacks it", async () => {
+  it("asks for the merge after an update before merge (chant#4636), and says when the file lacks it", async () => {
     const yml = "stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n  merge: auto\n  merge_token_env: PLYWOOD_MERGE_TOKEN\n  merge_method: squash\n";
-    setChantNextForTests({ applyMerge: true });
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo(yml));
@@ -179,17 +163,9 @@ describe("plywood ci on the parity features", () => {
     expect(chant.calls[0]).toEqual(expect.arrayContaining(["--apply-before-merge", "--merge", "auto", "--merge-token-env", "PLYWOOD_MERGE_TOKEN", "--merge-method", "squash"]));
     expect(o.stderr.join("\n")).toContain("wrote the update before merge without the merge");
     expect(writtenNotes({ applyMerge: { tokenEnv: "X" } }, join(repo(), "none.yml"))).toEqual([]);
-    setChantNextForTests({});
-    const old = fakeChant();
-    setChantProductForTests(old.api);
-    const p = io(repo(yml));
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, p)).toBe(0);
-    expect(old.calls[0]).not.toContain("--merge");
-    expect(p.stderr.join("\n")).toContain(APPLY_MERGE_NEEDS_CHANT);
   });
 
   it("writes no merge note when chant's generator wrote the merge", async () => {
-    setChantNextForTests({ applyMerge: true });
     const chant = fakeChant({}, "jobs:\n  apply:\n    steps:\n      - run: npx --no-install plywood ci run apply --merge auto --merge-token-env T\n");
     setChantProductForTests(chant.api);
     const o = io(repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n  merge: auto\n  merge_token_env: T\n"));
@@ -242,21 +218,11 @@ describe("plywood.yml's parity keys", () => {
 
 describe("plywood up --pr and apply.merge (chant#4636)", () => {
   const yml = "stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n  merge: auto\n  merge_token_env: T\nforge:\n  kind: forgejo\n";
-  it("merges after the update on a chant with chant#4636", async () => {
-    setChantNextForTests({ applyMerge: true });
+  it("merges after the update", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(repo(yml), { BASE_SHA: "abc" }))).toBe(0);
     expect(chant.calls[0]).toEqual(expect.arrayContaining(["pr-apply", "--before-merge", "--merge", "auto", "--merge-token-env", "T"]));
-  });
-
-  it("leaves the merge to a person, and says so, on a chant without it", async () => {
-    const chant = fakeChant();
-    setChantProductForTests(chant.api);
-    const o = io(repo(yml), { BASE_SHA: "abc" });
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, o)).toBe(0);
-    expect(chant.calls[0]).not.toContain("--merge");
-    expect(o.stderr.join("\n")).toContain(APPLY_MERGE_NEEDS_CHANT);
   });
 });
 
@@ -280,7 +246,7 @@ describe("the drift jobs' identities (chant#4631)", () => {
     expect(driftCloudFields(doc, "github", "shop/dev", "issue", "production")).not.toHaveProperty("update");
   });
 
-  it("puts them on the spec only on a chant with chant#4631", () => {
+  it("puts them on the spec when asked", () => {
     const doc = parseConfig(yml).doc;
     expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *").ops[0]).not.toHaveProperty("cloud");
     expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", undefined, { cloud: true, env: "production" }).ops[0]).toHaveProperty("update");
@@ -299,20 +265,6 @@ describe("the drift jobs' identities (chant#4631)", () => {
     const op = (contentsWrite: boolean) => driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", undefined, { cloud: true, contentsWrite, env: "production" }).ops[0] as { update: { permissions?: unknown } };
     expect(op(true).update.permissions).toEqual({ contents: "write" });
     expect(op(false).update.permissions).toBeUndefined();
-  });
-
-  it("detects contents: write by the probe chant's check accepts", async () => {
-    const refusing = { assertScheduledOpCloud: (spec: { update?: { permissions?: Record<string, string> } }) => {
-      if (spec.update?.permissions?.contents) throw new Error("update.permissions names contents");
-    } };
-    expect(await acceptsContentsWrite(async () => ({ assertScheduledOpCloud: () => undefined }))).toBe(true);
-    expect(await acceptsContentsWrite(async () => refusing)).toBe(false);
-    expect(await acceptsContentsWrite(async () => ({}))).toBe(false);
-    expect(await acceptsContentsWrite(async () => { throw new Error("no subpath"); })).toBe(false);
-    setChantNextForTests("reset");
-    const real = await chantNext();
-    // On the 0.124.55 pin the subpath is missing, so neither is there; on chant integration/ci-products-4 both are.
-    expect(real.updateContentsWrite).toBe(real.scheduledOpCloud);
   });
 
   it("leaves the update to the update job when the spec has one", () => {

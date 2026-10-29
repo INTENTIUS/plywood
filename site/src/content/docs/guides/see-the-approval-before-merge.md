@@ -1,8 +1,6 @@
 ---
 title: 'See the approval before merge'
 description: 'plywood/approval on the pull request says whether its approval covers every wave.'
-needs: [chant#4630]
-draft: true
 ---
 
 The pull request carries a `plywood/approval` status. It is `pending` while some wave's plans at the head have no approval of the pull request's preview covering them. Once one approval covers them all it is `success` and names the approver. A branch rule that requires the status keeps the merge closed while it is `pending`.

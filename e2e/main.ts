@@ -26,7 +26,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FLOCI_NET, JOB_IMAGE, ORG, PROJECT, REPO, REPORT_URL, BUCKETS, benchStack, engineEnv, hostUrls, jobImageDockerfile, stateDir } from "./bench";
-import { NeedsChantHarness, harness, requireHarness, type Arm, type HarnessModule, type Scenario } from "./harness";
+import { harness, type Arm, type HarnessModule, type Scenario } from "./harness";
 import { ForgeLedger, LockObserver, armPort, memberReports, outOfBand, pushOverBranch, pushOverMain, reviewerChant, sh, type CommandContext } from "./ports";
 import { recordAndRender, renderFromLedger } from "./claims";
 import { BASE_OVERLAYS_DIR, OVERLAYS_DIR, SCENARIOS_DIR, lintPlywoodScenario, readScenario, scenarioFiles } from "./scenarios";
@@ -46,15 +46,15 @@ function installedChant(): string | undefined {
 }
 
 /** Lint every scenario. Exit 1 on any finding. */
-export async function lint(h: HarnessModule | undefined, out: (s: string) => void = console.log): Promise<number> {
+export async function lint(h: HarnessModule, out: (s: string) => void = console.log): Promise<number> {
   let findings = 0;
   for (const [id, file] of Object.entries(scenarioFiles())) {
     const data = JSON.parse(readFileSync(file, "utf8")) as Scenario;
     const own = lintPlywoodScenario(file, data);
-    const theirs = h ? h.lintScenario(data).map((f) => `${file}: ${f.at}: ${f.message}`) : [];
+    const theirs = h.lintScenario(data).map((f) => `${file}: ${f.at}: ${f.message}`);
     for (const f of [...own, ...theirs]) out(f);
     findings += own.length + theirs.length;
-    if (own.length + theirs.length === 0) out(`${id}: clean${h ? "" : " (plywood's rules; the harness's lint needs chant's e2e harness)"}`);
+    if (own.length + theirs.length === 0) out(`${id}: clean`);
   }
   return findings === 0 ? 0 : 1;
 }
@@ -325,7 +325,7 @@ export async function main(argv: string[]): Promise<number> {
     case "up":
     case "claim":
     case "render": {
-      const h = await requireHarness(installedChant());
+      const h = await harness();
       if (cmd === "render") {
         await renderFromLedger(h, ROOT, stateDir(ROOT));
         return 0;
@@ -358,8 +358,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exitCode = code;
     },
     (err: unknown) => {
-      console.error(err instanceof NeedsChantHarness ? err.message : err instanceof Error ? (err.stack ?? err.message) : String(err));
-      process.exitCode = err instanceof NeedsChantHarness ? 2 : 1;
+      console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
+      process.exitCode = 1;
     },
   );
 }

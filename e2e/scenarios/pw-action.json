@@ -14,7 +14,7 @@
       "do": "out-of-band",
       "label": "plywood action previews the replacement of prod-us's rotate command alone, records the request and prints the line that approves it",
       "command": ["plywood-e2e", "action", "prod-us", "rotate"],
-      "expect": [{ "exit": 3 }]
+      "expect": [{ "exit": 3 }, { "gated": { "op": "pulumi-stack-ops", "status": "gated", "count": 1 } }]
     },
     {
       "id": "approve",
@@ -35,7 +35,7 @@
       "do": "out-of-band",
       "label": "the same call after the approval replaces the command once and records how it ended",
       "command": ["plywood-e2e", "action", "prod-us", "rotate"],
-      "expect": [{ "exit": 0 }]
+      "expect": [{ "exit": 0 }, { "gated": { "op": "pulumi-stack-ops", "status": "ok", "count": 1 } }]
     }
   ],
   "break": {

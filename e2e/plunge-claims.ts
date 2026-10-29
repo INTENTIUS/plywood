@@ -1,20 +1,17 @@
-// The plunge claims plywood's pages credit, by id. Each <WithPlunge claim="...">
-// names one, and scripts/check-claims.mjs fails the build on an id missing
-// here, on a <WithPlunge> with no claim, and on a `row` that plunge's claims
-// page (https://intentius.io/plunge/claims/) has no recorded run for.
+// The plunge features plywood's pages describe, by id, with the run each
+// rests on. EVIDENCE.md renders this list (e2e/evidence.ts).
 //
-// `row` is the start of the run's first cell on plunge's page
-// (site/src/content/docs/claims.md in the plunge repository). A claim with no
-// `row` has no recorded run on that page yet; `waits` says what it waits on.
-// Nothing here renders: the aside only links plunge's page.
+// `row` is the start of the run's first cell on plunge's own evidence page.
+// A feature with no `row` has no recorded run there yet; `waits` says what
+// it waits on.
 
 export type PlungeClaim = {
 	id: string;
-	/** What the claim says, as the aside's feature clause words it. */
+	/** What the claim says. */
 	says: string;
-	/** The start of the run's first cell on plunge's claims page. */
+	/** The start of the run's first cell on plunge's evidence page. */
 	row?: string;
-	/** Why plywood credits no recorded run yet. */
+	/** Why no recorded run is listed yet. */
 	waits?: string;
 };
 
@@ -50,5 +47,3 @@ export const PLUNGE_CLAIMS_DATA: PlungeClaim[] = [
 		waits: 'plunge#40, closed on 2026-10-28 with its fix on plunge main after 0.1.0: the maintainer run of plunge graph --json is credited here once a plunge release after 0.1.0 carries it',
 	},
 ];
-
-export const PLUNGE_CLAIM_IDS = new Set(PLUNGE_CLAIMS_DATA.map((c) => c.id));

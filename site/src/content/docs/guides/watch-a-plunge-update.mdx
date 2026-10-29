@@ -7,7 +7,7 @@ draft: true
 
 import WithPlunge from '../../../components/WithPlunge.astro';
 
-<WithPlunge claim="per-resource-progress" feature="per-resource timings of each provider call and record write during up" />
+<WithPlunge feature="per-resource timings of each provider call during up" />
 
 plunge times each provider call and each record write during `up`. In the wave job's trace each resource gets a span under its stack that spans its calls, with a child span per call and its provider and record time. The job's log prints one progress line per resource. The stack's span carries the totals (`plywood.plunge.resources`, `calls`, `provider_ms`, `record_ms`, `failed_calls`) and the slowest call. A failed update keeps the timings of the resources it reached.
 

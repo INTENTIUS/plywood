@@ -25,6 +25,8 @@ A release puts both images on GHCR, then `@intentius/plywood` on npm. The npm pa
 5. Run the publish workflow on main (`gh workflow run publish.yml --ref main`). The images job is skipped off a tag; the publish job skips a version npm already has, refuses a bundle that lacks a digest, and runs `npm publish --provenance --access public` from `packages/plywood`.
 6. `just github-release <version>` once npm has the version. It creates the GitHub release on the existing tag `v<version>` (`gh release create --verify-tag`, so it never creates or moves a tag), titled with the version and marked latest, with its notes from the `## In <version>` section of the changes page that step 1 merged. A version whose release exists is left as it is; `--dry-run` prints the notes.
 
+Update `EVIDENCE.md` with each release (`just e2e render` regenerates it from the scenarios and the bench's recorded rows). The docs site does not show claims or recorded runs; EVIDENCE.md is where they live.
+
 The tag starts the publish workflow too. At that point the digests are not recorded yet, so that run refuses at the publish job, and the step 5 dispatch on main publishes. A red tag run is therefore expected and is not a failed release; check that the dispatch run is green and that npm has the version. A tag pushed after its digests are already on main publishes directly.
 
 The workflow publishes with npm trusted publishing: npm accepts the job's GitHub OIDC token (`id-token: write`), so there is no npm token, and the package carries a provenance statement for the run. It needs npm 11.5.1 or later, which the job installs when Node's bundled npm is older.

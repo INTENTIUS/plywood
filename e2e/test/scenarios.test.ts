@@ -6,6 +6,7 @@ import { ADOPT_OP_FILE, adoptOpFile } from "../../packages/plywood/src/init/adop
 import { BUCKETS, FLOCI_NET, plungeStoreUrl, s3BackendUrl } from "../bench";
 import { claimsProblems } from "../claims";
 import { harness, type Scenario } from "../harness";
+import { PLUNGE_CLAIMS_DATA } from "../plunge-claims";
 import { dryRun, jobLogCopies, lint } from "../main";
 import { BASE_OVERLAYS_DIR, SCENARIOS_DIR, SCENARIO_CLAIMS, lintPlywoodScenario, readScenario, scenarioFiles } from "../scenarios";
 
@@ -159,11 +160,11 @@ describe("pw-adopt", () => {
   });
 });
 
-describe("the claims page data", () => {
-  it("is an e2e-claims/v1 document with only rendered rows", () => {
-    const doc = JSON.parse(readFileSync(join(ROOT, "site", "src", "data", "claims.json"), "utf8"));
-    expect(doc.$schema).toBe("https://intentius.io/chant/schemas/e2e-harness/e2e-claims/v1/e2e-claims.schema.json");
-    expect(claimsProblems(doc, SCENARIO_CLAIMS)).toEqual([]);
+describe("the recorded rows", () => {
+  it("lists every scenario and plunge feature on EVIDENCE.md", () => {
+    const page = readFileSync(join(ROOT, "EVIDENCE.md"), "utf8");
+    for (const id of Object.keys(SCENARIO_CLAIMS)) expect(page).toContain(`\`${id}\``);
+    for (const c of PLUNGE_CLAIMS_DATA) expect(page).toContain(`\`${c.id}\``);
   });
 
   it("refuses a row with no run commit or date, a scan that was not CLEAN, or a claim its scenario does not record", () => {

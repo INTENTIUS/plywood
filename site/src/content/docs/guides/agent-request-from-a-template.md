@@ -1,6 +1,8 @@
 ---
 title: 'Have an agent request an app'
 description: 'An agent asks for an app from a template, and the request goes through the same pull request and approval as a person''s.'
+needs: [plywood#40]
+draft: true
 ---
 
 ```sh

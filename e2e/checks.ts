@@ -107,9 +107,29 @@ export function movedNotGated(records: readonly LedgerRecord[], o: { op: string;
   return ok(`${o.stack}'s saved plan moved: exit ${EXIT.moved}, nothing applied`);
 }
 
-/** How many of the `wanted` runs of `op` since `since` have finished (any status). */
-export function finishedRuns(records: readonly LedgerRecord[], op: string, since: string, onlyWaves: boolean): number {
-  return records.filter((r) => r.op === op && r.started >= since && (!onlyWaves || r.wave !== undefined)).length;
+/**
+ * How many of the `wanted` runs of `op` since `since` have finished (any
+ * status). With `stack`, only the wave jobs that targeted it count
+ * (plywood#22 finding 10): staging's and prod's records of one merge no
+ * longer stand in for the other merge's dev job.
+ */
+export function finishedRuns(records: readonly LedgerRecord[], op: string, since: string, onlyWaves: boolean, stack?: string): number {
+  return records.filter((r) => r.op === op && r.started >= since && (!onlyWaves || r.wave !== undefined) && (stack === undefined || stackTarget(r, stack) !== undefined)).length;
+}
+
+/** One Forgejo Actions task as `/repos/<o>/<r>/actions/tasks` lists it. */
+export interface ForgeTask {
+  id: number;
+  name?: string;
+  status: string;
+}
+
+/** Statuses of a task the runner has not finished: one still running, or one queued behind another. */
+export const BUSY_TASK_STATUSES = ["running", "waiting", "blocked"] as const;
+
+/** The tasks still running or waiting (plywood#22 finding 10): an arm's reset waits until there are none. */
+export function busyTasks(tasks: readonly ForgeTask[]): ForgeTask[] {
+  return tasks.filter((t) => (BUSY_TASK_STATUSES as readonly string[]).includes(t.status));
 }
 
 /** Keys of a bucket listing that look like a lock: the DIY backend's lock directory, or any key naming a lock (plunge races.sh). */

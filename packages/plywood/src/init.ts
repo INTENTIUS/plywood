@@ -55,6 +55,7 @@ import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyP
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
 import { gateOf } from "./config/approval";
 import { engineOf } from "./config/engine";
+import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import { stacksOf as configuredStacks } from "./config/stacks";
@@ -258,6 +259,7 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
     const own = listed[key] ?? {};
     const backend = own.backend ?? (typeof doc.backend === "string" ? doc.backend : undefined);
     const engine = engineOf(doc, backend)?.engine;
+    const grain = lockGrainFor(doc, engine);
     const stackDir = own.dir ?? dir;
     const packs = packsForStack(stepPolicyPacksOf(doc), stackDir);
     const pin = pinned.get(key);
@@ -272,6 +274,9 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
       ...(pin ? { engineVersion: pin.engineVersion!, ...(pin.engineRoot ? { engineRoot: pin.engineRoot } : {}) } : {}),
       ...(own.gate ? { gate: own.gate } : {}),
       ...(packs.length ? { policyPacks: packs } : {}),
+      // chant's ledger lock (ruling for ci-products 2026-10-28): each stack's grain on its step, so a plunge stack on the
+      // resource grain leases its resource rows and never waits, and a stock stack (or locks.grain: stack) waits for its stack row.
+      ...(grain !== "per-engine" ? { lockGrain: LOCK_GRAIN_OF[grain] as "resource" | "target" } : {}),
     });
     seen.add(key);
   };

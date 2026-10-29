@@ -21,6 +21,7 @@
  * credential, a file:// Pulumi backend, no update check) and its log is
  * scanned before a row is recorded.
  */
+import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -30,8 +31,8 @@ import { ForgeLedger, LockObserver, armPort, memberReports, outOfBand, pushOverB
 import { recordAndRender, renderFromLedger } from "./claims";
 import { BASE_OVERLAYS_DIR, OVERLAYS_DIR, SCENARIOS_DIR, lintPlywoodScenario, readScenario, scenarioFiles } from "./scenarios";
 import { overlayFiles, readOverlay } from "./overlays";
-import { expandWord } from "./checks";
-import { compose, down, readBenchState, resetCloud, shopDir, up, type SeedContext } from "./seed";
+import { busyTasks, expandWord, type ForgeTask } from "./checks";
+import { compose, composeFile, down, readBenchState, resetCloud, shopDir, up, type SeedContext } from "./seed";
 
 const ROOT = join(import.meta.dirname, "..");
 const log = (line: string) => console.error(`[e2e] ${line}`);
@@ -145,6 +146,24 @@ async function newestPull(h: HarnessModule, forgeUrl: string, token: string, bra
   return list.filter((p) => p.head?.ref === branch).reduce<number | undefined>((n, p) => (n === undefined || p.number > n ? p.number : n), undefined);
 }
 
+/**
+ * Wait until Forgejo lists no running, waiting or blocked task for
+ * tutor/shop (plywood#22 finding 10), up to `limit` seconds, so an arm's
+ * reset never races a job the arm before started. Throws at the limit,
+ * naming the tasks still busy.
+ */
+async function drainTasks(h: HarnessModule, forgeUrl: string, token: string, clock: HarnessModule["realClock"], limit: number): Promise<void> {
+  const deadline = clock.now() + limit * 1000;
+  for (;;) {
+    const page = await h.forgejoApi<{ workflow_runs?: ForgeTask[] }>(forgeUrl, token, "GET", `/repos/${ORG}/${REPO}/actions/tasks?limit=200`);
+    const busy = busyTasks(page?.workflow_runs ?? []);
+    if (busy.length === 0) return;
+    if (clock.now() >= deadline) throw new Error(`Forgejo still lists ${busy.map((t) => `task ${t.id} (${t.name ?? "?"}, ${t.status})`).join(", ")} after ${limit}s, so the reset would race them`);
+    log(`waiting for ${busy.length} Forgejo task${busy.length === 1 ? "" : "s"} to finish before the reset: ${busy.map((t) => `${t.id} ${t.status}`).join(", ")}`);
+    await clock.sleep(5000);
+  }
+}
+
 async function claim(h: HarnessModule, id: string): Promise<number> {
   const scenario = h.loadScenario(join(SCENARIOS_DIR, `${id}.json`));
   const own = lintPlywoodScenario(join(SCENARIOS_DIR, `${id}.json`), scenario);
@@ -197,6 +216,8 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
       outOfBand: outOfBand(ctx),
       reset: async () => {
         observer.stop();
+        // plywood#22 finding 10: no reset restarts floci under a job the arm before left running or queued.
+        await drainTasks(h, urls.forgejo, st.admin.token, clock, ctx.waitLimit);
         for (const pull of await forge.openPulls()) await forge.closePull(pull);
         // A drift issue from the arm before would answer this arm's issue checks.
         for (const issue of await forge.issues()) if (issue.open) await h.forgejoApi(urls.forgejo, st.admin.token, "PATCH", `/repos/${ORG}/${REPO}/issues/${issue.number}`, { state: "closed" });
@@ -232,6 +253,51 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
   return row.plain === "pass" && row.break === "caught" ? 0 : 1;
 }
 
+/** Where Forgejo keeps tutor/shop's job logs in its container. */
+export const FORGEJO_JOB_LOG_DIR = `/data/gitea/actions_log/${ORG}/${REPO}`;
+
+/**
+ * Each job log under {@link FORGEJO_JOB_LOG_DIR} and where its copy goes,
+ * `<dir>/task<id>.log` (plywood#22): Forgejo compresses a finished task's
+ * log to `<id>.log.zst` and keeps a running or just-finished one as
+ * `<id>.log`, so the scan reads both.
+ */
+export function jobLogCopies(files: readonly string[], dir: string): Array<{ from: string; to: string; zst: boolean }> {
+  const out: Array<{ from: string; to: string; zst: boolean }> = [];
+  for (const from of files) {
+    const m = /(?:^|\/)([^/]+?)\.log(\.zst)?$/.exec(from.trim());
+    if (!m) continue;
+    out.push({ from: from.trim(), to: join(dir, `task${m[1]}.log`), zst: m[2] === ".zst" });
+  }
+  return out.sort((a, b) => (a.to < b.to ? -1 : a.to > b.to ? 1 : 0));
+}
+
+/** Copy every job log of tutor/shop out of Forgejo into `dir`, the compressed ones decompressed, for `chant e2e safe-run --scan`. */
+function copyJobLogs(dir: string): number {
+  const state = stateDir(ROOT);
+  const exec = (args: string[]) => execFileSync("docker", ["compose", "-p", PROJECT, "-f", composeFile(state), "exec", "-T", "forgejo", ...args], { maxBuffer: 512 * 1024 * 1024 });
+  const listed = String(exec(["find", FORGEJO_JOB_LOG_DIR, "-type", "f", "(", "-name", "*.log.zst", "-o", "-name", "*.log", ")"])).split("\n").filter(Boolean);
+  mkdirSync(dir, { recursive: true });
+  let copied = 0;
+  for (const c of jobLogCopies(listed, dir)) {
+    const raw = exec(["cat", c.from]);
+    if (c.zst) {
+      const plain = spawnSync("zstd", ["-dqc"], { input: raw, maxBuffer: 512 * 1024 * 1024 });
+      if (plain.status !== 0) {
+        writeFileSync(`${c.to}.zst`, raw);
+        log(`${c.from}: zstd could not decompress it (${plain.error?.message ?? `exit ${plain.status}`}); kept as ${c.to}.zst`);
+        continue;
+      }
+      writeFileSync(c.to, plain.stdout);
+    } else {
+      writeFileSync(c.to, raw);
+    }
+    copied++;
+  }
+  log(`copied ${copied} of ${listed.length} job logs into ${dir}`);
+  return copied === listed.length ? 0 : 1;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
   switch (cmd) {
@@ -250,6 +316,12 @@ export async function main(argv: string[]): Promise<number> {
     case "down":
       await down({ state: stateDir(ROOT), log });
       return 0;
+    case "job-logs":
+      if (!rest[0]) {
+        console.error("usage: just e2e job-logs <dir>");
+        return 2;
+      }
+      return copyJobLogs(rest[0]);
     case "up":
     case "claim":
     case "render": {
@@ -275,7 +347,7 @@ export async function main(argv: string[]): Promise<number> {
       return claim(h, rest[0]);
     }
     default:
-      console.error(`usage: just e2e lint | dry-run <id> | image <plunge> | up | claim <id> | render | down   (report URL ${REPORT_URL}, floci ${FLOCI_NET} in the network)`);
+      console.error(`usage: just e2e lint | dry-run <id> | image <plunge> | up | claim <id> | render | job-logs <dir> | down   (report URL ${REPORT_URL}, floci ${FLOCI_NET} in the network)`);
       return 2;
   }
 }

@@ -23,7 +23,7 @@
       "id": "update",
       "do": "out-of-band",
       "label": "the merge's update job is on the ledger",
-      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1", "dev"],
       "expect": [{ "exit": 0 }]
     },
     {

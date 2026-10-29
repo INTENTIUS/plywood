@@ -108,6 +108,7 @@ tutorial-scan:
 #   just e2e image <plunge>       the job image: plywood's images and a linux plunge build (run `just images` first)
 #   just e2e up                   start and seed the bench
 #   just e2e claim pw-disjoint    record the scenario's row and render site/src/data/claims.json
+#   just e2e job-logs <dir>       copy every Forgejo job log (.log.zst decompressed, and .log) into <dir> for the scan
 #   just e2e down                 remove the bench's containers and volumes
 e2e *args:
     npx tsx e2e/main.ts {{args}}

@@ -13,8 +13,7 @@
  *       product tool named as a write. `--propose` (plywood#41) is chant's
  *       propose tier (chant#4655): the same read tools plus
  *       `plywood:request_from_template`, declared `forgeWrite`, which refuses
- *       every call until plywood has Pulumi templates (plywood#40). On a
- *       chant without the tier, `--propose` exits 1 naming it.
+ *       every call until plywood has Pulumi templates (plywood#40).
  *
  *   plywood ci, with `review` set
  *       writes ops/plywood-review.op.ts, a pull request Op that previews
@@ -28,7 +27,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
-import { BUILT_CHANT, type ChantProduct, type ForgeKind } from "./chant-product";
+import { type ChantProduct, type ForgeKind } from "./chant-product";
 import { configCheck } from "./config-check";
 import { reviewOf } from "./config/agents";
 import { findConfig, loadConfig, type RawConfig } from "./config/index";
@@ -49,7 +48,7 @@ interface PlywoodMcpToolBase {
 /** chant's `McpToolContribution`, as plywood fills it: a read tool, or a tool that opens a pull request (`forgeWrite`, served on `--propose` only, chant#4655). */
 export type PlywoodMcpTool = (PlywoodMcpToolBase & { readOnly: true; forgeWrite?: never }) | (PlywoodMcpToolBase & { forgeWrite: true; readOnly?: never });
 
-/** What chant hands the hook's `tools`; a chant before chant#4655 leaves `propose` out. */
+/** What chant hands the hook's `tools`. */
 export interface PlywoodMcpContext {
   cwd: string;
   readOnly: boolean;
@@ -162,23 +161,11 @@ export function plywoodMcpHook(reportUrl?: string, propose = false): PlywoodMcpH
   };
 }
 
-/** The last chant release without the propose tier. */
-const PROPOSE_AFTER = "0.124.56";
-
-/** What `plywood mcp --propose` prints on a chant without chant#4655's tier. */
-export function needsProposeMessage(): string {
-  return (
-    `${PRODUCT} mcp --propose needs chant >= the release after ${PROPOSE_AFTER}, which carries the MCP propose tier (PRODUCT_MCP_PROPOSE_FLOOR, chant#4655). ` +
-    `This plywood was built with chant ${BUILT_CHANT}, which lacks it. ` +
-    "Upgrade plywood once that chant is out, or build against a local chant with 'just chant-local'."
-  );
-}
-
 /**
  * `plywood mcp [--report-url <url>] [--propose]`: chant's read-only MCP
  * server over stdio, with plywood's tools. `--propose` is chant's propose
  * tier (`serve mcp --read-only --propose`, chant#4655), which also serves
- * plywood's `forgeWrite` tools; on a chant without it, exit 1.
+ * plywood's `forgeWrite` tools.
  */
 export async function mcp(args: string[], _json: boolean, table: ExitTable, io: StageIo): Promise<number> {
   const propose = args.includes("--propose");
@@ -187,10 +174,6 @@ export async function mcp(args: string[], _json: boolean, table: ExitTable, io: 
   if (report.rest.length) return usage(`mcp does not take ${report.rest.join(" ")}`, table, io);
   return withChant(`${PRODUCT} mcp`, table, io, (chant) => {
     // stdout is the protocol's: every word of plywood's goes to stderr.
-    if (propose && typeof chant.PRODUCT_MCP_PROPOSE_FLOOR !== "string") {
-      io.err(`${PRODUCT}: ${needsProposeMessage()}`);
-      return Promise.resolve(table.failed);
-    }
     if (typeof chant.PRODUCT_MCP_HOOK_FLOOR !== "string") {
       io.err(`${PRODUCT} mcp: this chant has no product tool hook (chant#4555), so the server serves chant's read tools and none of ${PRODUCT}'s`);
     }

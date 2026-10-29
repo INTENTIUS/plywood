@@ -22,19 +22,13 @@
  * chant's `productActionFromEnv`, and asks anew each time, since every
  * comment is a new request. A retried job still never runs an action twice
  * under one approval.
- *
- * `gatedStackAction` is probed on its own, outside the other stack
- * operations' REQUIRED list, so export, cancel and move keep working on a
- * chant without it; this verb then says which chant it needs and exits with
- * chant's `failed` code.
  */
-import { chantProduct, hasChantActions } from "./chant-product";
+import { chantProduct } from "./chant-product";
 import { actionsOf } from "./config/stacks";
 import type { ExitTable } from "./exit-codes";
 import { positionals, usage, type StageIo } from "./stages";
 import {
   commonFlags,
-  needsStackOpsMessage,
   readConfig,
   reportOutcome,
   requesterOf,
@@ -64,39 +58,23 @@ export type ChantStackAction = (
 /** The approval subject chant asks an action under (`stackActionSubject`). */
 export const actionSubject = (stack: string, name: string): string => `action:${stack}:${name}`;
 
-/** The last chant release without `gatedStackAction`. */
-const ACTIONS_AFTER = "0.124.56";
+let cachedAction: Promise<ChantStackAction> | undefined;
 
-let cachedAction: Promise<ChantStackAction | undefined> | undefined;
-
-/** chant's gatedStackAction, or undefined when the installed pulumi lexicon lacks it. */
-export function chantStackAction(): Promise<ChantStackAction | undefined> {
-  cachedAction ??= (async () => {
-    try {
-      // @ts-ignore: gatedStackAction is newer than the lexicon at the pin (chant#4654).
-      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
-      return typeof m.gatedStackAction === "function" ? (m.gatedStackAction as ChantStackAction) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's gatedStackAction (chant#4654), loaded on first use. */
+export function chantStackAction(): Promise<ChantStackAction> {
+  cachedAction ??= import("@intentius/chant-lexicon-pulumi").then((m) => m.gatedStackAction as unknown as ChantStackAction);
   return cachedAction;
 }
 
-/** Tests stand in a fake gatedStackAction (or none, for the refusal). `reset` goes back to the real import. */
-export function setChantStackActionForTests(fake: ChantStackAction | undefined | "reset"): void {
+/** Tests stand in a fake gatedStackAction. `reset` goes back to the real import. */
+export function setChantStackActionForTests(fake: ChantStackAction | "reset"): void {
   cachedAction = fake === "reset" ? undefined : Promise.resolve(fake);
-}
-
-/** The message `plywood action` prints on a chant without gatedStackAction. */
-export function needsActionsMessage(): string {
-  return needsStackOpsMessage(`${PRODUCT} action`, "gated stack actions (gatedStackAction, chant#4654)", ACTIONS_AFTER);
 }
 
 /** The stack and action an action job was started for, read through chant (chant#4654). */
 async function fromEvent(env: NodeJS.ProcessEnv): Promise<{ stack: string; name: string } | { error: string }> {
   const chant = await chantProduct();
-  if (!chant || !hasChantActions(chant)) return { error: `${PRODUCT} action --from-event reads the action job's comment or inputs through chant's productActionFromEnv, which this chant lacks. ${needsActionsMessage()}` };
+  if (!chant) return { error: `${PRODUCT} action --from-event reads the action job's comment or inputs through chant's productActionFromEnv, and chant's product entry did not load` };
   const words = chant.assertProductWords({ ...PRODUCT_WORDS, commands: { ...PRODUCT_WORDS.commands, ...ACTION_COMMAND } });
   const asked = chant.productActionFromEnv!(words, env);
   if (asked.kind === "refused") return { error: `the action job was asked for no action: ${asked.reason}` };
@@ -138,10 +116,6 @@ export async function action(args: string[], json: boolean, table: ExitTable, io
   if (!chosen) return usage(STACK_OP_WORDS.noAction(stack.key, name, declared.map((a) => a.name)), table, io);
 
   const gated = await chantStackAction();
-  if (!gated) {
-    io.err(`${PRODUCT}: ${needsActionsMessage()}`);
-    return table.failed;
-  }
   useBackend([stack], io.env);
   const rules = requestRules(read.config);
   try {

@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, hasChant4607, hasChant4620, hasChantActions, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
 import { hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond } from "./chant-next";
 import { approvalOf } from "./config/approval";
@@ -370,7 +370,7 @@ export function workflowPlan(
   // through the pull request (ruling B). From APPROVAL_STATUS_PULL_REQUEST_FLOOR chant posts it for those waves too.
   if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant) && !hasChantPullRequestApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
   // plywood#39: with actions declared, chant's action job answers /plywood action and a dispatch with stack and action inputs (chant#4654).
-  const actionJob = actionJobFor(chant, doc, forge, notes);
+  const actionJob = actionJobFor(doc, forge, notes);
   const jobsWanted: ChantCommand[] = actionJob ? [...shape.jobs, "action"] : shape.jobs;
   const words = wordsForJobs(jobsWanted);
   // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
@@ -411,19 +411,14 @@ export function workflowPlan(
   return { jobs, words, prWords, argv, notes, ...(applyMerge ? { applyMerge } : {}) };
 }
 
-/** What plywood ci says when plywood.yml declares actions and the installed chant has no action job. */
-export const ACTIONS_NEED_CHANT =
-  "plywood.yml declares actions, and the installed chant has no action job (chant#4654), so the workflow answers no /plywood action comment; run 'plywood action <stack> <name>' by hand";
-
 /** What plywood ci says when plywood.yml declares actions on GitLab. */
 export const ACTIONS_NOT_ON_GITLAB =
   "plywood.yml declares actions, and a GitLab pipeline starts on no comment or dispatch with inputs, so it has no action job; run 'plywood action <stack> <name>' from a pipeline of your own";
 
-/** Whether the workflow gets chant's action job: actions declared, GitHub or Forgejo, and a chant with chant#4654. `notes` says why not. */
-export function actionJobFor(chant: ChantProduct, doc: RawConfig, forge: ForgeKind, notes: string[]): boolean {
+/** Whether the workflow gets chant's action job: actions declared, GitHub or Forgejo, `notes` says why not. */
+export function actionJobFor(doc: RawConfig, forge: ForgeKind, notes: string[]): boolean {
   if (!hasActions(doc)) return false;
   if (forge === "gitlab") return (notes.push(ACTIONS_NOT_ON_GITLAB), false);
-  if (!hasChantActions(chant)) return (notes.push(ACTIONS_NEED_CHANT), false);
   return true;
 }
 

@@ -9,14 +9,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { action, actionSubject, needsActionsMessage, setChantStackActionForTests, type ActionResult, type ChantStackAction } from "../src/actions";
+import { action, actionSubject, setChantStackActionForTests, type ActionResult, type ChantStackAction } from "../src/actions";
 import { main, type Io } from "../src/cli";
-import { chantProduct, hasChantActions, setChantProductForTests, type ChantProduct, type ProductActionRequest, type ProductPipelineOptions } from "../src/chant-product";
+import { chantProduct, setChantProductForTests, type ChantProduct, type ProductActionRequest, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { plywoodMcpTools } from "../src/agents";
 import { FALLBACK_EXIT } from "../src/exit-codes";
-import { exportStack, setChantStackOpsForTests, type ChantStackOps, type StackOpOutcome } from "../src/stack-ops";
-import { ACTIONS_NEED_CHANT, ACTIONS_NOT_ON_GITLAB, ci, workflowPlan, type StageIo } from "../src/stages";
+import { setChantStackOpsForTests, type StackOpOutcome } from "../src/stack-ops";
+import { ACTIONS_NOT_ON_GITLAB, ci, workflowPlan, type StageIo } from "../src/stages";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
 
 const T = FALLBACK_EXIT;
@@ -69,8 +69,8 @@ function fakeLexicon(preview: Array<{ op: string; urn: string }> = [{ op: "repla
   return { fn, calls, digest, approve: (subject: string) => approvals.add(subject) };
 }
 
-/** A fake chant product entry, with the action job (chant#4654) unless `actions` is false. */
-function fakeChant(actions = true) {
+/** A fake chant product entry, with the action job (chant#4654). */
+function fakeChant() {
   const pipelines: ProductPipelineOptions[] = [];
   const calls: string[][] = [];
   const api: ChantProduct = {
@@ -96,19 +96,14 @@ function fakeChant(actions = true) {
       }
       return 0;
     },
-    ...(actions
-      ? {
-          PRODUCT_ACTIONS_FLOOR: "0.124.57",
-          productActionFromEnv: (_w, env): ProductActionRequest => {
-            const comment = env.CHANT_ACTION_COMMENT;
-            if (comment) {
-              const [, verb, member, address] = comment.trim().split(/\s+/);
-              return verb === "action" && member && address ? { kind: "action", member, address, from: "comment" } : { kind: "refused", reason: "not an action comment" };
-            }
-            return env.CHANT_ACTION_MEMBER && env.CHANT_ACTION ? { kind: "action", member: env.CHANT_ACTION_MEMBER, address: env.CHANT_ACTION, from: "dispatch" } : { kind: "refused", reason: "a dispatched action names a stack and an action" };
-          },
-        }
-      : {}),
+    productActionFromEnv: (_w, env): ProductActionRequest => {
+      const comment = env.CHANT_ACTION_COMMENT;
+      if (comment) {
+        const [, verb, member, address] = comment.trim().split(/\s+/);
+        return verb === "action" && member && address ? { kind: "action", member, address, from: "comment" } : { kind: "refused", reason: "not an action comment" };
+      }
+      return env.CHANT_ACTION_MEMBER && env.CHANT_ACTION ? { kind: "action", member: env.CHANT_ACTION_MEMBER, address: env.CHANT_ACTION, from: "dispatch" } : { kind: "refused", reason: "a dispatched action names a stack and an action" };
+    },
   };
   return { api, pipelines, calls };
 }
@@ -210,24 +205,7 @@ describe("plywood action", () => {
     expect(lex.calls).toEqual([]);
   });
 
-  it("names the chant it needs on a lexicon without gatedStackAction, and export keeps working there", async () => {
-    setChantStackActionForTests(undefined);
-    const o = io(repo());
-    expect(await action(["shop/prod-us", "rotate"], false, T, o)).toBe(1);
-    expect(o.stderr[0]).toBe(`plywood: ${needsActionsMessage()}`);
-    expect(needsActionsMessage()).toContain("the release after 0.124.56");
-    expect(needsActionsMessage()).toContain("chant#4654");
-    const ops: ChantStackOps = {
-      gatedStackExport: async () => ({ status: "waiting", digest: "sha256:e", command: "" }),
-      gatedStackCancel: async () => ({ status: "waiting", digest: "sha256:c", command: "" }),
-      gatedStackMove: async () => ({ status: "waiting", digest: "sha256:m", command: "" }),
-    };
-    setChantStackOpsForTests(ops);
-    expect(await exportStack(["shop/prod-us", "--out", join(tmpdir(), "plywood-export-x.json")], false, T, io(repo()))).toBe(3);
-  });
-
   it("is dispatched by the CLI", async () => {
-    setChantStackActionForTests(undefined);
     const lines: string[] = [];
     expect(await main(["action"], { out: (s) => lines.push(s), err: (s) => lines.push(s) })).toBe(1);
     expect(lines.join("\n")).toContain("action takes a stack and an action's name");
@@ -253,10 +231,6 @@ describe("plywood action --from-event", () => {
     expect(await action(["--from-event"], false, T, o)).toBe(1);
     expect(o.stderr[0]).toContain("names a stack and an action");
     expect(await action(["--from-event", "shop/prod-us"], false, T, io(repo()))).toBe(1);
-    setChantProductForTests(fakeChant(false).api);
-    const old = io(repo(), { CHANT_ACTION_COMMENT: "/plywood action shop/prod-us rotate" });
-    expect(await action(["--from-event"], false, T, old)).toBe(1);
-    expect(old.stderr[0]).toContain("productActionFromEnv");
   });
 });
 
@@ -272,7 +246,7 @@ describe("the action job in the pipeline (chant#4654)", () => {
     expect(o.stderr.join("\n")).toContain("action    npx --no-install plywood action --from-event");
   });
 
-  it("leaves it out with no actions, on GitLab, and on a chant without it, saying why", () => {
+  it("leaves it out with no actions, and on GitLab, saying why", () => {
     const doc = parseConfig(YML).doc;
     const plain = workflowPlan(fakeChant().api, parseConfig("stacks:\n  shop/dev: {}\n").doc, "github", "production", undefined);
     expect(plain.argv).not.toContain("--action-job");
@@ -280,10 +254,6 @@ describe("the action job in the pipeline (chant#4654)", () => {
     const gitlab = workflowPlan(fakeChant().api, doc, "gitlab", "production", undefined);
     expect(gitlab.argv).not.toContain("--action-job");
     expect(gitlab.notes).toContain(ACTIONS_NOT_ON_GITLAB);
-    const old = workflowPlan(fakeChant(false).api, doc, "forgejo", "production", undefined);
-    expect(old.argv).not.toContain("--action-job");
-    expect(old.notes).toContain(ACTIONS_NEED_CHANT);
-    expect(old.prWords.commands).not.toHaveProperty("action");
   });
 
   it("keeps /plywood action out of the words a pipeline without the job gets", () => {
@@ -292,12 +262,11 @@ describe("the action job in the pipeline (chant#4654)", () => {
   });
 });
 
-// The golden: the action job chant renders for plywood's words on GitHub and Forgejo, with the installed chant. The pin
-// has no action job, so this runs on a chant with chant#4654 ('just chant-local').
+// The golden: the action job chant renders for plywood's words on GitHub and Forgejo, with the installed chant.
 const real = await chantProduct();
 const GOLDEN = join(import.meta.dirname, "fixtures", "actions");
 
-describe.runIf(real !== undefined && hasChantActions(real))("the rendered action job (golden, chant#4654)", () => {
+describe.runIf(real !== undefined)("the rendered action job (golden, chant#4654)", () => {
   for (const forge of ["github", "forgejo"] as const) {
     it(`carries workflow_dispatch inputs stack and action on ${forge}`, async () => {
       setChantProductForTests("reset");

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { mcp, needsProposeMessage, plywoodMcpHook, plywoodProposeTools, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
+import { mcp, plywoodMcpHook, plywoodProposeTools, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { FALLBACK_EXIT } from "../src/exit-codes";
@@ -16,7 +16,7 @@ import { verdict } from "../templates/agent-guard/plywood-guard.mjs";
 
 const TEMPLATE_HOOK = fileURLToPath(new URL("../templates/agent-guard/plywood-guard.mjs", import.meta.url));
 
-function fakeChant(hookFloor = true, proposeFloor = false) {
+function fakeChant(hookFloor = true) {
   const calls: Array<{ argv: string[]; options?: { mcp?: unknown } }> = [];
   const api: ChantProduct = {
     assertProductWords: (w) => w as never,
@@ -29,7 +29,7 @@ function fakeChant(hookFloor = true, proposeFloor = false) {
       return 0;
     },
     ...(hookFloor ? { PRODUCT_MCP_HOOK_FLOOR: "0.125.0" } : {}),
-    ...(proposeFloor ? { PRODUCT_MCP_PROPOSE_FLOOR: "0.124.57", PRODUCT_TOOL_PROPOSE_WORDS: ["request", "propose"] } : {}),
+    PRODUCT_TOOL_PROPOSE_WORDS: ["request", "propose"],
   };
   return { api, calls };
 }
@@ -93,7 +93,7 @@ function listed(hook: ReturnType<typeof plywoodMcpHook>, cwd: string, propose: b
 
 describe("plywood mcp --propose", () => {
   it("starts chant's propose tier, which lists request_from_template beside the read tools", async () => {
-    const chant = fakeChant(true, true);
+    const chant = fakeChant();
     setChantProductForTests(chant.api);
     const dir = repo("stacks:\n  shop/dev: {}\n");
     const out = io(dir);
@@ -108,7 +108,7 @@ describe("plywood mcp --propose", () => {
   });
 
   it("lists no request tool on plain plywood mcp", async () => {
-    const chant = fakeChant(true, true);
+    const chant = fakeChant();
     setChantProductForTests(chant.api);
     const dir = repo("{}\n");
     await mcp([], false, FALLBACK_EXIT, io(dir));
@@ -138,19 +138,8 @@ describe("plywood mcp --propose", () => {
     expect(TEMPLATE_REQUEST_WORDS.refusal).not.toMatch(/#\d/);
   });
 
-  it("exits 1 naming the chant it needs on a chant without the tier, and starts nothing", async () => {
-    const chant = fakeChant(true, false);
-    setChantProductForTests(chant.api);
-    const out = io(repo("{}\n"));
-    expect(await mcp(["--propose"], false, FALLBACK_EXIT, out)).toBe(1);
-    expect(chant.calls).toEqual([]);
-    expect(out.stderr.join("\n")).toContain(needsProposeMessage());
-    expect(needsProposeMessage()).toMatch(/chant >= the release after 0\.124\.56/);
-    expect(needsProposeMessage()).toContain("chant#4655");
-  });
-
   it("takes --propose with --report-url in either order", async () => {
-    const chant = fakeChant(true, true);
+    const chant = fakeChant();
     setChantProductForTests(chant.api);
     expect(await mcp(["--propose", "--report-url", "file:///r"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);
     expect(await mcp(["--report-url", "file:///r", "--propose"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);

@@ -91,8 +91,6 @@ export interface ChantProduct {
   runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords, options?: { mcp?: unknown }): Promise<number>;
   /** Present when `runChantInProcess` takes the product tool hook (chant#4555). */
   PRODUCT_MCP_HOOK_FLOOR?: string;
-  /** Present when `serve mcp --read-only --propose` serves the product's `forgeWrite` tools (chant#4655). */
-  PRODUCT_MCP_PROPOSE_FLOOR?: string;
   /** The words a `forgeWrite` tool's name may hold on the propose tier (chant#4655). */
   PRODUCT_TOOL_PROPOSE_WORDS?: readonly string[];
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
@@ -128,15 +126,8 @@ export interface ChantProduct {
   APPROVAL_STATUS_PULL_REQUEST_FLOOR?: string;
   /** Whether an op waves spec gets the approval status jobs: a `pr-review` or `pull-request` wave (chant#4630). */
   opWavesPostsApprovalStatus?(spec: unknown): boolean;
-  /** Present when the product pipeline has the action job and the `action` command (chant#4654). */
-  PRODUCT_ACTIONS_FLOOR?: string;
   /** The stack and action an action job was started for, from `CHANT_ACTION_COMMENT`, or `CHANT_ACTION_MEMBER` and `CHANT_ACTION` (chant#4654). */
   productActionFromEnv?(words: ProductWords, env: Record<string, string | undefined>): ProductActionRequest;
-}
-
-/** Whether the installed chant has chant#4654's action job and reads what it was asked for. */
-export function hasChantActions(chant: ChantProduct): boolean {
-  return typeof chant.PRODUCT_ACTIONS_FLOOR === "string" && typeof chant.productActionFromEnv === "function";
 }
 
 /**

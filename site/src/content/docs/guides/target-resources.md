@@ -1,7 +1,7 @@
 ---
 title: 'Preview a few resources'
 description: 'Pass URNs as targets to see the preview of those resources alone.'
-needs: [plywood#28, chant#4627]
+needs: [plywood#28]
 draft: true
 ---
 

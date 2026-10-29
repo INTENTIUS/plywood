@@ -1,8 +1,6 @@
 ---
 title: 'Drift checks with their own identities'
 description: 'The drift job reads with the preview identity and names the writer of each drifted attribute.'
-needs: [chant#4631, chant#4632]
-draft: true
 ---
 
 With `identity` in `plywood.yml`, each stack's drift job trades its OIDC token for the stack's preview identity before the checkout. No later step can ask for another token, so the read never holds the up identity.

@@ -34,15 +34,14 @@ describe("plywood's scenarios", () => {
     }
   });
 
-  it("pass the harness's own lint when the installed chant has it", async () => {
+  it("pass the harness's own lint", async () => {
     const h = await harness();
-    if (!h) return; // the pinned chant has no harness; `just chant-local` runs this
     for (const [id, file] of Object.entries(scenarioFiles())) expect(h.lintScenario(JSON.parse(readFileSync(file, "utf8"))), id).toEqual([]);
   });
 
-  it("lint clean through `just e2e lint` on the pinned chant", async () => {
+  it("lint clean through `just e2e lint`", async () => {
     const out: string[] = [];
-    expect(await lint(undefined, (l) => void out.push(l))).toBe(0);
+    expect(await lint(await harness(), (l) => void out.push(l))).toBe(0);
     expect(out).toHaveLength(7);
   });
 

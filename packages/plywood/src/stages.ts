@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
-import { chantNext, hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond, type ChantNext } from "./chant-next";
+import { hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond } from "./chant-next";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -132,8 +132,7 @@ export async function check(args: string[], json: boolean, table: ExitTable, io:
 export async function preview(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
   // --target <urn> goes to pr-plan as it is (chant#4620), repeatable; a chant before it refuses it below.
   const targeted = args.includes("--target");
-  // --refresh and --target-dependents go to pr-plan as they are (chant#4627); a chant before it refuses them below.
-  const planFlags = ["--refresh", "--target-dependents"].filter((f) => args.includes(f));
+  // --refresh and --target-dependents go to pr-plan as they are (chant#4627).
   if (args.includes("--target-dependents") && !targeted) return usage("--target-dependents widens a --target preview to the resources that depend on the targets; give a --target", table, io);
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--target" && (args[i + 1] === undefined || args[i + 1]!.startsWith("-"))) return usage("--target takes a resource's URN", table, io);
@@ -157,14 +156,8 @@ export async function preview(args: string[], json: boolean, table: ExitTable, i
   const argv = ["components", "pr-plan", "--base", at, "--pr", number, ...gate, ...(stack ? ["--member", stack] : []), ...rest, ...(json ? ["--json"] : [])];
   return withChant(`${PRODUCT} preview`, table, io, async (chant) => {
     if (targeted && !hasChant4620(chant)) return usage(PREVIEW_TARGET_NEEDS_CHANT, table, io);
-    if (planFlags.length && !(await chantNext()).planFlags) return usage(previewFlagsNeedChant(planFlags), table, io);
     return chant.runChantInProcess(argv, PRODUCT_WORDS);
   });
-}
-
-/** What `plywood preview --refresh` or `--target-dependents` says on a chant without chant#4627. */
-export function previewFlagsNeedChant(flags: readonly string[]): string {
-  return `${flags.join(" and ")} ${flags.length === 1 ? "needs" : "need"} a chant whose pr-plan passes ${flags.length === 1 ? "it" : "them"} to the pulumi-up step (chant#4627), which this chant lacks`;
 }
 
 /** What `plywood preview --target` says on a chant without chant#4620. */
@@ -259,7 +252,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const noteControl = await noteControlTarget(config.doc, io.cwd);
     let plan: WorkflowPlan;
     try {
-      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks, prJobs, next: await chantNext(), ...(noteControl ? { control: noteControl } : {}) });
+      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks, prJobs, ...(noteControl ? { control: noteControl } : {}) });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;
@@ -361,18 +354,15 @@ export function workflowPlan(
   env: string,
   waves: unknown,
   extra: string[] = [],
-  opts: { reviewStacks?: boolean; control?: unknown; prJobs?: { options: Record<string, unknown>; flags: string[] }; next?: ChantNext } = {},
+  opts: { reviewStacks?: boolean; control?: unknown; prJobs?: { options: Record<string, unknown>; flags: string[] } } = {},
 ): WorkflowPlan {
   const shape = pipelineShape(doc, forge, waves);
-  const next = opts.next;
   const notes: string[] = [];
   const pipeline = toChantSettings({ doc }).pipeline;
-  // chant#4628: the note names the target commit it was previewed against, and a push marks older notes stale.
-  const staleNotes = next?.staleNotes === true;
   // chant#4629: the responses to a refused wave, a failed update and the description.
   const respond = respondOptions(chant, pipeline, shape.applyBeforeMerge, notes);
   // chant#4636: apply.merge: auto merges after the update before merge.
-  const applyMerge = shape.applyBeforeMerge && pipeline.applyMerge ? (next?.applyMerge ? pipeline.applyMerge : (notes.push(APPLY_MERGE_NEEDS_CHANT), undefined)) : undefined;
+  const applyMerge = shape.applyBeforeMerge ? pipeline.applyMerge : undefined;
   // chant#4630: a chant that posts plywood/approval only for pr-review waves gets the note, since plywood's waves approve
   // through the pull request (ruling B). From APPROVAL_STATUS_PULL_REQUEST_FLOOR chant posts it for those waves too.
   if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant) && !hasChantPullRequestApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
@@ -392,7 +382,8 @@ export function workflowPlan(
     ...(opts.control !== undefined ? { control: { target: opts.control } } : {}),
     // plywood#29: runners, env, pass and parallelism on the pull request jobs, with chant#4625 (src/jobs.ts).
     ...(opts.prJobs?.options ?? {}),
-    ...(staleNotes ? { staleNotes: true } : {}),
+    // chant#4628: the note names the target commit it was previewed against, and a push marks older notes stale.
+    staleNotes: true,
     ...respond.options,
     ...(applyMerge ? { applyMerge } : {}),
   });
@@ -403,7 +394,7 @@ export function workflowPlan(
     ...(applyMerge ? applyMergeArgv(applyMerge) : []),
     ...respond.argv,
     ...(previewComment ? ["--preview-comment"] : []),
-    ...(staleNotes ? ["--stale-notes"] : []),
+    "--stale-notes",
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
     ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
@@ -411,9 +402,6 @@ export function workflowPlan(
   ];
   return { jobs, words, prWords, argv, notes, ...(applyMerge ? { applyMerge } : {}) };
 }
-
-/** What plywood ci says under apply.merge: auto on a chant without chant#4636. */
-export const APPLY_MERGE_NEEDS_CHANT = "apply.merge is auto, and the installed chant has no pr-apply --merge auto (chant#4636), so a person merges after each update before merge";
 
 /** What plywood ci says under approval: pr-review on a chant with chant#4630 and without its pull-request floor. */
 export const APPROVAL_STATUS_NOTE =

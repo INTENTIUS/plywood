@@ -1,6 +1,8 @@
 # plywood
 
-CI Automation for Pulumi.
+Sophisticated automation for Pulumi.
+
+Built on chant; can run plunge as its engine.
 
 It runs Pulumi previews and updates from pull requests on GitHub, GitLab or Forgejo. A change gets one preview note for every stack it reaches, then rolls out in waves, each behind an approval of its preview digest.
 

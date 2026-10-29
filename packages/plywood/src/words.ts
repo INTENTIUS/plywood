@@ -6,7 +6,7 @@
 
 export const PRODUCT = "plywood";
 
-export const TAGLINE = "CI Automation for Pulumi";
+export const TAGLINE = "Sophisticated automation for Pulumi.";
 
 /** The op that applies a merged change, and the gates it passes (chant#4550 ruling E). */
 export const OP_NAME = "pulumi-up";

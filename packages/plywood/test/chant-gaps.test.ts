@@ -2,7 +2,7 @@
  * plywood on chant#4608 (forge check), #4610 and #4611 (notify words and
  * relay), #4612 (estate) and #4613 (policy source and packs at base). Each
  * runs against a fake of chant's entry and against its absence, the
- * fallback the 0.124.54 pin takes. A last block runs the real entries and
+ * fallback an older chant takes. A last block runs the real entries and
  * skips on a chant without them. Nothing reaches a forge, a cloud or Pulumi
  * Cloud.
  */
@@ -271,7 +271,7 @@ describe("policy.source and ci.policy.packs on chant#4613", () => {
   });
 });
 
-/** The real entries; each skips on a chant without it (the 0.124.54 pin). */
+/** The real entries; each skips on a chant without it (an older chant). */
 describe("against the installed chant", async () => {
   // @ts-ignore: newer than the pin (chant#4608, #4612, #4613).
   const fc = (await import("@intentius/chant/forge-check").catch(() => undefined)) as Record<string, unknown> | undefined;

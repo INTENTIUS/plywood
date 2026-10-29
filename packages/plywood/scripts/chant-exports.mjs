@@ -35,7 +35,7 @@ const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|ci-product|parallelism|
  * An esbuild plugin that leaves an @intentius/chant* import external when the
  * installed chant serves it as compiled JS ({@link chantRuntimeTarget}), so
  * the code runs the installed, pinned chant. A subpath it serves only as
- * TypeScript (chant 0.124.54 has no `import` condition) is bundled, and a
+ * TypeScript (chant before 0.124.58 has no `import` condition) is bundled, and a
  * missing CHANT_NEXT subpath becomes a module that throws. `external`
  * collects the specifiers left external.
  */

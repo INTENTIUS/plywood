@@ -51,7 +51,7 @@ let cached: Promise<boolean> | undefined;
 export function chantReviewStacks(): Promise<boolean> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: initReviewStack, removeReviewStack and the plugin's prEnvTemplate are newer than the lexicon at 0.124.54.
+      // @ts-ignore: initReviewStack, removeReviewStack and the plugin's prEnvTemplate are missing from older lexicons.
       const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
       const plugin = m.pulumiPlugin as { prEnvTemplate?: unknown; prEnvTeardown?: unknown } | undefined;
       return (

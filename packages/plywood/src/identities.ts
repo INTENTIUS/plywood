@@ -18,8 +18,8 @@
  * in plywood's words (`plywood/preview/<member>` is the required status).
  * Every request is a read. plywood keeps no copy of the check.
  *
- * The subpath is imported on first use. A chant without it (the 0.124.54
- * pin) gets the message the command printed before chant#4608 and chant's
+ * The subpath is imported on first use. A chant without it (one older than the
+ * pinned 0.124.58) gets the message the command printed before chant#4608 and chant's
  * `failed` code.
  */
 import type { JobSettings } from "./config/jobs";
@@ -176,7 +176,7 @@ let forgeCheckModule: Promise<ChantForgeCheck | undefined> | undefined;
 export function chantForgeCheck(): Promise<ChantForgeCheck | undefined> {
   forgeCheckModule ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4608).
+      // @ts-ignore: older chants lack the subpath (chant#4608).
       const fc: Record<string, unknown> = await import("@intentius/chant/forge-check");
       const id: Record<string, unknown> = await import("@intentius/chant/ci-identity");
       if (!FORGE_CHECK_FUNCTIONS.every((f) => typeof fc[f] === "function") || typeof id.resolveCloudIdentity !== "function") return undefined;

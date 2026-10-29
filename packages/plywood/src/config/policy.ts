@@ -29,7 +29,7 @@
  * `source` and `ci.policy.packs` need chant's policy source
  * (`@intentius/chant/policy-source`, `CI_POLICY_SOURCE_FLOOR`). The config
  * translation is synchronous, so the CLI awaits {@link useChantPolicySource}
- * once before a command. On a chant without it (the 0.124.54 pin) `source`
+ * once before a command. On a chant without it (older than the pinned 0.124.58) `source`
  * is refused as before and packs ride in the step input alone.
  */
 import { posix } from "node:path";
@@ -54,7 +54,7 @@ let policySourceLoading: Promise<boolean> | undefined;
 export function useChantPolicySource(): Promise<boolean> {
   policySourceLoading ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4613).
+      // @ts-ignore: older chants lack the subpath (chant#4613).
       const m: Record<string, unknown> = await import("@intentius/chant/policy-source");
       policySource = typeof m.CI_POLICY_SOURCE_FLOOR === "string" && typeof m.assertGatePolicySource === "function";
     } catch {

@@ -110,7 +110,7 @@ describe("plywood config identities and forge check", () => {
  * (chant#4549) trades a fake forge OIDC token for the preview token in the
  * plan job's spec and the up token in the apply job's. Every request goes
  * to the fake, and none to api.pulumi.com. Skipped on a chant whose
- * ci-identity has no Pulumi Cloud trade (the 0.124.54 pin).
+ * ci-identity has no Pulumi Cloud trade (an older chant).
  */
 describe("the Pulumi Cloud trade against a loopback fake", async () => {
   // @ts-ignore: resolveCloudIdentity, TRADE_JS and IDENTITY_CLOUDS with pulumi are newer than the pin (chant#4549).

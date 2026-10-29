@@ -53,7 +53,7 @@ describe("telemetry", () => {
    * chant's exporter reads plywood's variables: traces go to the loopback
    * URL with /v1/traces, under the plywood prefix. The bench run that sends a
    * trace to a loopback sink waits for epic-ready. Skipped on a chant without
-   * `@intentius/chant/otlp` (the 0.124.54 pin).
+   * `@intentius/chant/otlp` (an older chant).
    */
   it("points chant's exporter at a loopback sink with plywood's prefix", async (ctx) => {
     let otlp: Record<string, unknown> | undefined;

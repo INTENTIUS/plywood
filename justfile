@@ -120,6 +120,9 @@ e2e *args:
 #                                  checks the version, the tag, npm and the packed tarball, then
 #                                  tags the green commit v0.1.0 and pushes the tag
 #   just record-digests [<run id>] this version's image digests from GHCR into image-digests.json
+#   just github-release <version>... [--dry-run]
+#                                  each version's GitHub release on its existing tag, notes from the
+#                                  changes page; the newest named is marked latest
 release-bump version:
     node scripts/release.mjs bump {{version}}
 
@@ -128,6 +131,9 @@ release version *flags:
 
 record-digests run="":
     node scripts/release.mjs digests {{ if run == "" { "" } else { "--run " + run } }}
+
+github-release *versions:
+    node scripts/github-release.mjs {{versions}}
 
 # Install the site's dependencies from its lock file.
 site-install:

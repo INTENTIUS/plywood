@@ -2,7 +2,7 @@
  * The exit codes plywood leaves with. plywood owns no table: every code is
  * chant's (INTENTIUS/chant#4553), passed through unchanged.
  *
- * chant 0.124.54, the pinned release, has no exported table yet. The table
+ * chant releases before the one that added the table (chant#4553) have none; the pinned 0.124.58 has it. The table
  * is imported on first use and checked for the codes plywood reads; when the
  * installed chant lacks it, FALLBACK_EXIT stands in. Its numbers are the ones
  * ruled on chant#4553 (moved is 4, a policy denial is 7, a usage or config
@@ -69,7 +69,7 @@ let cached: Promise<{ table: ExitTable; source: "chant" | "fallback" }> | undefi
 export function exitCodes(): Promise<{ table: ExitTable; source: "chant" | "fallback" }> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4553).
+      // @ts-ignore: older chants lack the subpath (chant#4553).
       const m: unknown = await import("@intentius/chant/exit-codes");
       const table = (m as { CHANT_EXIT?: unknown }).CHANT_EXIT;
       if (isExitTable(table)) return { table: withMisplaced(table), source: "chant" as const };

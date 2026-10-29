@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { mcp, plywoodMcpHook, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
+import { mcp, plywoodMcpHook, plywoodProposeTools, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { FALLBACK_EXIT } from "../src/exit-codes";
 import { guard, guardVerdict, withGuardHook } from "../src/guard";
 import type { StageIo } from "../src/stages";
-import { PRODUCT_WORDS } from "../src/words";
+import { PRODUCT_WORDS, TEMPLATE_REQUEST_WORDS } from "../src/words";
 // @ts-ignore: the hook template is plain JS, shipped as it is.
 import { verdict } from "../templates/agent-guard/plywood-guard.mjs";
 
@@ -29,6 +29,7 @@ function fakeChant(hookFloor = true) {
       return 0;
     },
     ...(hookFloor ? { PRODUCT_MCP_HOOK_FLOOR: "0.125.0" } : {}),
+    PRODUCT_TOOL_PROPOSE_WORDS: ["request", "propose"],
   };
   return { api, calls };
 }
@@ -76,6 +77,73 @@ describe("plywood mcp", () => {
     const out = io(repo("{}\n"));
     await mcp([], false, FALLBACK_EXIT, out);
     expect(out.stderr.join("\n")).toContain("chant#4555");
+  });
+});
+
+/**
+ * The tools a server lists, served the way chant#4655's productToolsServed
+ * serves them: a read-only server keeps the read tools and refuses to start
+ * with a forgeWrite tool; the propose tier keeps both.
+ */
+function listed(hook: ReturnType<typeof plywoodMcpHook>, cwd: string, propose: boolean): string[] {
+  const tools = hook.tools({ cwd, readOnly: true, propose });
+  for (const t of tools) if (t.forgeWrite === true && !propose) throw new Error(`${t.name} is forgeWrite on a server without --propose`);
+  return tools.map((t) => `${hook.product}:${t.name}`);
+}
+
+describe("plywood mcp --propose", () => {
+  it("starts chant's propose tier, which lists request_from_template beside the read tools", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    const dir = repo("stacks:\n  shop/dev: {}\n");
+    const out = io(dir);
+    expect(await mcp(["--propose"], false, FALLBACK_EXIT, out)).toBe(0);
+    expect(chant.calls[0]!.argv).toEqual(["serve", "mcp", "--read-only", "--propose"]);
+    const hook = chant.calls[0]!.options!.mcp as ReturnType<typeof plywoodMcpHook>;
+    expect(hook.readOnly).toBe(true);
+    expect(hook.propose).toBe(true);
+    expect(listed(hook, dir, true)).toEqual(["plywood:stacks", "plywood:settings", "plywood:tips", "plywood:verbs", "plywood:request_from_template"]);
+    expect(hook.instructions).toContain("refuses every call");
+    expect(out.stdout).toEqual([]);
+  });
+
+  it("lists no request tool on plain plywood mcp", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    const dir = repo("{}\n");
+    await mcp([], false, FALLBACK_EXIT, io(dir));
+    const hook = chant.calls[0]!.options!.mcp as ReturnType<typeof plywoodMcpHook>;
+    expect(hook.propose).toBeUndefined();
+    expect(listed(hook, dir, false)).not.toContain("plywood:request_from_template");
+    // The propose hook on a server that did not take the tier (a chant that drops `propose`) still lists only read tools.
+    expect(listed(plywoodMcpHook(undefined, true), dir, false)).not.toContain("plywood:request_from_template");
+  });
+
+  it("declares request_from_template forgeWrite, named with request as its only write word", () => {
+    const [tool] = plywoodProposeTools();
+    expect(tool!.name).toBe("request_from_template");
+    expect(tool!.forgeWrite).toBe(true);
+    expect(tool!.readOnly).toBeUndefined();
+    expect(tool!.inputSchema.required).toEqual(["template", "name", "inputs"]);
+    expect(Object.keys(tool!.inputSchema.properties)).toEqual(["template", "version", "name", "app", "inputs"]);
+    const write = /^(approve|apply|override|unlock|lock|merge|write|delete|push|commit|update|create|exec|init|generate|respond)/;
+    expect(tool!.name.split("_").filter((p) => write.test(p))).toEqual([]);
+  });
+
+  it("refuses every call, saying Pulumi templates are not available yet and naming no issue", async () => {
+    const [tool] = plywoodProposeTools();
+    await expect(tool!.handler({ template: "bucket", name: "orders", inputs: {} })).rejects.toThrow(TEMPLATE_REQUEST_WORDS.refusal);
+    expect(TEMPLATE_REQUEST_WORDS.refusal).toMatch(/^Pulumi templates are not available yet/);
+    expect(TEMPLATE_REQUEST_WORDS.refusal).toContain("template registry and catalog");
+    expect(TEMPLATE_REQUEST_WORDS.refusal).not.toMatch(/#\d/);
+  });
+
+  it("takes --propose with --report-url in either order", async () => {
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    expect(await mcp(["--propose", "--report-url", "file:///r"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);
+    expect(await mcp(["--report-url", "file:///r", "--propose"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);
+    for (const c of chant.calls) expect((c.options!.mcp as ReturnType<typeof plywoodMcpHook>).reportUrl).toBe("file:///r");
   });
 });
 

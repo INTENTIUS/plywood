@@ -11,7 +11,8 @@
  *              the job image (bench.ts JOB_IMAGE) with the bench's job env
  *   tutor/shop the plunge corpus's aws-ts program, built by
  *              stack/seed-repo.sh (the repo setup of stack/seed.sh), with
- *              e2e/scenarios/base/plywood.yml, then in a job container:
+ *              e2e/scenarios/base/plywood.yml and prod-us's command
+ *              resource rotate (./action.ts), then in a job container:
  *              dev created and deployed on plunge's store, staging deployed
  *              on stock Pulumi for pw-adopt, prod-us and prod-eu deployed
  *              on stock Pulumi for plywood#22's stock claims,
@@ -43,6 +44,7 @@ import {
   plungeStoreUrl,
   s3BackendUrl,
 } from "./bench";
+import { addRotateAction } from "./action";
 import type { HarnessModule, Person } from "./harness";
 import { jobArgv, sh } from "./ports";
 import { makeBucket } from "./secure-bucket";
@@ -228,9 +230,10 @@ export async function up(c: SeedContext): Promise<BenchState> {
     const build = join(c.state, "shop-build");
     await sh("bash", [join(c.root, "stack", "seed-repo.sh"), build], { env: { ...process.env, PLYWOOD_TUTORIAL_PLUNGE_REF: PLUNGE_REF } });
     writeFileSync(join(build, "plywood.yml"), readFileSync(join(c.root, "e2e", "scenarios", "base", "plywood.yml"), "utf8"));
+    addRotateAction(build);
     await sh("git", ["-C", build, "init", "-q", "-b", "main"], { env: gitEnv });
     await sh("git", ["-C", build, "add", "-A"], { env: gitEnv });
-    await sh("git", ["-C", build, "-c", `user.name=${people.author.login}`, "-c", `user.email=${people.author.login}@${EMAIL_DOMAIN}`, "commit", "-q", "-m", "The aws-ts program from plunge's corpus, with plywood.yml"], { env: gitEnv });
+    await sh("git", ["-C", build, "-c", `user.name=${people.author.login}`, "-c", `user.email=${people.author.login}@${EMAIL_DOMAIN}`, "commit", "-q", "-m", "The aws-ts program from plunge's corpus, with plywood.yml and prod-us's rotate command"], { env: gitEnv });
     await sh("git", ["-C", build, "push", "-q", remote(people.author), "main"], { env: gitEnv, redact: [people.author.token] });
 
     c.log("creating the stacks, deploying dev on plunge and staging on stock Pulumi, and running plywood init");

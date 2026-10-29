@@ -16,6 +16,7 @@
  */
 import { configCheck } from "./config-check";
 import { exitCodes, type ExitTable } from "./exit-codes";
+import { action } from "./actions";
 import { audit } from "./audit";
 import { mcp } from "./agents";
 import { drift } from "./drift";
@@ -96,6 +97,7 @@ export function helpText(): string {
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
     "  rollback <stack> [--digest <d>] | --release <name> --env <env>",
     "                                                      preview a release's program, then update behind its gate",
+    "  action <stack> <name> [--anew]                      run an action plywood.yml declares: replace its command resource",
     "",
     "Ledger:",
     "  audit [approvals|updates|runs|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...",
@@ -116,7 +118,8 @@ export function helpText(): string {
     "  control dispatch [--sha <sha>]                      tell plywood.yml's control repo this commit applied",
     "",
     "Agents:",
-    "  mcp [--report-url <url>]                            chant's read-only MCP server over stdio, with plywood's read tools",
+    "  mcp [--report-url <url>] [--propose]                chant's read-only MCP server over stdio, with plywood's read tools;",
+    "                                                      --propose adds request_from_template, which refuses until Pulumi templates exist",
     "  guard check <command line>                          whether the agent guard refuses a command",
     "  guard install [--dir <d>]                           the Claude Code hook and the pulumi and plunge wrappers",
     "",
@@ -183,6 +186,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "cancel") return cancelStack(args.slice(1), json, table, stageIo);
   if (verb === "move") return moveStack(args.slice(1), json, table, stageIo);
   if (verb === "rollback") return rollbackStack(args.slice(1), json, table, stageIo);
+  if (verb === "action") return action(args.slice(1), json, table, stageIo);
   if (verb === "drift") return drift(args.slice(1), json, table, stageIo);
   if (verb === "mcp") return mcp(args.slice(1), json, table, stageIo);
   if (verb === "guard") return guard(args.slice(1), json, table, stageIo);

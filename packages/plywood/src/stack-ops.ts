@@ -27,6 +27,9 @@
  *       chant components rollback (chant#4542): the release's recorded
  *       program previews against the stack, the release gate binds that
  *       preview, and the update runs once it is approved.
+ *   plywood action <stack> <name>
+ *       gatedStackAction (chant#4654), in src/actions.ts: the replacement of
+ *       a command resource plywood.yml names under the stack's actions.
  *
  * Each request is approved with `plywood approve <gate> --op
  * pulumi-stack-ops --plan <digest>`, the line a waiting request prints, and
@@ -49,7 +52,7 @@ import { environmentOf, slug } from "./init/detect";
 import { explainRefusal } from "./refusals";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { BUILT_CHANT } from "./chant-product";
-import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS } from "./words";
+import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./words";
 
 /** chant's op the requests are recorded under (`PULUMI_STACK_OPS_OP`). */
 export const STACK_OPS_OP = "pulumi-stack-ops";
@@ -181,10 +184,10 @@ export function setChantStackOpsForTests(fake: ChantStackOps | undefined | "rese
   cachedRollback = fake === "reset" ? undefined : Promise.resolve(rollback ?? fake !== undefined);
 }
 
-/** The message a stack operation prints when the installed lexicon lacks it. */
-export function needsStackOpsMessage(what: string, feature: string): string {
+/** The message a stack operation prints when the installed lexicon lacks it; `after` is the last chant release without the feature. */
+export function needsStackOpsMessage(what: string, feature: string, after = "0.124.54"): string {
   return (
-    `${what} needs @intentius/chant-lexicon-pulumi >= the release after 0.124.54, which carries ${feature}. ` +
+    `${what} needs @intentius/chant-lexicon-pulumi >= the release after ${after}, which carries ${feature}. ` +
     `This plywood was built with chant ${BUILT_CHANT}, which lacks it. ` +
     "Upgrade plywood once that chant is out, or build against a local chant with 'just chant-local'."
   );
@@ -261,18 +264,16 @@ export function approveRequestLine(gate: string, digest: string, mode: string): 
 }
 
 /** The backend a stack names, for the engine's run, when the environment names none. */
-function useBackend(stacks: ResolvedStack[], env: NodeJS.ProcessEnv): string | undefined {
+export function useBackend(stacks: ResolvedStack[], env: NodeJS.ProcessEnv): string | undefined {
   const named = [...new Set(stacks.map((s) => s.backend).filter((b): b is string => b !== undefined))];
   if (named.length > 1) return `the stacks are on different backends (${named.join(", ")}); a move needs both on one backend`;
   if (named[0] && !env.PULUMI_BACKEND_URL) env.PULUMI_BACKEND_URL = named[0];
   return undefined;
 }
 
-type Verb = "export" | "cancel" | "move";
-
 /** Print what a request's outcome means, and return chant's code for it. */
 export function reportOutcome<T>(
-  verb: Verb,
+  verb: StackOpVerb,
   outcome: StackOpOutcome<T>,
   gate: string,
   rules: StackOpCommon["rules"],
@@ -319,7 +320,7 @@ export function reportOutcome<T>(
 }
 
 /** Run one request, turning a refusal chant throws before asking into chant's `failed`. */
-async function runRequest(verb: Verb, json: boolean, table: ExitTable, io: StageIo, call: (ops: ChantStackOps) => Promise<number>): Promise<number> {
+async function runRequest(verb: StackOpVerb, json: boolean, table: ExitTable, io: StageIo, call: (ops: ChantStackOps) => Promise<number>): Promise<number> {
   const ops = await chantStackOps();
   if (!ops) {
     io.err(`${PRODUCT}: ${needsStackOpsMessage(`${PRODUCT} ${verb}`, "the gated stack operations (chant#4578)")}`);
@@ -336,7 +337,7 @@ async function runRequest(verb: Verb, json: boolean, table: ExitTable, io: Stage
 }
 
 /** --by, --dir: the flags every request takes. */
-function commonFlags(args: string[]): { by?: string; dir?: string; rest: string[]; missing?: string } {
+export function commonFlags(args: string[]): { by?: string; dir?: string; rest: string[]; missing?: string } {
   const by = takeFlag(args, "--by");
   const dir = takeFlag(by.rest, "--dir");
   if (by.missing) return { rest: args, missing: "--by" };

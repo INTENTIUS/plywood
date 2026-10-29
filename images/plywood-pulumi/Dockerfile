@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 RUN git config --system --add safe.directory '*' && mkdir -p /opt/plywood/pulumi-home && chmod 1777 /opt/plywood/pulumi-home
 COPY --from=fetch /out/opt/plywood/ /opt/plywood/
 RUN ln -s /opt/plywood/pulumi-3.272.0/pulumi /usr/local/bin/pulumi && pulumi version
+RUN pulumi plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home
 COPY --from=fetch /opt/plywood/aws-cli/ /opt/plywood/aws-cli/
 RUN ln -s /opt/plywood/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
 COPY images/pack/intentius-plywood-0.1.0.tgz /tmp/intentius-plywood-0.1.0.tgz

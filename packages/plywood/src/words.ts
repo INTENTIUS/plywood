@@ -34,7 +34,7 @@ export const VERBS: readonly VerbWords[] = [
 export const BIN = "npx --no-install plywood";
 
 /** chant's comment commands, by the word typed after `/plywood` (chant `CiProductCommand`). */
-export type ChantCommand = "plan" | "apply" | "lock" | "unlock" | "agent";
+export type ChantCommand = "plan" | "apply" | "lock" | "unlock" | "agent" | "action";
 
 /**
  * plywood's words in the shape chant's `assertProductWords` takes
@@ -83,12 +83,20 @@ export const PRODUCT_WORDS: Readonly<ProductWordsInput> = Object.freeze({
 } satisfies ProductWordsInput);
 
 /**
+ * `/plywood action <stack> <name>` (plywood#39), answered by chant's action
+ * job (chant#4654). It is not in PRODUCT_WORDS: a chant before chant#4654
+ * has no `action` command and refuses words that name one, so only a
+ * pipeline with the action job gets it, through {@link wordsForJobs}.
+ */
+export const ACTION_COMMAND: Readonly<Record<string, ChantCommand>> = Object.freeze({ action: "action" });
+
+/**
  * The words for a pipeline that has jobs for `jobs` only. chant refuses a
  * comment command with no job to answer it, so `/plywood up` is left out
  * until a pipeline applies, and `/plywood lock` until it locks at preview.
  */
 export function wordsForJobs(jobs: readonly ChantCommand[]): ProductWordsInput {
-  const commands = Object.fromEntries(Object.entries(PRODUCT_WORDS.commands).filter(([, c]) => jobs.includes(c)));
+  const commands = Object.fromEntries(Object.entries({ ...PRODUCT_WORDS.commands, ...ACTION_COMMAND }).filter(([, c]) => jobs.includes(c)));
   return { ...PRODUCT_WORDS, commands };
 }
 
@@ -129,10 +137,26 @@ export const CLOUD_NAMES = { aws: "AWS", gcp: "GCP", azure: "Azure", pulumi: "Pu
 export const NO_IDENTITY = "the job's own credentials (no OIDC trade)";
 
 /**
- * The stack operations' words (plywood#16). They are commands beside the
- * ruled verbs, listed under their own heading in --help. Each is a gated request on the
- * workspace ledger, run by chant's pulumi lexicon once a second person
- * approves it (src/stack-ops.ts).
+ * Requests from templates over MCP (plywood#41). `request_from_template` is
+ * declared on `plywood mcp --propose`, and refuses every call until plywood
+ * has Pulumi templates: a template registry and catalog, and `plywood
+ * request` (plywood#40, after plywood#32). The refusal names no issue, since
+ * an agent reads it.
+ */
+export const TEMPLATE_REQUEST_WORDS = {
+  tool: "request_from_template",
+  refusal:
+    "Pulumi templates are not available yet: request_from_template opens a pull request for an app from a template once plywood has a template registry and catalog, and the plywood request command that opens the same pull request for a person. Until then it refuses every call and opens nothing. To change a stack now, open a pull request with the change.",
+} as const;
+
+/** The stack operations a gated request runs (src/stack-ops.ts, src/actions.ts). */
+export type StackOpVerb = "export" | "cancel" | "move" | "action";
+
+/**
+ * The stack operations' words (plywood#16, and plywood#39's actions). They
+ * are commands beside the ruled verbs, listed under their own heading in
+ * --help. Each is a gated request on the workspace ledger, run by chant's
+ * pulumi lexicon once a second person approves it (src/stack-ops.ts).
  */
 export const STACK_OP_WORDS = {
   usage: {
@@ -140,11 +164,20 @@ export const STACK_OP_WORDS = {
     cancel: `${PRODUCT} cancel <project/stack> [--lock <id>]`,
     move: `${PRODUCT} move <urn>... --from <project/stack> --to <project/stack>, or ${PRODUCT} move <project/stack> --onto plunge`,
     rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback --release <name> --env <env>`,
+    action: `${PRODUCT} action <project/stack> <name> [--anew], or ${PRODUCT} action --from-event`,
   },
-  waiting: (verb: "export" | "cancel" | "move", approve: string): string =>
+  waiting: (verb: StackOpVerb, approve: string): string =>
     `The ${verb} waits for a second person's approval, and your own does not count. They run '${approve}', then you run this command again to carry it out.`,
-  spent: (verb: "export" | "cancel" | "move"): string =>
-    `This ${verb} ran once already under its approval, and a request runs once. Run the command again to ask for a new one.`,
+  spent: (verb: StackOpVerb): string =>
+    verb === "action"
+      ? "This action ran once already under its approval, and a request runs once. Run the command again with --anew to ask for a new run."
+      : `This ${verb} ran once already under its approval, and a request runs once. Run the command again to ask for a new one.`,
+  acted: (stack: string, name: string, r: { urn: string; engine: string; tail: string }): string =>
+    `Ran action ${name} on ${stack}: ${r.engine} replaced ${r.urn}.${r.tail ? `\n${r.tail}` : ""}`,
+  noAction: (stack: string, name: string, declared: readonly string[]): string =>
+    declared.length
+      ? `${stack} has no action ${name} in plywood.yml; its actions are ${declared.join(", ")}`
+      : `${stack} declares no actions in plywood.yml; add one under stacks.${stack}.actions with a name and the URN of a command resource`,
   exported: (stack: string, r: { file: string; sha256: string; bytes: number; resources: number }): string =>
     `Exported ${stack} to ${r.file} (${r.resources} resources, ${r.bytes} bytes, sha256 ${r.sha256}). The file is readable by you alone; the ledger keeps its digest and size, never its content.`,
   cancelled: (stack: string, lock: string, checked: boolean): string =>

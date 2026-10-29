@@ -43,6 +43,8 @@ export interface ProductPipelineJobs {
   preview?: { jobName: string; noteJobName: string; comment: string };
   /** The stale marking's job (chant#4628), with `staleNotes`. */
   stale?: { command: string; env: Record<string, string> };
+  /** The action job (chant#4654), with `actionJob`: the comment and the dispatch inputs it answers, and `plywood action --from-event`. */
+  action?: { jobName: string; comment: string; inputs: { member: string; action: string }; command: string };
 }
 
 /** The options plywood passes to `productPipelineJobs`. */
@@ -73,7 +75,12 @@ export interface ProductPipelineOptions {
   decide?: { backend: string; model: string };
   /** Merge the pull request once its update before merge applied (chant#4636); a chant before it ignores the option. */
   applyMerge?: { tokenEnv: string; method?: string };
+  /** The job that answers `/plywood action <stack> <name>` and a dispatch with `stack` and `action` inputs (chant#4654); a chant before it ignores the option. */
+  actionJob?: boolean | { inputs?: { member?: string; action?: string } };
 }
+
+/** What an action job was asked for, as chant's `productActionFromEnv` reads it (chant#4654). */
+export type ProductActionRequest = { kind: "action"; member: string; address: string; from: "comment" | "dispatch" } | { kind: "refused"; reason: string };
 
 /** What plywood calls from `@intentius/chant/ci-product`. */
 export interface ChantProduct {
@@ -84,6 +91,8 @@ export interface ChantProduct {
   runChantInProcess(argv: string[], words: ProductWordsInput | ProductWords, options?: { mcp?: unknown }): Promise<number>;
   /** Present when `runChantInProcess` takes the product tool hook (chant#4555). */
   PRODUCT_MCP_HOOK_FLOOR?: string;
+  /** The words a `forgeWrite` tool's name may hold on the propose tier (chant#4655). */
+  PRODUCT_TOOL_PROPOSE_WORDS?: readonly string[];
   /** The waves spec with the words' op, gate pattern and approval preset (chant#4550); plywood init writes its output. */
   productWavesSpec?(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   CI_PRODUCT_FLOOR?: string;
@@ -117,6 +126,8 @@ export interface ChantProduct {
   APPROVAL_STATUS_PULL_REQUEST_FLOOR?: string;
   /** Whether an op waves spec gets the approval status jobs: a `pr-review` or `pull-request` wave (chant#4630). */
   opWavesPostsApprovalStatus?(spec: unknown): boolean;
+  /** The stack and action an action job was started for, from `CHANT_ACTION_COMMENT`, or `CHANT_ACTION_MEMBER` and `CHANT_ACTION` (chant#4654). */
+  productActionFromEnv?(words: ProductWords, env: Record<string, string | undefined>): ProductActionRequest;
 }
 
 /**

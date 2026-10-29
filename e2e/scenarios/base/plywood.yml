@@ -4,8 +4,9 @@
 # before plywood init). dev runs on plunge's record store; staging is a
 # stock stack in the same bucket, declared on its stock backend, until
 # pw-adopt adopts it and points it at plunge's records (base overlay
-# staging-on-plunge); prod-us and prod-eu stay on stock Pulumi. Every URL is
-# floci as a job on the bench's network sees it.
+# staging-on-plunge); prod-us and prod-eu stay on stock Pulumi. prod-us
+# declares the day-2 action rotate, its command resource (e2e/action.ts).
+# Every URL is floci as a job on the bench's network sees it.
 #
 # Every generated job runs in the bench's job image (e2e/bench.ts JOB_IMAGE,
 # built by `just e2e image`): plywood from this checkout, the local plunge
@@ -24,6 +25,10 @@ stacks:
   shop/prod-us:
     dir: .
     backend: s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true
+    actions:
+      - name: rotate
+        urn: urn:pulumi:prod-us::shop::command:local:Command::rotate
+        description: replace the bench's local command, which writes a marker and touches nothing else
   shop/prod-eu:
     dir: .
     backend: s3://plywood-tutorial-state?region=us-east-1&endpoint=http://floci:4566&use_path_style=true

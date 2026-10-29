@@ -1,0 +1,45 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-action",
+  "product": "plywood",
+  "claim": "action/gated-replace",
+  "title": "A day-2 action waits for a second person's approval of its preview, then replaces its command resource once",
+  "tree": { "base": "base", "overlays": "overlays" },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "limits": { "out-of-band": 900 },
+  "steps": [
+    {
+      "id": "ask",
+      "do": "out-of-band",
+      "label": "plywood action previews the replacement of prod-us's rotate command alone, records the request and prints the line that approves it",
+      "command": ["plywood-e2e", "action", "prod-us", "rotate"],
+      "expect": [{ "exit": 3 }, { "gated": { "op": "pulumi-stack-ops", "status": "gated", "count": 1 } }]
+    },
+    {
+      "id": "approve",
+      "do": "out-of-band",
+      "label": "the reviewer, not the requester, approves the request the preview's digest binds",
+      "command": ["plywood-e2e", "approve-pending", "pulumi-stack-ops"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "marker",
+      "do": "out-of-band",
+      "label": "main keeps the command's marker as the request saw it",
+      "command": ["plywood-e2e", "configure", "${PLYWOOD_E2E_ROTATE_MARKER:-rotate-marker-first}"],
+      "expect": [{ "exit": 0 }]
+    },
+    {
+      "id": "run",
+      "do": "out-of-band",
+      "label": "the same call after the approval replaces the command once and records how it ended",
+      "command": ["plywood-e2e", "action", "prod-us", "rotate"],
+      "expect": [{ "exit": 0 }, { "gated": { "op": "pulumi-stack-ops", "status": "ok", "count": 1 } }]
+    }
+  ],
+  "break": {
+    "env": { "BREAK": "1", "PLYWOOD_E2E_ROTATE_MARKER": "rotate-marker-second" },
+    "note": "After the approval, main changes the command's marker, so the preview the second call makes differs from the one approved: the request waits again (exit 3), nothing is replaced, and the run step's exit 0 and ok outcome must not hold."
+  }
+}

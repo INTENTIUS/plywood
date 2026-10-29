@@ -28,6 +28,14 @@
  * adopt-bare-bucket in its BREAK arm), adopts staging, and only then points
  * plywood.yml at plunge's records (staging-on-plunge), as a user would.
  *
+ * | scenario  | claim                | what the BREAK arm changes                                  |
+ * |-----------|----------------------|-------------------------------------------------------------|
+ * | pw-action | action/gated-replace | main changes the command's input after the approval         |
+ *
+ * pw-action (plywood#39, plywood#44) runs on prod-us's command resource
+ * rotate, which the seed adds to the shop program (./action.ts), with the
+ * command provider from plywood's images.
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -51,6 +59,7 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-moved-preview": "gate/moved-preview",
   "pw-canary": "wave/canary",
   "pw-drift": "drift/issue",
+  "pw-action": "action/gated-replace",
 };
 
 /** The scenario files in `dir`, by id. */

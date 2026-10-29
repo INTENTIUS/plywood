@@ -18,7 +18,8 @@ drift: { schedule: "0 6 * * *" }
 
 | Key | Default | Meaning |
 |---|---|---|
-| `stacks` | found by `init` | each stack as `project/stack`, with `dir`, `paths`, `gate` and `backend` |
+| `stacks` | found by `init` | each stack as `project/stack`, with `dir`, `paths`, `gate`, `backend` and `actions` |
+| `stacks.<stack>.actions` | none | the stack's day-2 actions, each a `name`, the `urn` of a `command:local:Command` or `command:remote:Command` resource in the stack, and a `description`; `config check` refuses a URN of another type, on another stack, and a name used twice |
 | `waves` | one wave per environment, dev before staging before prod | a list of waves, each a list of stacks, the first wave the canary; or a mapping with `canary`, the stacks that update first, and `after`, each stack to the stacks it updates after |
 | `engine` | a `plunge+` backend picks `plunge`, else Pulumi | `pulumi` or `plunge` |
 | `backend` | `PULUMI_BACKEND_URL`, then `Pulumi.yaml`'s `backend.url` | the backend URL, for every stack or per stack under `stacks` |

@@ -1,8 +1,6 @@
 ---
 title: 'Run a day-2 action'
 description: 'Declare a command resource as an action, and run it on request once a second person approves its preview.'
-needs: [chant#4654]
-draft: true
 ---
 
 A day-2 action is an operation you run on a stack after it is up, such as rotating a key or flushing a cache. In plywood an action is a `command:local:Command` or `command:remote:Command` resource in the stack, and running it means replacing that resource. Declare it once under the stack in `plywood.yml`:

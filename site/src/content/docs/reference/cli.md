@@ -72,7 +72,7 @@ Each one is a request on the workspace ledger and runs once a second person appr
 
 | Command | Does |
 |---|---|
-| `plywood mcp [--report-url <url>] [--propose]` | runs a read-only MCP server over stdio, with plywood's read tools; `--propose` adds `plywood:request_from_template`, which refuses every call while Pulumi templates are not available, and exits 1 on a chant without the propose tier |
+| `plywood mcp [--report-url <url>] [--propose]` | runs a read-only MCP server over stdio, with plywood's read tools; `--propose` adds `plywood:request_from_template`, which refuses every call while Pulumi templates are not available |
 | `plywood guard check <command line>` | prints whether the agent guard refuses a command |
 | `plywood guard install [--dir <d>]` | installs the Claude Code hook and the `pulumi` and `plunge` wrappers |
 

@@ -1,8 +1,6 @@
 ---
 title: 'Have an agent request an app'
 description: 'An agent asks for an app from a template, and the request goes through the same pull request and approval as a person''s.'
-needs: [chant#4655, plywood#40]
-draft: true
 ---
 
 ```sh
@@ -24,5 +22,3 @@ The tool takes the arguments of `plywood request`.
 A call opens one pull request on `request/<template>/<name>`, the same pull request `plywood request` opens, with `via: mcp` in its body. plywood previews it like any other change, and its update runs after a person approves the digest. A second call for the same request opens nothing and returns `existing: true`.
 
 Pulumi templates are not available yet. They need a template registry and catalog in plywood. The tool refuses every call with that message and opens nothing.
-
-`plywood mcp --propose` needs a chant with the propose tier. On an older chant it exits 1 and names the chant release it needs.

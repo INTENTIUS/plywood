@@ -1,4 +1,4 @@
 {
-  "ghcr.io/intentius/plywood-pulumi:0.1.0-pulumi3.272.0": "sha256:730237bed59e0054e6839898658069a4bcbdab0ffb8f893487c864bc2f3436c8",
-  "ghcr.io/intentius/plywood-plunge:0.1.0-plunge0.1.0": "sha256:76a50f55cc2fd96c19e4ecb625a19863783374c9dc89d1606cc70a36635cc48d"
+  "ghcr.io/intentius/plywood-pulumi:0.2.0-pulumi3.272.0": "sha256:ea268f1dd2fa15f80ddcedd5c3498d24b79cc2b8a590177c5499e2db3f686f18",
+  "ghcr.io/intentius/plywood-plunge:0.2.0-plunge0.1.0": "sha256:6a862ad23e39081a32fe8b2331b095ed2de44e527f2719416201b0affa46a1eb"
 }

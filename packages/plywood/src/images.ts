@@ -30,8 +30,8 @@
  * skip the download. A pin that is not linked keeps plywood's line: chant's
  * always links onto PATH, and its Pulumi line skips when the `pulumi` on PATH
  * is that version without checking the versioned directory, which a step
- * pinned with `engineVersion` runs from. The lexicon at plywood's pin
- * (0.124.54) has no ci-setup, and every line is plywood's.
+ * pinned with `engineVersion` runs from. A lexicon without ci-setup
+ * (the pinned 0.124.58 has it) leaves every line plywood's.
  *
  * plywood hands the lines to chant's `prLoop.engineSetup` when the installed
  * chant reads that option and the job runs in chant's default image
@@ -210,7 +210,7 @@ let loading: Promise<boolean> | undefined;
 export function useChantInstallLines(): Promise<boolean> {
   loading ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from the lexicon at 0.124.54 (chant#4592).
+      // @ts-ignore: older lexicons lack the subpath (chant#4592).
       const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/ci-setup");
       const ok =
         typeof m.ciRelease === "function" &&
@@ -482,14 +482,14 @@ let hook: Promise<boolean> | undefined;
 
 /**
  * Whether the installed chant takes a product's engine lines: chant#4550's
- * `@intentius/chant/ci-product` with `prLoopSetup`. chant 0.124.54 has
- * neither; scripts/build-cli.mjs stands in a module that throws for the
+ * `@intentius/chant/ci-product` with `prLoopSetup`. A chant before the
+ * release that added them has neither; scripts/build-cli.mjs stands in a module that throws for the
  * missing subpath, and the answer is false.
  */
 export function chantReadsEngineSetup(): Promise<boolean> {
   hook ??= (async () => {
     try {
-      // @ts-ignore the pinned chant has no such subpath yet
+      // @ts-ignore older chants have no such subpath
       const m: Record<string, unknown> = await import("@intentius/chant/ci-product");
       return typeof m.prLoopSetup === "function" && typeof m.engineSetupLines === "function";
     } catch {

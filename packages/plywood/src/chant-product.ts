@@ -1,7 +1,8 @@
 /**
  * chant's product pipeline (`@intentius/chant/ci-product`, chant#4550),
- * reached through a feature-detect. plywood's pin is chant 0.124.54, which
- * has no such entry; the release after it does (its `CI_PRODUCT_FLOOR`).
+ * reached through a feature-detect. plywood pins chant 0.124.58, which
+ * has the entry; a chant before the release that added it (its
+ * `CI_PRODUCT_FLOOR`) does not.
  *
  * The entry is imported on first use. When it is missing, or lacks any of
  * `assertProductWords`, `productPipelineJobs`, `approveLine` and
@@ -191,7 +192,7 @@ let cached: Promise<ChantProduct | undefined> | undefined;
 export function chantProduct(): Promise<ChantProduct | undefined> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4550).
+      // @ts-ignore: older chants lack the subpath (chant#4550).
       const m: unknown = await import("@intentius/chant/ci-product");
       return isChantProduct(m) ? m : undefined;
     } catch {

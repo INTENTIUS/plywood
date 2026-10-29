@@ -81,7 +81,7 @@ describe("policy words", () => {
 /**
  * The fixture pack's preview stream, read by chant's pulumi lexicon: the
  * mandatory rule denies and the advisory one is a warning (a note line).
- * Skipped on a lexicon without `pulumiPolicyFindings` (the 0.124.54 pin).
+ * Skipped on a lexicon without `pulumiPolicyFindings` (an older chant).
  */
 describe("the fixture pack's findings through chant", async () => {
   let lexicon: Record<string, unknown> | undefined;

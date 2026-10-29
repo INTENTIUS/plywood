@@ -28,7 +28,7 @@ let detected: Promise<boolean> | undefined;
 export function hasChant4625(): Promise<boolean> {
   detected ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4625).
+      // @ts-ignore: older chants lack the subpath (chant#4625).
       const m: Record<string, unknown> = await import("@intentius/chant/parallelism");
       return typeof m.mapLimited === "function" && typeof m.parallelismProblem === "function";
     } catch {

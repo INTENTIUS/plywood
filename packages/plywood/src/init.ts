@@ -139,7 +139,13 @@ export const COMPONENTS_FILE = "plywood.component.ts";
 export const WAVES_SPEC_FILE = `.chant/op-waves/${OP_NAME}.spec.json`;
 
 /** The chant pin plywood ships with: the pulumi lexicon is pinned to the same release. */
-export const CHANT_PIN: string = (PLYWOOD_DEPENDENCIES as Record<string, string>)["@intentius/chant"] ?? "0.124.54";
+export const CHANT_PIN: string = chantPin();
+
+function chantPin(): string {
+  const pin = (PLYWOOD_DEPENDENCIES as Record<string, string | undefined>)["@intentius/chant"];
+  if (!pin) throw new Error("packages/plywood/package.json has no @intentius/chant dependency");
+  return pin;
+}
 
 /** Parses init's flags. A bad flag is a message. */
 export function parseInitArgs(args: string[]): InitOptions | { error: string } | { printPrompt: true } {
@@ -300,7 +306,7 @@ function forgeFor(doc: RawConfig, detected: Detected, opts: InitOptions): { kind
 /** chant's `writeCiHook` (chant#4556), reached through a feature-detect. */
 async function chantWriteCiHook(): Promise<((root: string, moment: "check", hook: { name: string; command: string[] }) => { file: string; replaced: boolean }) | undefined> {
   try {
-    // @ts-ignore: the subpath's writeCiHook is missing from chant 0.124.54 (chant#4556).
+    // @ts-ignore: older chants lack the subpath's writeCiHook (chant#4556).
     const m: Record<string, unknown> = await import("@intentius/chant/components/check-hooks");
     return typeof m.writeCiHook === "function" ? (m.writeCiHook as never) : undefined;
   } catch {

@@ -14,8 +14,8 @@
  * metrics endpoint is set. Without one it prints the estate and writes
  * nothing.
  *
- * The subpath is imported on first use. A chant without it (the 0.124.54
- * pin) says so and exits with chant's `failed` code; `plywood audit` reads
+ * The subpath is imported on first use. A chant without it (one older than the
+ * pinned 0.124.58) says so and exits with chant's `failed` code; `plywood audit` reads
  * the same ledger tables there.
  */
 import { dirname } from "node:path";
@@ -54,7 +54,7 @@ let estateModule: Promise<ChantEstate | undefined> | undefined;
 export function chantEstate(): Promise<ChantEstate | undefined> {
   estateModule ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4612).
+      // @ts-ignore: older chants lack the subpath (chant#4612).
       const m: Record<string, unknown> = await import("@intentius/chant/ci-estate");
       const r: Record<string, unknown> = await import("@intentius/chant/pr-report-url");
       if (!["readEstateLedger", "buildLedgerEstate", "writeEstate"].every((f) => typeof m[f] === "function")) return undefined;

@@ -106,7 +106,7 @@ let loaded: Promise<Omit<ChantDriftNotify, "words"> | undefined> | undefined;
 export function chantDriftNotify(): Promise<Omit<ChantDriftNotify, "words"> | undefined> {
   loaded ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4550, #4610).
+      // @ts-ignore: older chants lack the subpath (chant#4550, #4610).
       const product: Record<string, unknown> = await import("@intentius/chant/ci-product");
       const notify: Record<string, unknown> = await import("@intentius/chant/notify");
       const fns = [product.driftNotifyFields, product.productSendOptions, notify.makeNotifyEvent, notify.sendNotify];

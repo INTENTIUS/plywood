@@ -12,8 +12,8 @@
  * gets chant's shared bucket check (`@intentius/chant/bucket-check`,
  * chant#4558): versioning, a lifecycle rule that expires noncurrent
  * versions, and the public access block. The check only reads. It is
- * reached through a feature-detect, since plywood's pinned chant (0.124.54)
- * lacks it; scripts/build-cli.mjs stands in a throwing module there.
+ * reached through a feature-detect, since a chant older than the pinned 0.124.58
+ * may lack it; scripts/build-cli.mjs stands in a throwing module there.
  */
 import type { DetectedProject } from "./detect";
 
@@ -147,7 +147,7 @@ let cached: Promise<ChantBucketCheck | undefined> | undefined;
 export function chantBucketCheck(): Promise<ChantBucketCheck | undefined> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4558).
+      // @ts-ignore: older chants lack the subpath (chant#4558).
       const m: Record<string, unknown> = await import("@intentius/chant/bucket-check");
       return typeof m.checkBucket === "function" ? (m as unknown as ChantBucketCheck) : undefined;
     } catch {

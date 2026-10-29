@@ -36,8 +36,8 @@
  * the requester runs the same command again to carry it out. The requester's
  * own approval never counts.
  *
- * Everything chant runs here is reached through a feature-detect: the pulumi
- * lexicon at plywood's pin (0.124.54) has none of it, and then each verb
+ * Everything chant runs here is reached through a feature-detect: a pulumi
+ * lexicon older than the pinned 0.124.58 may have none of it, and then each verb
  * says so and exits with chant's `failed` code.
  */
 import { existsSync } from "node:fs";
@@ -104,7 +104,7 @@ let cachedLocks: Promise<ChantStackLockReader | undefined> | undefined;
 export function chantStackLockReader(): Promise<ChantStackLockReader | undefined> {
   cachedLocks ??= (async () => {
     try {
-      // @ts-ignore: pulumiStackLockIds is newer than the lexicon at 0.124.54 (chant#4615).
+      // @ts-ignore: pulumiStackLockIds is missing from older lexicons (chant#4615).
       const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
       return typeof m.pulumiStackLockIds === "function" ? (m.pulumiStackLockIds as ChantStackLockReader) : undefined;
     } catch {
@@ -147,7 +147,7 @@ let cachedRollback: Promise<boolean> | undefined;
 export function chantStackOps(): Promise<ChantStackOps | undefined> {
   cachedOps ??= (async () => {
     try {
-      // @ts-ignore: the gated stack operations are newer than the lexicon at 0.124.54 (chant#4578).
+      // @ts-ignore: the gated stack operations are missing from older lexicons (chant#4578).
       const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
       return REQUIRED.every((name) => typeof m[name] === "function") ? (m as unknown as ChantStackOps) : undefined;
     } catch {
@@ -165,10 +165,10 @@ export function chantStackOps(): Promise<ChantStackOps | undefined> {
 export function chantStackRollback(): Promise<boolean> {
   cachedRollback ??= (async () => {
     try {
-      // @ts-ignore: pulumiReleaseInputs is newer than the lexicon at 0.124.54.
+      // @ts-ignore: pulumiReleaseInputs is missing from older lexicons (the release after 0.124.54).
       const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
       if (typeof m.pulumiReleaseInputs !== "function") return false;
-      // @ts-ignore: the subpath is missing from the lexicon at 0.124.54 (chant#4542).
+      // @ts-ignore: older lexicons lack the subpath (chant#4542).
       const copy: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/release-copy");
       return typeof copy.prepareReleaseCopy === "function";
     } catch {

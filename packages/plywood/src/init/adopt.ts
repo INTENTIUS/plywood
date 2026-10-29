@@ -17,8 +17,8 @@
  * digest, and `plunge stack adopt --json --yes`. `chant run plywood-adopt`
  * stops at each gate and `chant approve plywood-adopt <gate>` opens it.
  *
- * Both are reached through a feature-detect: the pulumi lexicon at plywood's
- * pin (0.124.54) has no adopt argv, adopt document parser or Op. Then init
+ * Both are reached through a feature-detect: a pulumi lexicon older than the pinned
+ * 0.124.58 may have no adopt argv, adopt document parser or Op. Then init
  * prints the preview command for each stack and skips the Op file.
  */
 import type { PlungeStack } from "./engine";
@@ -64,9 +64,9 @@ let cached: Promise<ChantAdopt | undefined> | undefined;
 export function chantAdopt(): Promise<ChantAdopt | undefined> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: plungeAdoptArgs and runAllowedPlunge's env are missing from the lexicon at 0.124.54 (chant#4562).
+      // @ts-ignore: plungeAdoptArgs and runAllowedPlunge's env are missing from older lexicons (chant#4562).
       const run: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/run");
-      // @ts-ignore: parsePlungeAdoptView and PulumiAdoptOp are missing from the lexicon at 0.124.54 (chant#4562).
+      // @ts-ignore: parsePlungeAdoptView and PulumiAdoptOp are missing from older lexicons (chant#4562).
       const lexicon: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
       const args = run.plungeAdoptArgs as ((o: { stack: string }) => string[]) | undefined;
       const allowed = run.runAllowedPlunge as ((r: Runner, a: string[], cwd: string, env?: Record<string, string>) => Promise<{ stdout: string }>) | undefined;

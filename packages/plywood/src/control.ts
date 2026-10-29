@@ -195,7 +195,7 @@ let cached: Promise<ChantControl | undefined> | undefined;
 export function chantControl(): Promise<ChantControl | undefined> {
   cached ??= (async () => {
     try {
-      // @ts-ignore: the subpath is missing from chant 0.124.54 (chant#4568).
+      // @ts-ignore: older chants lack the subpath (chant#4568).
       const m: Record<string, unknown> = await import("@intentius/chant/ci-control");
       return REQUIRED.every((n) => typeof m[n] === "function") ? (m as unknown as ChantControl) : undefined;
     } catch {

@@ -27,7 +27,7 @@ export async function pages() {
 
 export const PREAMBLE = `# plywood
 
-> CI Automation for Pulumi
+> Sophisticated automation for Pulumi.
 
 plywood runs Pulumi previews and updates from pull requests on GitHub, GitLab or Forgejo. It posts one preview note for every stack a change reaches, binds each approval to a preview digest, and rolls changes out in waves. It runs on chant's runtime, and plunge, the Pulumi fork from the team behind plywood, adds resource-level features.
 

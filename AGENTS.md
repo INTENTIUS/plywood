@@ -11,7 +11,7 @@
 - The CI workflows are `ci/ci.ts` (ci.yml) and `publish/publish.ts` (publish.yml); `chant-ci-green.yml` is chant's, written by `chant ci workflow --token-secret CI_GREEN_TOKEN` from `chant.workspace.json`'s `ci.green`. `just ci` renders all three.
 - Every check runs on local builds, fakes, loopback servers or the floci emulator. Pulumi backends are `file://`, `plunge+file://` or S3 on floci; never a real cloud, Pulumi Cloud or the default Pulumi backend.
 - `e2e/` is the bench on chant's e2e harness (plywood#25): plywood's seed, its claims as harness scenarios, and the checks they read from chant's ledger. It reaches `@intentius/chant/e2e-harness` by a lazy import and refuses on a chant without it; `stack/` is the tutorial bench that works on the pin. Neither is part of the package.
-- The tagline is "CI Automation for Pulumi", word for word.
+- The tagline is "Sophisticated automation for Pulumi.", word for word.
 - The site is for users and describes plywood as published. Notes about this repo, issue links and build status stay out of it, apart from one page, `site/src/content/docs/reference/development.mdx`, which links the repository docs and lists the draft pages with their issues; contributor material goes in CONTRIBUTING.md. A guide for a feature that needs a newer chant or plunge than the pin stays a draft (`draft: true` with `needs:`).
 
 ## Releasing

@@ -187,3 +187,16 @@ describe("chant and main", () => {
     expect(pushed["plywood.yml"]).toMatch(/\nlocks:\n  grain: stack\n$/);
   });
 });
+
+describe("withForgeLedger", () => {
+  it("starts from the forge's chant/lifecycle and pushes it back, keeping the command's exit code", async () => {
+    const { withForgeLedger } = await import("../ports");
+    const script = withForgeLedger("plywood run plywood-adopt");
+    const lines = script.split("\n");
+    expect(lines[0]).toBe("git fetch -q origin chant/lifecycle:chant/lifecycle || true");
+    expect(lines).toContain("plywood run plywood-adopt");
+    expect(lines).toContain("code=$?");
+    expect(lines.at(-1)).toBe("exit $code");
+    expect(script).toContain("git push -q origin chant/lifecycle");
+  });
+});

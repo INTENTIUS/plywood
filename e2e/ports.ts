@@ -123,6 +123,27 @@ export function jobArgv(h: Pick<HarnessModule, "RUNNER_JOB_ENV">, c: JobContaine
   return ["docker", "run", "--rm", "--network", PROJECT, ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]), "--entrypoint", "sh", c.image, "-c", body];
 }
 
+/**
+ * A command a person runs in a clone, with the forge's ledger under it: the
+ * clone starts with the forge's chant/lifecycle, and when the command ends
+ * (whatever its exit code) the records it wrote there are pushed back, so the
+ * next clone and the harness's ForgeLedger see its gated run or its approval.
+ * `plywood run <op>` and `plywood approve` write the ledger in the clone only
+ * and push nothing (the first pw-adopt run on 2026-10-30 read 0 gated runs).
+ * The command's own exit code is the script's.
+ */
+export function withForgeLedger(script: string): string {
+  return [
+    "git fetch -q origin chant/lifecycle:chant/lifecycle || true",
+    "set +e",
+    script,
+    "code=$?",
+    "set -e",
+    "if git rev-parse -q --verify refs/heads/chant/lifecycle >/dev/null; then git push -q origin chant/lifecycle || echo 'plywood-e2e: the ledger push was refused' >&2; fi",
+    "exit $code",
+  ].join("\n");
+}
+
 // ── the ledger ──────────────────────────────────────────────────────────
 
 /** The shop repository's ledger, fetched from the forge into a scratch repository. */
@@ -421,7 +442,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     }
     case "job":
       need(1);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, a.map(quote).join(" ")));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(a.map(quote).join(" "))));
     case "plunge-up": {
       need(1);
       const [stack, ...sets] = a;
@@ -444,7 +465,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       if (!p) return say(c, { code: 1, line: `no pending gate of ${a[0]} since the arm started` });
       if (!p.planDigest) return say(c, { code: 1, line: `${a[0]}'s gate ${p.gate} binds no plan to approve` });
       const script = `plywood approve ${quote(p.gate)} --op ${quote(a[0]!)} --plan ${quote(p.planDigest)} --approver ${quote(c.reviewer.login)} --yes`;
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.reviewer }, script));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.reviewer }, withForgeLedger(script)));
     }
     case "configure": {
       need(1);

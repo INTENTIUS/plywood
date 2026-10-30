@@ -150,7 +150,7 @@ export const JOB_IMAGE = "plywood-tutorial-job:local";
  * path names the local build too. `chantTarballs`, the files `just
  * chant-local` packed (under `chant-local/` in the build context), replace
  * the pinned chant packages under the global plywood, so the jobs run the
- * same chant as the host.
+ * same chant as the host. It also takes git from trixie (plywood#49).
  */
 export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string; pulumiVersion: string; plungeVersion: string; chantTarballs?: readonly string[] }): string {
   const dir = `/opt/plywood/pulumi-${o.pulumiVersion}`;
@@ -172,6 +172,10 @@ export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string
     "COPY plunge /opt/plywood/plunge-local/plunge",
     // The language hosts and plugins plunge runs come with the release beside it.
     `RUN set -e; for f in /opt/plywood/plunge-0*/pulumi-*; do [ -e "$f" ] && ln -sf "$f" /opt/plywood/plunge-local/; done; ln -sf /opt/plywood/plunge-local/plunge /usr/local/bin/plunge; ln -sf /opt/plywood/plunge-local/plunge ${release}/plunge; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`,
+    // plywood's images carry bookworm's git 2.39.5, which has no `git merge-tree --write-tree --merge-base`
+    // (git 2.40), which chant's lifecycle push replays with when two jobs push chant/lifecycle at once
+    // (plywood#49). The bench takes git from trixie so the scenarios measure their claims.
+    'RUN set -e; echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && printf "Package: *\\nPin: release n=trixie\\nPin-Priority: 100\\n" > /etc/apt/preferences.d/trixie && apt-get update && apt-get install -y --no-install-recommends -t trixie git && rm -rf /var/lib/apt/lists/* && git --version',
     ...chant,
     "",
   ].join("\n");

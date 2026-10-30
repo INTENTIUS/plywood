@@ -219,7 +219,8 @@ h1#_top {
 }
 
 /* The home hero: the board, large and crisp, with no frame since its background is transparent. */
-.hero .pw-hero-board {
+.hero .pw-hero-board,
+.ph .pw-hero-board {
 	width: clamp(8rem, 22vw, 16rem);
 	height: auto;
 	margin-inline: auto;
@@ -360,4 +361,10 @@ code, pre, kbd, samp {
 	height: 6px;
 	margin-left: 2px;
 	background: var(--pw-steel);
+}
+
+/* The home page carries its own heading in ProductHome, so Starlight's title
+   panel is hidden there. */
+:root:has(.ph) main > .content-panel:first-child:has(h1#_top) {
+	display: none;
 }

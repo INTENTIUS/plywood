@@ -11,8 +11,8 @@
     {
       "id": "waves",
       "do": "out-of-band",
-      "label": "main puts the stock prod stacks first in the waves, and plywood init writes them again",
-      "command": ["plywood-e2e", "configure", "stock-first"],
+      "label": "main puts the stock prod stacks first in the waves, gates every wave (gate: always), and plywood init writes them again",
+      "command": ["plywood-e2e", "configure", "stock-first-gated"],
       "expect": [{ "exit": 0 }]
     },
     { "id": "workers", "do": "open", "branch": "e2e/moved-preview-workers", "overlay": "prod-us-workers-4", "title": "prod-us: a fourth worker queue" },

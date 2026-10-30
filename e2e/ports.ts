@@ -123,6 +123,27 @@ export function jobArgv(h: Pick<HarnessModule, "RUNNER_JOB_ENV">, c: JobContaine
   return ["docker", "run", "--rm", "--network", PROJECT, ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]), "--entrypoint", "sh", c.image, "-c", body];
 }
 
+/**
+ * A command a person runs in a clone, with the forge's ledger under it: the
+ * clone starts with the forge's chant/lifecycle, and when the command ends
+ * (whatever its exit code) the records it wrote there are pushed back, so the
+ * next clone and the harness's ForgeLedger see its gated run or its approval.
+ * `plywood run <op>` and `plywood approve` write the ledger in the clone only
+ * and push nothing (the first pw-adopt run on 2026-10-30 read 0 gated runs).
+ * The command's own exit code is the script's.
+ */
+export function withForgeLedger(script: string): string {
+  return [
+    "git fetch -q origin chant/lifecycle:chant/lifecycle || true",
+    "set +e",
+    script,
+    "code=$?",
+    "set -e",
+    "if git rev-parse -q --verify refs/heads/chant/lifecycle >/dev/null; then git push -q origin chant/lifecycle || echo 'plywood-e2e: the ledger push was refused' >&2; fi",
+    "exit $code",
+  ].join("\n");
+}
+
 // ── the ledger ──────────────────────────────────────────────────────────
 
 /** The shop repository's ledger, fetched from the forge into a scratch repository. */
@@ -307,17 +328,20 @@ const WRITE_FILES = `node -e 'const fs=require("fs"),p=require("path");const f=J
 
 /**
  * The script `configure` runs in a job container on a clone of main: lay
- * the base overlay's files, run `plywood ci` as a person would after editing
- * plywood.yml (the waves spec, the workflow and any drift jobs written
- * again), and push main. The commit says [skip ci] so the push starts no
+ * the base overlay's files, run `plywood init --forge forgejo --yes` on them
+ * (the waves spec, the workflow and any drift jobs written again, with
+ * plywood.yml's image and engine lines), and push main. It is not `plywood
+ * ci`: that verb writes the workflow without plywood.yml's image, so every
+ * job runs in node:22, which has no plywood (the first pw-canary run on
+ * 2026-10-30, stalled at its plan; filed on INTENTIUS/plywood). The commit says [skip ci] so the push starts no
  * waves job of its own.
  */
 export function configureScript(name: string): string {
   return [
     WRITE_FILES,
-    `PULUMI_BACKEND_URL=${quote(s3BackendUrl(BUCKETS.state, FLOCI_NET))} plywood ci --forge forgejo`,
+    `PULUMI_BACKEND_URL=${quote(s3BackendUrl(BUCKETS.state, FLOCI_NET))} plywood init --forge forgejo --yes`,
     "git add -A",
-    `git commit -q -m ${quote(`e2e: plywood.yml from base overlay ${name}, and plywood ci [skip ci]`)} || true`,
+    `git commit -q -m ${quote(`e2e: plywood.yml from base overlay ${name}, and plywood init [skip ci]`)} || true`,
     "git push -q origin HEAD:main",
   ].join("\n");
 }
@@ -357,7 +381,7 @@ export const COMMANDS: Record<string, string> = {
   "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container",
   action: "<stack> <name>: plywood action shop/<stack> <name> as the author on the stack's backend, in a job container; a call that waits must print the approve line",
   "approve-pending": "<op>: the reviewer approves the newest pending gate of <op> with the plan it binds",
-  configure: "<base overlay>: lay it over main, run plywood ci and push main, in a job container as the admin",
+  configure: "<base overlay>: lay it over main, run plywood init and push main, in a job container as the admin",
   push: "<branch> <overlay>: push the overlay as one more commit on the arm's pull request branch",
   note: "<branch> <once> <text>...: one comment on the branch's pull request holds <once> and every <text>, and <once> appears once (./checks.ts oneNote)",
   "wait-stacks": "<op> <stack>...: wait until a wave job of <op> since the arm started settled each stack, or one stopped",
@@ -418,7 +442,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     }
     case "job":
       need(1);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, a.map(quote).join(" ")));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(a.map(quote).join(" "))));
     case "plunge-up": {
       need(1);
       const [stack, ...sets] = a;
@@ -441,7 +465,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       if (!p) return say(c, { code: 1, line: `no pending gate of ${a[0]} since the arm started` });
       if (!p.planDigest) return say(c, { code: 1, line: `${a[0]}'s gate ${p.gate} binds no plan to approve` });
       const script = `plywood approve ${quote(p.gate)} --op ${quote(a[0]!)} --plan ${quote(p.planDigest)} --approver ${quote(c.reviewer.login)} --yes`;
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.reviewer }, script));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.reviewer }, withForgeLedger(script)));
     }
     case "configure": {
       need(1);

@@ -11,8 +11,8 @@
     {
       "id": "waves",
       "do": "out-of-band",
-      "label": "main puts the stock prod stacks first in the waves, and plywood ci writes them again",
-      "command": ["plywood-e2e", "configure", "stock-first"],
+      "label": "main puts the stock prod stacks first in the waves, gates every wave (gate: always), and plywood init writes them again",
+      "command": ["plywood-e2e", "configure", "stock-first-gated"],
       "expect": [{ "exit": 0 }]
     },
     { "id": "workers", "do": "open", "branch": "e2e/moved-preview-workers", "overlay": "prod-us-workers-4", "title": "prod-us: a fourth worker queue" },
@@ -29,8 +29,8 @@
     {
       "id": "update",
       "do": "out-of-band",
-      "label": "the merge's first wave job is on the ledger",
-      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1", "prod-us"],
+      "label": "the merge's first wave job is on the ledger, gated: a gated job records no target, so the wait does not name a stack",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
       "expect": [{ "exit": 0 }]
     },
     {

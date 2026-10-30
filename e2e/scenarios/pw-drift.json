@@ -11,7 +11,7 @@
     {
       "id": "drift-on",
       "do": "out-of-band",
-      "label": "main puts prod-us first in the waves and schedules its drift check, and plywood ci writes the jobs",
+      "label": "main puts prod-us first in the waves and schedules its drift check, and plywood init writes the jobs",
       "command": ["plywood-e2e", "configure", "stock-first-drift"],
       "expect": [{ "exit": 0 }]
     },

@@ -40,7 +40,7 @@
     {
       "id": "on-plunge",
       "do": "out-of-band",
-      "label": "with staging adopted, plywood.yml declares it on plunge's records and plywood ci writes the jobs again",
+      "label": "with staging adopted, plywood.yml declares it on plunge's records and plywood init writes the jobs again",
       "command": ["plywood-e2e", "configure", "staging-on-plunge"],
       "expect": [{ "exit": 0 }]
     },

@@ -11,7 +11,7 @@
     {
       "id": "waves",
       "do": "out-of-band",
-      "label": "main makes prod-us the canary wave and prod-eu the next, and plywood ci writes them again",
+      "label": "main makes prod-us the canary wave and prod-eu the next, and plywood init writes them again",
       "command": ["plywood-e2e", "configure", "${PLYWOOD_E2E_WAVES:-stock-first}"],
       "expect": [{ "exit": 0 }]
     },

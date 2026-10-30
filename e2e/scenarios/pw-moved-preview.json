@@ -11,7 +11,7 @@
     {
       "id": "waves",
       "do": "out-of-band",
-      "label": "main puts the stock prod stacks first in the waves, and plywood ci writes them again",
+      "label": "main puts the stock prod stacks first in the waves, and plywood init writes them again",
       "command": ["plywood-e2e", "configure", "stock-first"],
       "expect": [{ "exit": 0 }]
     },

@@ -149,7 +149,7 @@ function ctx(o: { records?: LedgerRecord[]; arm?: Record<string, string>; commen
 }
 
 describe("the stock claims' plywood-e2e commands", () => {
-  it("configures main in a job container as the admin, with the base overlay's files and plywood ci", async () => {
+  it("configures main in a job container as the admin, with the base overlay's files and plywood init", async () => {
     const t = ctx();
     expect(await runCommand(t.c, ["configure", "stock-first"])).toBe(0);
     const argv = t.ran[0]!;
@@ -157,7 +157,7 @@ describe("the stock claims' plywood-e2e commands", () => {
     expect(JSON.parse(Buffer.from(files.slice("PLYWOOD_E2E_FILES=".length), "base64").toString("utf8"))).toEqual({ "base.txt": "stock-first" });
     expect(argv.at(-1)).toContain("http://plywood-admin:adm@forgejo:3000/tutor/shop.git");
     const script = configureScript("stock-first");
-    expect(script).toContain("plywood ci --forge forgejo");
+    expect(script).toContain("plywood init --forge forgejo --yes");
     expect(script).toContain("[skip ci]");
     expect(script).toContain("git push -q origin HEAD:main");
     expect(script).toMatch(/PULUMI_BACKEND_URL='s3:\/\/plywood-tutorial-state\?/);

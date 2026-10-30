@@ -20,7 +20,7 @@
  *
  * The three that update put the prod stacks ahead of dev and staging in the
  * waves (base overlays stock-first*, laid by `plywood-e2e configure`, which
- * runs plywood ci), so their waves never wait on dev or staging.
+ * runs plywood init), so their waves never wait on dev or staging.
  *
  * The seed deploys staging on stock Pulumi and the base plywood.yml declares
  * it on that stock backend, so every scenario plans it the way the seed left

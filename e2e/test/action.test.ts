@@ -18,7 +18,9 @@ describe("the bench's day-2 action", () => {
 
   it("declares a local command at the images' provider pin, only where the marker is set", () => {
     const text = rotateProgram();
-    expect(text).toContain('new pulumi.CustomResource(\n        "command:local:Command",\n        "rotate",');
+    expect(text).toContain('class RotateCommand extends pulumi.CustomResource');
+    expect(text).toContain('super("command:local:Command", name, props, opts);');
+    expect(text).toContain('new RotateCommand(\n        "rotate",');
     expect(text).toContain('{ version: "1.0.1" }');
     expect(text).toContain('new pulumi.Config("shop").get("rotateMarker")');
     expect(text).toContain("environment: { ROTATE_MARKER: marker }");

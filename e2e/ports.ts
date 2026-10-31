@@ -378,7 +378,7 @@ export const COMMANDS: Record<string, string> = {
   "locks-seen": ": the lock observer saw no lock-like key in the record store",
   markers: "<stack> <name>: a queue on floci carries plunge's markers for <name>",
   job: "<word>...: the words as a command in a job container on a clone of main",
-  "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container",
+  "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container; up=false previews instead and writes no record",
   action: "<stack> <name>: plywood action shop/<stack> <name> as the author on the stack's backend, in a job container; a call that waits must print the approve line",
   "approve-pending": "<op>: the reviewer approves the newest pending gate of <op> with the plan it binds",
   configure: "<base overlay>: lay it over main, run plywood init and push main, in a job container as the admin",
@@ -445,13 +445,16 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(a.map(quote).join(" "))));
     case "plunge-up": {
       need(1);
-      const [stack, ...sets] = a;
+      const [stack, ...all] = a;
+      // `up=false` makes the update a preview, which writes no record: a BREAK arm's "another update" that moves nothing.
+      const sets = all.filter((kv) => kv !== "up=true" && kv !== "up=false");
+      const writes = !all.includes("up=false");
       const config = sets.map((kv) => {
         const i = kv.indexOf("=");
         if (i < 1) throw new Error(`plunge-up takes key=value, not ${kv}`);
         return `plunge config set --stack ${quote(stack!)} ${quote(kv.slice(0, i))} ${quote(kv.slice(i + 1))}`;
       });
-      const script = [...config, `plunge up --yes --non-interactive --stack ${quote(stack!)}`].join("\n");
+      const script = [...config, writes ? `plunge up --yes --non-interactive --stack ${quote(stack!)}` : `plunge preview --non-interactive --stack ${quote(stack!)}`].join("\n");
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: plungeStoreUrl(BUCKETS.records, FLOCI_NET) } }, script));
     }
     case "action": {
@@ -578,7 +581,7 @@ export async function pushOverBranch(o: { forgeUrl: string; person: Person; scra
     writeFileSync(to, content);
   }
   await sh("git", ["-C", dir, "add", "-A"], { env });
-  await sh("git", ["-C", dir, "-c", `user.name=${o.person.login}`, "-c", `user.email=${o.person.login}@plywood-tutorial.local`, "-c", "commit.gpgsign=false", "commit", "-q", "-m", o.message], { env });
+  await sh("git", ["-C", dir, "-c", `user.name=${o.person.login}`, "-c", `user.email=${o.person.login}@plywood-tutorial.local`, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", o.message], { env });
   await sh("git", ["-C", dir, "push", "-q", "origin", `HEAD:refs/heads/${o.branch}`], { env, redact });
   return (await sh("git", ["-C", dir, "rev-parse", "HEAD"], { env })).trim();
 }

@@ -5,8 +5,9 @@
  *                               harness's lintScenario when chant has it
  *   just e2e dry-run <id>       print a scenario's plain and BREAK arms step
  *                               by step; starts and changes nothing
- *   just e2e image <plunge>     build the job image (bench.ts JOB_IMAGE) from
- *                               plywood's images and a linux plunge binary
+ *   just e2e image [<plunge>]   build the job image (bench.ts JOB_IMAGE) from
+ *                               plywood's images; with a linux plunge binary
+ *                               it runs that, else the plunge the image carries
  *   just e2e up                 start the harness's stack and seed it
  *   just e2e claim <id>         the plain run and the BREAK run, the scan, and
  *                               on a CLEAN scan the row on the bench's claims
@@ -87,8 +88,8 @@ export function dryRun(s: Scenario): string[] {
 }
 
 async function buildImage(plungeBin: string | undefined): Promise<number> {
-  if (!plungeBin || !existsSync(plungeBin)) {
-    console.error("usage: just e2e image <path to a linux plunge binary built from plunge main>");
+  if (plungeBin && !existsSync(plungeBin)) {
+    console.error(`just e2e image: no plunge binary at ${plungeBin}; name a linux build, or none to run the plunge in plywood's image`);
     return 2;
   }
   const images = readFileSync(join(ROOT, "packages", "plywood", "src", "images.ts"), "utf8");
@@ -98,7 +99,7 @@ async function buildImage(plungeBin: string | undefined): Promise<number> {
   if (!pulumi || !plunge) throw new Error("packages/plywood/src/images.ts names no pulumi or plunge release");
   const ctx = join(stateDir(ROOT), "job-image");
   mkdirSync(ctx, { recursive: true });
-  copyFileSync(plungeBin, join(ctx, "plunge"));
+  if (plungeBin) copyFileSync(plungeBin, join(ctx, "plunge"));
   // With `just chant-local` installed, the jobs get the same local chant as the host.
   const chantTarballs = localChantTarballs();
   if (chantTarballs.length) {
@@ -114,6 +115,7 @@ async function buildImage(plungeBin: string | undefined): Promise<number> {
       pulumiVersion: pulumi,
       plungeVersion: plunge,
       chantTarballs,
+      localPlunge: plungeBin !== undefined,
     }),
   );
   log(`building ${JOB_IMAGE} in ${ctx} (run 'just images' first; nothing is pushed)`);
@@ -164,6 +166,28 @@ async function drainTasks(h: HarnessModule, forgeUrl: string, token: string, clo
   }
 }
 
+async function forgeTasks(h: HarnessModule, forgeUrl: string, token: string): Promise<ForgeTask[]> {
+  const page = await h.forgejoApi<{ workflow_runs?: ForgeTask[] }>(forgeUrl, token, "GET", `/repos/${ORG}/${REPO}/actions/tasks?limit=200`);
+  return page?.workflow_runs ?? [];
+}
+
+/**
+ * After a push to a pull request's branch: wait until its record-plans job
+ * (a task newer than `after`) has finished and no task is busy. A merged wave
+ * compares its plans with the ones recorded at the pull request's head
+ * (approvals.preview), and a merge before that job ends finds none.
+ */
+async function settlePlans(h: HarnessModule, forgeUrl: string, token: string, clock: HarnessModule["realClock"], after: number, limit: number): Promise<void> {
+  const deadline = clock.now() + limit * 1000;
+  for (;;) {
+    const tasks = await forgeTasks(h, forgeUrl, token);
+    const recorded = tasks.some((t) => t.id > after && t.name === "record-plans" && t.status === "success");
+    if (recorded && busyTasks(tasks).length === 0) return;
+    if (clock.now() >= deadline) throw new Error(`the push's record-plans job did not finish within ${limit}s`);
+    await clock.sleep(5000);
+  }
+}
+
 async function claim(h: HarnessModule, id: string): Promise<number> {
   const scenario = h.loadScenario(join(SCENARIOS_DIR, `${id}.json`));
   const own = lintPlywoodScenario(join(SCENARIOS_DIR, `${id}.json`), scenario);
@@ -196,7 +220,12 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
     waitLimit: scenario.limits?.["out-of-band"] ?? 600,
     admin: st.admin,
     overlay: (name, kind) => overlayFiles(readOverlay(kind === "base" ? BASE_OVERLAYS_DIR : OVERLAYS_DIR, name), shopDir(state)),
-    pushBranch: (branch, files, message) => pushOverBranch({ forgeUrl: urls.forgejo, person: st.author, scratch: join(state, "scratch"), branch, files, message }),
+    pushBranch: async (branch, files, message) => {
+      const before = await forgeTasks(h, urls.forgejo, st.admin.token);
+      const sha = await pushOverBranch({ forgeUrl: urls.forgejo, person: st.author, scratch: join(state, "scratch"), branch, files, message });
+      await settlePlans(h, urls.forgejo, st.admin.token, clock, Math.max(...before.map((t) => t.id), 0), scenario.limits?.["out-of-band"] ?? 600);
+      return sha;
+    },
     pullComments: async (branch) => {
       const pull = await newestPull(h, urls.forgejo, st.admin.token, branch);
       return pull === undefined ? undefined : forge.comments(pull);

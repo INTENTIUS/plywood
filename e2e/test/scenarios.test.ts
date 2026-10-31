@@ -73,7 +73,7 @@ describe("plywood's scenarios", () => {
 
   it("break the stock claims through the subject each checks", () => {
     expect(readScenario("pw-one-note").break.overlay).toBe("prod-eu-events-workers");
-    expect(readScenario("pw-moved-preview").break.env.PLYWOOD_E2E_REPUSH).toBe("notes-line");
+    expect(readScenario("pw-moved-preview").break.env.PLYWOOD_E2E_REPUSH).toBe("no-change");
     expect(readScenario("pw-canary").break.env.PLYWOOD_E2E_WAVES).toBe("stock-one-wave");
     expect(readScenario("pw-drift").break.env.PLYWOOD_E2E_DRIFT_RETENTION).toBe("7200");
     expect(readScenario("pw-action").break.env.PLYWOOD_E2E_ROTATE_MARKER).toBe("rotate-marker-second");
@@ -97,9 +97,10 @@ describe("plywood's scenarios", () => {
   it("dry-run both arms, the BREAK arm's values in place, touching nothing", () => {
     const lines = dryRun(readScenario("pw-moved-plan")).join("\n");
     expect(lines).toContain("plain arm:");
-    expect(lines).toContain("break arm (BREAK=1 PLYWOOD_E2E_RETENTION=3600):");
+    expect(lines).toContain("break arm (BREAK=1 PLYWOOD_E2E_RETENTION=3600 PLYWOOD_E2E_ELSEWHERE_WRITES=false):");
     expect(lines).toContain("corpus:eventsRetentionSeconds=1800");
     expect(lines).toContain("corpus:eventsRetentionSeconds=3600");
+    expect(lines).toContain("up=false");
     expect(lines).toContain("e2e/moved-events-break");
     expect(dryRun(readScenario("pw-disjoint")).join("\n")).toContain("base: lay stack-grain over main");
   });

@@ -4,7 +4,7 @@
   "id": "pw-moved-plan",
   "product": "plywood",
   "claim": "plunge/saved-plan-moved",
-  "title": "A plunge update whose records moved after its preview is refused with chant's moved code",
+  "title": "A merged update whose records moved after its pull request previewed it is refused with chant's moved code",
   "tree": { "base": "base", "overlays": "overlays" },
   "reportUrl": "s3://plywood-tutorial-reports/shop",
   "steps": [
@@ -15,27 +15,27 @@
       "id": "elsewhere",
       "do": "out-of-band",
       "label": "another update writes the events queue's record after the preview",
-      "command": ["plywood-e2e", "plunge-up", "dev", "corpus:eventsRetentionSeconds=${PLYWOOD_E2E_RETENTION:-1800}"],
+      "command": ["plywood-e2e", "plunge-up", "dev", "corpus:eventsRetentionSeconds=${PLYWOOD_E2E_RETENTION:-1800}", "up=${PLYWOOD_E2E_ELSEWHERE_WRITES:-true}"],
       "expect": [{ "exit": 0 }]
     },
     { "id": "events-merge", "do": "merge", "pull": "events" },
     {
       "id": "update",
       "do": "out-of-band",
-      "label": "the merge's update job is on the ledger",
-      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1", "dev"],
+      "label": "the merge's first wave job is on the ledger: a wave refused for moved plans records no target, so the wait does not name a stack",
+      "command": ["plywood-e2e", "wait-runs", "pulumi-up", "1"],
       "expect": [{ "exit": 0 }]
     },
     {
       "id": "moved",
       "do": "out-of-band",
-      "label": "it refused with chant's moved code, named dev among its moved runs, and was not gated",
+      "label": "approvals.preview: the merge's plans differ from the ones the pull request previewed, so it refused with chant's moved code (4), named dev among its moved runs, and was not gated",
       "command": ["plywood-e2e", "moved", "pulumi-up", "dev"],
       "expect": [{ "exit": 0 }, { "ledger": { "op": "pulumi-up", "status": "gated", "count": 0 } }]
     }
   ],
   "break": {
-    "env": { "BREAK": "1", "PLYWOOD_E2E_RETENTION": "3600" },
-    "note": "The update made elsewhere sets the value dev already has, so no record is written, nothing moves, and the merge's update applies: the moved check must fail."
+    "env": { "BREAK": "1", "PLYWOOD_E2E_RETENTION": "3600", "PLYWOOD_E2E_ELSEWHERE_WRITES": "false" },
+    "note": "The other update only previews dev with the value it already has, so it writes no record, the merge's plans match what the pull request previewed, and the merge applies: the moved check must fail. A plunge up with the same value still writes records and moves the plans."
   }
 }

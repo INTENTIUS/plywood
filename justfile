@@ -105,7 +105,7 @@ tutorial-scan:
 # tutorial bench, so run one or the other.
 #   just e2e lint                 the scenarios against plywood's rules and the harness's lint
 #   just e2e dry-run pw-disjoint  a scenario's two arms, step by step; touches nothing
-#   just e2e image <plunge>       the job image: plywood's images and a linux plunge build (run `just images` first)
+#   just e2e image [<plunge>]     the job image: plywood's images (released, or `just images` first) and, if named, a linux plunge build
 #   just e2e up                   start and seed the bench
 #   just e2e claim pw-disjoint    record the scenario's row and render EVIDENCE.md
 #   just e2e job-logs <dir>       copy every Forgejo job log (.log.zst decompressed, and .log) into <dir> for the scan

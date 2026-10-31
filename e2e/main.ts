@@ -5,8 +5,9 @@
  *                               harness's lintScenario when chant has it
  *   just e2e dry-run <id>       print a scenario's plain and BREAK arms step
  *                               by step; starts and changes nothing
- *   just e2e image <plunge>     build the job image (bench.ts JOB_IMAGE) from
- *                               plywood's images and a linux plunge binary
+ *   just e2e image [<plunge>]   build the job image (bench.ts JOB_IMAGE) from
+ *                               plywood's images; with a linux plunge binary
+ *                               it runs that, else the plunge the image carries
  *   just e2e up                 start the harness's stack and seed it
  *   just e2e claim <id>         the plain run and the BREAK run, the scan, and
  *                               on a CLEAN scan the row on the bench's claims
@@ -87,8 +88,8 @@ export function dryRun(s: Scenario): string[] {
 }
 
 async function buildImage(plungeBin: string | undefined): Promise<number> {
-  if (!plungeBin || !existsSync(plungeBin)) {
-    console.error("usage: just e2e image <path to a linux plunge binary built from plunge main>");
+  if (plungeBin && !existsSync(plungeBin)) {
+    console.error(`just e2e image: no plunge binary at ${plungeBin}; name a linux build, or none to run the plunge in plywood's image`);
     return 2;
   }
   const images = readFileSync(join(ROOT, "packages", "plywood", "src", "images.ts"), "utf8");
@@ -98,7 +99,7 @@ async function buildImage(plungeBin: string | undefined): Promise<number> {
   if (!pulumi || !plunge) throw new Error("packages/plywood/src/images.ts names no pulumi or plunge release");
   const ctx = join(stateDir(ROOT), "job-image");
   mkdirSync(ctx, { recursive: true });
-  copyFileSync(plungeBin, join(ctx, "plunge"));
+  if (plungeBin) copyFileSync(plungeBin, join(ctx, "plunge"));
   // With `just chant-local` installed, the jobs get the same local chant as the host.
   const chantTarballs = localChantTarballs();
   if (chantTarballs.length) {
@@ -114,6 +115,7 @@ async function buildImage(plungeBin: string | undefined): Promise<number> {
       pulumiVersion: pulumi,
       plungeVersion: plunge,
       chantTarballs,
+      localPlunge: plungeBin !== undefined,
     }),
   );
   log(`building ${JOB_IMAGE} in ${ctx} (run 'just images' first; nothing is pushed)`);

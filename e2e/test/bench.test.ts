@@ -78,6 +78,13 @@ describe("the bench's stack", () => {
     expect(d).not.toContain("chant-local");
   });
 
+  it("runs the plunge the image carries when no local binary is named", () => {
+    const d = jobImageDockerfile({ plungeImage: "p", pulumiImage: "q", pulumiVersion: "3.272.0", plungeVersion: "0.2.0", localPlunge: false });
+    expect(d).not.toContain("COPY plunge");
+    expect(d).not.toContain("plunge-local");
+    expect(d).toContain("ln -sf /opt/plywood/pulumi-3.272.0/pulumi /usr/local/bin/pulumi; plunge version; /opt/plywood/plunge-0.2.0/plunge version; pulumi version");
+  });
+
   it("puts the local chant's tarballs under the global plywood when chant-local packed them", () => {
     const d = jobImageDockerfile({
       plungeImage: "p",

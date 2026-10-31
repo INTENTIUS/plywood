@@ -130,10 +130,10 @@ export const PLUNGE_REF = "812cfd894151027dbc22269a5a8b43fb53368ec2";
  * tags it, with stock Pulumi copied in from plywood's pulumi image (staging
  * is a stock stack, and plunge's adopt exports it with `pulumi stack
  * export`), and a local plunge build on PATH when the released plunge lacks
- * a feature a scenario reads (the earlier pin, plunge 0.1.0, predated plunge#55's timings).
+ * a feature a scenario reads (without one, the released plunge in the image runs) (the earlier pin, plunge 0.1.0, predated plunge#55's timings).
  * The command provider pw-action's resource needs comes with the plunge
  * image's Pulumi home (packages/plywood/src/images.ts IMAGE_PLUGINS).
- * `just e2e-image <linux plunge binary>` builds it from
+ * `just e2e image [<linux plunge binary>]` builds it from
  * {@link jobImageDockerfile}. Nothing pushes it.
  */
 export const JOB_IMAGE = "plywood-tutorial-job:local";
@@ -152,10 +152,11 @@ export const JOB_IMAGE = "plywood-tutorial-job:local";
  * the pinned chant packages under the global plywood, so the jobs run the
  * same chant as the host. It also takes git from trixie (plywood#49).
  */
-export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string; pulumiVersion: string; plungeVersion: string; chantTarballs?: readonly string[] }): string {
+export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string; pulumiVersion: string; plungeVersion: string; chantTarballs?: readonly string[]; localPlunge?: boolean }): string {
   const dir = `/opt/plywood/pulumi-${o.pulumiVersion}`;
   const release = `/opt/plywood/plunge-${o.plungeVersion}`;
   const tarballs = o.chantTarballs ?? [];
+  const local = o.localPlunge ?? true;
   const chant = tarballs.length
     ? [
         `COPY ${tarballs.map((t) => `chant-local/${t}`).join(" ")} /tmp/chant-local/`,
@@ -164,14 +165,19 @@ export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string
       ]
     : [];
   return [
-    "# Written by e2e/bench.ts (just e2e-image): plywood's plunge image with stock Pulumi beside it",
-    "# and a local plunge build on PATH, for scenarios that read what the released plunge lacks.",
+    "# Written by e2e/bench.ts (just e2e image): plywood's plunge image with stock Pulumi beside it,",
+    local ? "# and a local plunge build on PATH, for scenarios that read what the released plunge lacks." : "# and the released plunge the image carries.",
     `FROM ${o.pulumiImage} AS pulumi`,
     `FROM ${o.plungeImage}`,
     `COPY --from=pulumi ${dir}/ ${dir}/`,
-    "COPY plunge /opt/plywood/plunge-local/plunge",
-    // The language hosts and plugins plunge runs come with the release beside it.
-    `RUN set -e; for f in /opt/plywood/plunge-0*/pulumi-*; do [ -e "$f" ] && ln -sf "$f" /opt/plywood/plunge-local/; done; ln -sf /opt/plywood/plunge-local/plunge /usr/local/bin/plunge; ln -sf /opt/plywood/plunge-local/plunge ${release}/plunge; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`,
+    ...(local
+      ? [
+          "COPY plunge /opt/plywood/plunge-local/plunge",
+          // The language hosts and plugins plunge runs come with the release beside it.
+          `RUN set -e; for f in /opt/plywood/plunge-0*/pulumi-*; do [ -e "$f" ] && ln -sf "$f" /opt/plywood/plunge-local/; done; ln -sf /opt/plywood/plunge-local/plunge /usr/local/bin/plunge; ln -sf /opt/plywood/plunge-local/plunge ${release}/plunge; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`,
+        ]
+      : // The released plunge in the image is the one the scenarios run.
+        [`RUN set -e; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`]),
     // plywood's images carry bookworm's git 2.39.5, which has no `git merge-tree --write-tree --merge-base`
     // (git 2.40), which chant's lifecycle push replays with when two jobs push chant/lifecycle at once
     // (plywood#49). The bench takes git from trixie so the scenarios measure their claims.

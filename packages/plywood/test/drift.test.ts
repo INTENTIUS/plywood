@@ -43,8 +43,10 @@ const CART_CLEAN: DriftDoc = { records: [{ address: "urn:pulumi:prod::cart::aws:
  * A fake chant that writes `docs[member]` where `workspace drift -o` asks, and records each call.
  * Like chant's command (workspace/drift-cli.ts), it takes a workspace member of the declaration
  * and refuses anything else with `member-required`; a stack key is not a member (plywood#50).
+ * With `--stack` (chant 0.124.59) it reads that stack's export, and answers `no-drift-read`
+ * naming the stack when `stored` lists the member's exports and the stack is not among them.
  */
-function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly string[] = ["shop", "cart"]) {
+function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly string[] = ["shop", "cart"], stored: Record<string, readonly string[]> = {}) {
   const calls: string[][] = [];
   const api: ChantProduct = {
     assertProductWords: (w) => w as never,
@@ -58,6 +60,11 @@ function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly s
         const member = argv[argv.indexOf("--member") + 1]!;
         if (!declared.includes(member)) {
           writeFileSync(argv[argv.indexOf("-o") + 1]!, JSON.stringify({ error: { code: "member-required", message: `--member ${member} is not a member of w; it declares ${declared.join(", ")}` } }));
+          return 1;
+        }
+        const stack = argv.includes("--stack") ? argv[argv.indexOf("--stack") + 1]! : undefined;
+        if (stack !== undefined && stored[member] && !stored[member]!.includes(stack)) {
+          writeFileSync(argv[argv.indexOf("-o") + 1]!, JSON.stringify({ error: { code: "no-drift-read", message: `the store holds no export for stack ${stack} of ${member}` } }));
           return 1;
         }
         const doc = docs[member];
@@ -145,9 +152,9 @@ describe("plywood drift", () => {
     const out = io(repo(YML));
     const code = await drift([], true, FALLBACK_EXIT, out);
     expect(code).toBe(FALLBACK_EXIT.drift);
-    expect(chant.calls.map((a) => a.slice(0, 4))).toEqual([
-      ["workspace", "drift", "--member", "shop"],
-      ["workspace", "drift", "--member", "cart"],
+    expect(chant.calls.map((a) => a.slice(0, 6))).toEqual([
+      ["workspace", "drift", "--member", "shop", "--stack", "dev"],
+      ["workspace", "drift", "--member", "cart", "--stack", "prod"],
     ]);
     const env = JSON.parse(out.stdout[0]!);
     expect(env.stacks[0]).toMatchObject({ stack: "shop/dev", drifted: 1, rows: [{ urn: URN, attributes: ["visibilityTimeoutSeconds"] }] });
@@ -180,7 +187,7 @@ describe("plywood drift", () => {
     setChantProductForTests(chant.api);
     expect(await drift(["--op", driftOpName("shop/dev")], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
     expect(chant.calls).toHaveLength(1);
-    expect(chant.calls[0]!.slice(0, 4)).toEqual(["workspace", "drift", "--member", "shop"]);
+    expect(chant.calls[0]!.slice(0, 6)).toEqual(["workspace", "drift", "--member", "shop", "--stack", "dev"]);
     expect(await drift(["--op", "plywood-drift-nope"], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
   });
 
@@ -208,7 +215,7 @@ describe("the member a stack is read under (plywood#50)", () => {
     setChantProductForTests(chant.api);
     const out = io(dir);
     expect(await drift(["--op", driftOpName("shop/prod-us")], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.drift);
-    expect(chant.calls[0]!.slice(0, 4)).toEqual(["workspace", "drift", "--member", "shop"]);
+    expect(chant.calls[0]!.slice(0, 6)).toEqual(["workspace", "drift", "--member", "shop", "--stack", "prod-us"]);
     expect(JSON.parse(out.stdout[0]!).stacks[0]).toMatchObject({ stack: "shop/prod-us", ok: true, drifted: 1 });
   });
 
@@ -223,17 +230,21 @@ describe("the member a stack is read under (plywood#50)", () => {
     expect(driftMember(mkdtempSync(join(tmpdir(), "plywood-drift-")), doc, "Shop App/prod")).toBe("Shop App");
   });
 
-  it("fails the read of a stack when chant answers with another stack's export, rather than reporting its drift", async () => {
-    // chant 0.124.58 takes a member and no stack: with one project holding two stacks it can read either's export.
+  it("passes each stack of a project to chant, and fails the read of one the store holds no export for", async () => {
     const dir = repo('stacks:\n  shop/dev: { dir: shop }\n  shop/prod: { dir: shop }\n');
-    const chant = fakeChant({ shop: DRIFTED });
+    const chant = fakeChant({ shop: DRIFTED }, ["shop", "cart"], { shop: ["dev"] });
     setChantProductForTests(chant.api);
     const out = io(dir);
     expect(await drift([], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.failed);
+    expect(chant.calls.map((a) => a.slice(0, 6))).toEqual([
+      ["workspace", "drift", "--member", "shop", "--stack", "dev"],
+      ["workspace", "drift", "--member", "shop", "--stack", "prod"],
+    ]);
     const [dev, prod] = JSON.parse(out.stdout[0]!).stacks;
     expect(dev).toMatchObject({ stack: "shop/dev", ok: true, drifted: 1 });
     expect(prod).toMatchObject({ stack: "shop/prod", ok: false, drifted: 0 });
-    expect(prod.error).toContain("is about stack dev, not prod");
+    expect(prod.error).toContain("no-drift-read");
+    expect(prod.error).toContain("stack prod");
   });
 });
 

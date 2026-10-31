@@ -62,6 +62,7 @@ import { stacksOf as configuredStacks } from "./config/stacks";
 import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
+import { GITLAB_READ_TOKEN, hasChantWavePreview, withWavePreview } from "./chant-next";
 import { hasChant4625, prJobsFor, withJobSettings } from "./jobs";
 import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, needsBucketCheckMessage, type BucketReport } from "./init/backend";
 import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
@@ -400,7 +401,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
     const message = needsChantMessage("Writing the waves spec and the workflow");
     files.push({ file: WAVES_SPEC_FILE, status: "skipped", note: message }, { file: WORKFLOW_FILE[forge.kind], status: "skipped", note: "needs the same chant" });
   } else {
-    let spec: Record<string, unknown> | undefined = wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves);
+    let spec: Record<string, unknown> | undefined = await wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves, forge.kind);
     // plywood#29: env, pass, parallelism and environments on each wave (src/jobs.ts).
     if (settings.pipeline.jobs) {
       try {
@@ -425,6 +426,10 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   adopt.push(...(await adoptStep(root, detected, doc, io.env, declaration.doc, opts.dryRun, files, notes, todo)));
 
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
+  // The waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
+  if (forge.kind === "gitlab" && chant && stacks.length > 0 && (await hasChantWavePreview())) {
+    todo.push(`Add a ${GITLAB_READ_TOKEN} CI/CD variable (a project access token with the read_api scope, masked and protected) so a wave can read the merge request it applies; without it the wave refuses`);
+  }
   const failed = files.find((f) => f.status === "failed");
   return {
     ok: !failed,
@@ -502,7 +507,7 @@ async function preCommitStep(root: string, config: string, dryRun: boolean): Pro
 }
 
 /** The waves spec with chant's names filled (chant `productWavesSpec`), else as plywood builds it. */
-function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>): Record<string, unknown> {
+async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>, forge: ForgeKind): Promise<Record<string, unknown>> {
   const runner = waveRunner(chantPipelineOptions(settings.pipeline, false).runner);
   const base = wavesSpec({
     stacks,
@@ -514,7 +519,9 @@ function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: R
     // notify.relay only on a chant with the relay (chant#4611); an older chant refuses the setting.
     ...(settings.pipeline.notify ? { notify: { ...notifyForChant(settings.pipeline.notify, chant) } } : {}),
   });
-  return chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
+  const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
+  // A merged wave applies what its pull request previewed, or exits 4 (chant 0.124.59's approvals.preview).
+  return (await hasChantWavePreview()) ? withWavePreview(named, forge) : named;
 }
 
 /**

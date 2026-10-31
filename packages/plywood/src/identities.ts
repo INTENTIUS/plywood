@@ -19,7 +19,7 @@
  * Every request is a read. plywood keeps no copy of the check.
  *
  * The subpath is imported on first use. A chant without it (one older than the
- * pinned 0.124.58) gets the message the command printed before chant#4608 and chant's
+ * pinned 0.124.59) gets the message the command printed before chant#4608 and chant's
  * `failed` code.
  */
 import type { JobSettings } from "./config/jobs";

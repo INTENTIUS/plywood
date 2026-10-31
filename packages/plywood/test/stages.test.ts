@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { FALLBACK_EXIT } from "../src/exit-codes";
-import { check, ci, pipelineShape, preview, type StageIo } from "../src/stages";
+import { check, ci, passthrough, pipelineShape, preview, type StageIo } from "../src/stages";
 import { TIPS } from "../src/tips";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
 
@@ -234,5 +234,64 @@ describe("the bin", () => {
     expect(await main(["tips"], { out: (s) => out.push(s), err: () => {} })).toBe(0);
     for (const t of TIPS) expect(out.join("\n")).toContain(t.id);
     expect(await main(["tips", "nope"], { out: () => {}, err: () => {} })).toBe(1);
+  });
+});
+
+describe("plywood run wave", () => {
+  const MOVED = "wave 1 (dev): the plans moved since #7 previewed them: the head abc planned sha256:a, and the merge plans sha256:b";
+  const REFUSAL = `Nothing in wave 1 (dev) or after it ran: ${MOVED}. Approve these plans to apply them: plywood approve wave-1 --plan sha256:b`;
+
+  /** A chant whose run wave logs through stderr, as chant's op-wave job does, then exits with `code`. */
+  function waveChant(code: number, lines: string[]): ChantProduct {
+    const chant = fakeChant(code).api;
+    return {
+      ...chant,
+      runChantInProcess: async () => {
+        for (const l of lines) process.stderr.write(`${l}\n`);
+        return code;
+      },
+    };
+  }
+
+  it("explains exit 4 with the approve line chant printed, and leaves the code as it is", async () => {
+    setChantProductForTests(waveChant(FALLBACK_EXIT.moved, [REFUSAL]));
+    const out = io(repo());
+    const was = process.stderr.write;
+    const quiet = (() => true) as typeof process.stderr.write;
+    process.stderr.write = quiet;
+    let code: number;
+    try {
+      code = await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, out);
+    } finally {
+      process.stderr.write = was;
+    }
+    expect(code).toBe(FALLBACK_EXIT.moved);
+    const said = out.stderr.join("\n");
+    expect(said).toContain("exit 4");
+    expect(said).toContain("nothing in it was applied");
+    expect(said).toContain("plywood approve wave-1 --plan sha256:b");
+    expect(said).toContain("--record-plans");
+  });
+
+  it("says nothing more on other codes", async () => {
+    for (const code of [0, FALLBACK_EXIT.waiting, FALLBACK_EXIT.failed]) {
+      setChantProductForTests(waveChant(code, ["wave 1 (dev): ran"]));
+      const out = io(repo());
+      const was = process.stderr.write;
+      process.stderr.write = (() => true) as typeof process.stderr.write;
+      try {
+        expect(await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, out)).toBe(code);
+      } finally {
+        process.stderr.write = was;
+      }
+      expect(out.stderr).toEqual([]);
+    }
+  });
+
+  it("restores stderr after the run", async () => {
+    setChantProductForTests(waveChant(0, []));
+    const before = process.stderr.write;
+    await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, io(repo()));
+    expect(process.stderr.write).toBe(before);
   });
 });

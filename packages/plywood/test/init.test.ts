@@ -17,6 +17,7 @@ import { setChantWavePreviewForTests, withWavePreview } from "../src/chant-next"
 import { setupPrompt } from "../../../site/src/prompts";
 import { unwrapWavesSpec } from "../src/waves-workflow";
 import { imageFor, imageReference } from "../src/images";
+import { publishedImage } from "./published-image";
 
 const GENERATED = [
   "name: plywood",
@@ -204,7 +205,7 @@ describe("golden files", () => {
     const file = JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"));
     expect(Object.keys(file)).toEqual(["waves", "options"]);
     expect(file.options.beforeScript.length).toBeGreaterThan(0);
-    expect(file.options.image).toBe(imageReference(imageFor("pulumi")));
+    expect(file.options.image).toBe(publishedImage("pulumi"));
     expect(unwrapWavesSpec(file)).toEqual({
       name: "pulumi-up",
       op: "pulumi-up",

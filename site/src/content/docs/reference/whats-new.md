@@ -13,7 +13,7 @@ The wave jobs read the pull request through the job's token on GitHub and Forgej
 
 `plywood drift` passes the stack to chant, so a project with several stacks reads each stack's own stored export.
 
-Both images now carry plunge 0.2.0, checked against its checksums file, and a `plunge:` pin in `plywood.yml` takes the same version.
+Both images now carry plunge 0.2.0, checked against its checksums file, and a `plunge:` pin in `plywood.yml` takes the same version. The images the package pins by digest are `ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.3.0-plunge0.2.0`.
 
 ## In 0.2.0
 

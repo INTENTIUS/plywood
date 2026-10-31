@@ -6,7 +6,7 @@ description: 'Use an image with your plugins and language runtime installed, so 
 Each job runs in plywood's image for its engine, `plywood-pulumi` or `plywood-plunge`, with the plywood CLI installed. A program with many provider plugins, or one in a language other than Node.js, starts faster from an image of your own built from it:
 
 ```dockerfile
-FROM ghcr.io/intentius/plywood-pulumi:0.2.0-pulumi3.272.0
+FROM ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0
 RUN pulumi plugin install resource aws 7.4.0
 RUN chmod -R a+rX /opt/plywood/pulumi-home
 ```

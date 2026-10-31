@@ -15,17 +15,17 @@
       "command": ["plywood-e2e", "configure", "stock-first-gated"],
       "expect": [{ "exit": 0 }]
     },
-    { "id": "workers", "do": "open", "branch": "e2e/moved-preview-workers", "overlay": "prod-us-workers-4", "title": "prod-us: a fourth worker queue" },
-    { "id": "workers-plan", "do": "plan", "pull": "workers", "expect": [{ "report": { "status": "planned" } }] },
-    { "id": "workers-approve", "do": "approve", "pull": "workers" },
+    { "id": "events", "do": "open", "branch": "e2e/moved-preview-events", "overlay": "prod-us-events-7200", "title": "prod-us: keep events for two hours" },
+    { "id": "events-plan", "do": "plan", "pull": "events", "expect": [{ "report": { "status": "planned" } }] },
+    { "id": "events-approve", "do": "approve", "pull": "events" },
     {
       "id": "again",
       "do": "out-of-band",
-      "label": "the author pushes one more commit after the approval",
-      "command": ["plywood-e2e", "push", "e2e/moved-preview-workers", "${PLYWOOD_E2E_REPUSH:-prod-us-workers-5}"],
+      "label": "the author pushes one more commit after the approval, and the push waits for the plans recorded at the new head",
+      "command": ["plywood-e2e", "push", "e2e/moved-preview-events", "${PLYWOOD_E2E_REPUSH:-prod-us-events-14400}"],
       "expect": [{ "exit": 0 }]
     },
-    { "id": "workers-merge", "do": "merge", "pull": "workers" },
+    { "id": "events-merge", "do": "merge", "pull": "events" },
     {
       "id": "update",
       "do": "out-of-band",
@@ -42,7 +42,7 @@
     }
   ],
   "break": {
-    "env": { "BREAK": "1", "PLYWOOD_E2E_REPUSH": "notes-line" },
-    "note": "The push after the approval adds a notes file no stack reads, so the preview and its digest stay the same, the approval covers the merge and prod-us applies: the waits check must fail."
+    "env": { "BREAK": "1", "PLYWOOD_E2E_REPUSH": "no-change" },
+    "note": "The push after the approval is an empty commit, so the tree, the preview and its digest stay the same, the approval covers the merge and prod-us applies: the waits check must fail."
   }
 }

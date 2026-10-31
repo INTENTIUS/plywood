@@ -166,6 +166,28 @@ async function drainTasks(h: HarnessModule, forgeUrl: string, token: string, clo
   }
 }
 
+async function forgeTasks(h: HarnessModule, forgeUrl: string, token: string): Promise<ForgeTask[]> {
+  const page = await h.forgejoApi<{ workflow_runs?: ForgeTask[] }>(forgeUrl, token, "GET", `/repos/${ORG}/${REPO}/actions/tasks?limit=200`);
+  return page?.workflow_runs ?? [];
+}
+
+/**
+ * After a push to a pull request's branch: wait until its record-plans job
+ * (a task newer than `after`) has finished and no task is busy. A merged wave
+ * compares its plans with the ones recorded at the pull request's head
+ * (approvals.preview), and a merge before that job ends finds none.
+ */
+async function settlePlans(h: HarnessModule, forgeUrl: string, token: string, clock: HarnessModule["realClock"], after: number, limit: number): Promise<void> {
+  const deadline = clock.now() + limit * 1000;
+  for (;;) {
+    const tasks = await forgeTasks(h, forgeUrl, token);
+    const recorded = tasks.some((t) => t.id > after && t.name === "record-plans" && t.status === "success");
+    if (recorded && busyTasks(tasks).length === 0) return;
+    if (clock.now() >= deadline) throw new Error(`the push's record-plans job did not finish within ${limit}s`);
+    await clock.sleep(5000);
+  }
+}
+
 async function claim(h: HarnessModule, id: string): Promise<number> {
   const scenario = h.loadScenario(join(SCENARIOS_DIR, `${id}.json`));
   const own = lintPlywoodScenario(join(SCENARIOS_DIR, `${id}.json`), scenario);
@@ -198,7 +220,12 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
     waitLimit: scenario.limits?.["out-of-band"] ?? 600,
     admin: st.admin,
     overlay: (name, kind) => overlayFiles(readOverlay(kind === "base" ? BASE_OVERLAYS_DIR : OVERLAYS_DIR, name), shopDir(state)),
-    pushBranch: (branch, files, message) => pushOverBranch({ forgeUrl: urls.forgejo, person: st.author, scratch: join(state, "scratch"), branch, files, message }),
+    pushBranch: async (branch, files, message) => {
+      const before = await forgeTasks(h, urls.forgejo, st.admin.token);
+      const sha = await pushOverBranch({ forgeUrl: urls.forgejo, person: st.author, scratch: join(state, "scratch"), branch, files, message });
+      await settlePlans(h, urls.forgejo, st.admin.token, clock, Math.max(...before.map((t) => t.id), 0), scenario.limits?.["out-of-band"] ?? 600);
+      return sha;
+    },
     pullComments: async (branch) => {
       const pull = await newestPull(h, urls.forgejo, st.admin.token, branch);
       return pull === undefined ? undefined : forge.comments(pull);

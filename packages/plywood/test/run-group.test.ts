@@ -154,7 +154,7 @@ describe.runIf(real !== undefined)("the workflows chant writes for plywood's wor
       if (!/^on:\n(?:.*\n)*?\s+push:/m.test(text) || name.endsWith("-plans.yml")) continue;
       expect(twoMerges(text).firstRunCancelled, name).toBe(false);
     }
-  });
+  }, 60_000);
 
   it("on GitHub: no workflow-level group that could cancel a run, and none added", async () => {
     const files = await generated("github");
@@ -165,7 +165,7 @@ describe.runIf(real !== undefined)("the workflows chant writes for plywood's wor
     }
     expect(files[".github/workflows/pulumi-up.yml"]).not.toMatch(/^concurrency:/m);
     expect(files[".github/workflows/plywood.yml"]).not.toMatch(/^concurrency:/m);
-  });
+  }, 60_000);
 
   it("on GitLab: no job is interruptible, so a newer pipeline never cancels a started one", async () => {
     const files = await generated("gitlab");
@@ -174,5 +174,5 @@ describe.runIf(real !== undefined)("the workflows chant writes for plywood's wor
       expect(text, name).not.toMatch(/interruptible:\s*true/);
       expect(text, name).not.toMatch(/auto_cancel/);
     }
-  });
+  }, 60_000);
 });

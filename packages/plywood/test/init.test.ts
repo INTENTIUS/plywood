@@ -13,7 +13,7 @@ import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "../src/init/own-jobs";
 import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } from "../src/init/render";
 import { template } from "../src/templates";
 import { PRODUCT_WORDS } from "../src/words";
-import { setChantWavePreviewForTests, withWavePreview } from "../src/chant-next";
+import { setChantWavePreviewForTests } from "../src/chant-next";
 import { setupPrompt } from "../../../site/src/prompts";
 import { unwrapWavesSpec } from "../src/waves-workflow";
 import { imageFor, imageReference } from "../src/images";
@@ -213,12 +213,12 @@ describe("golden files", () => {
       gateName: "wave-{k}",
       branches: ["main"],
       step: { kind: "pulumi-up" },
-      // 0.124.59: a merged wave applies what its pull request previewed, and reads the pull request with the job's token.
-      approvals: { pullRequest: { gate: "up" }, preview: true },
+      // Since 0.3.1 approvals.preview is off unless plywood.yml says `preview: true` (plywood#55, plywood#56), so no wave token either.
+      approvals: { pullRequest: { gate: "up" } },
       waves: [
-        { name: "dev", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }] },
-        { name: "staging", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }] },
-        { name: "prod", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }] },
+        { name: "dev", gate: "on-destructive", runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }] },
+        { name: "staging", gate: "on-destructive", runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }] },
+        { name: "prod", gate: "on-destructive", runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }] },
       ],
     });
     expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8"))).toEqual({
@@ -238,6 +238,17 @@ describe("golden files", () => {
     expect(op).toContain('name: "pulumi-up",');
     expect(op).toContain('phase("dev", [pulumiPreviewStep("shop", { dir: "infra", stack: "dev", id: "dev-shop-dev" })]),');
     expect(op.indexOf('phase("staging"')).toBeLessThan(op.indexOf('phase("prod"'));
+  });
+
+  it("preview: true in plywood.yml opts in to approvals.preview and the wave token (plywood#55, plywood#56)", async () => {
+    setChantProductForTests(fakeChant().api);
+    setChantWavePreviewForTests(true);
+    const root = repo("git@github.com:acme/shop.git", { ...ONE_PROJECT, "plywood.yml": "preview: true\n" });
+    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    expect(r.ok).toBe(true);
+    const spec = unwrapWavesSpec(JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"))) as { approvals: object; waves: Array<{ variables?: object }> };
+    expect(spec.approvals).toEqual({ pullRequest: { gate: "up" }, preview: true });
+    expect(spec.waves.map((w) => w.variables)).toEqual([TOKEN, TOKEN, TOKEN]);
   });
 
   it("two projects: a member each, and their stacks share a wave per environment", async () => {

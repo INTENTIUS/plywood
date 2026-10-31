@@ -40,6 +40,8 @@ A guide whose feature needs a newer chant or plunge than plywood pins carries `d
 
 <DraftList />
 
+`approvals.preview` is off by default since 0.3.1 and `preview: true` in `plywood.yml` turns it on, because of two bugs in the plan digest: [plywood#55](https://github.com/INTENTIUS/plywood/issues/55) (the second of two merges that change different resources of one stack is refused) and [plywood#56](https://github.com/INTENTIUS/plywood/issues/56) (a pull request that creates an autonamed resource is refused at merge). The default goes back to on in `previewOf` (`src/config/approval.ts`) once both are fixed.
+
 Day-2 actions (plywood#39) ship the `actions` key with its check. The `plywood action` verb refuses on a lexicon without `gatedStackAction`. The `pw-action` scenario (plywood#44) runs on a local command resource `rotate` that the bench's seed adds to prod-us, with the command provider plywood's images carry. Its run is not recorded yet.
 
 Agent requests (plywood#41) ship `plywood mcp --propose` on chant#4655's propose tier, detected by `PRODUCT_MCP_PROPOSE_FLOOR`. Its `plywood:request_from_template` tool is declared `forgeWrite` and refuses every call. Pulumi templates arrive with plywood#40 after the registry in plywood#32. The `pw-agent-request` scenario comes with them.

@@ -2,12 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
+import { chantProduct, setChantProductForTests, type ChantProduct } from "../src/chant-product";
+import { runInit } from "../src/init";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { isCron } from "../src/config/drift";
 import {
   drift,
+  driftMember,
   DRIFT_OP_FILE,
   DRIFT_SPEC_FILE,
   driftFingerprint,
@@ -35,9 +37,14 @@ const DRIFTED: DriftDoc = {
   ],
 };
 const CLEAN: DriftDoc = { records: [{ address: URN, status: "in-sync", observedAt: "2026-10-27T07:00:00Z" }] };
+const CART_CLEAN: DriftDoc = { records: [{ address: "urn:pulumi:prod::cart::aws:sqs/queue:Queue::orders", status: "in-sync", observedAt: "2026-10-27T07:00:00Z" }] };
 
-/** A fake chant that writes `docs[member]` where `workspace drift -o` asks, and records each call. */
-function fakeChant(docs: Record<string, DriftDoc | "fail">) {
+/**
+ * A fake chant that writes `docs[member]` where `workspace drift -o` asks, and records each call.
+ * Like chant's command (workspace/drift-cli.ts), it takes a workspace member of the declaration
+ * and refuses anything else with `member-required`; a stack key is not a member (plywood#50).
+ */
+function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly string[] = ["shop", "cart"]) {
   const calls: string[][] = [];
   const api: ChantProduct = {
     assertProductWords: (w) => w as never,
@@ -49,6 +56,10 @@ function fakeChant(docs: Record<string, DriftDoc | "fail">) {
       calls.push(argv);
       if (argv[0] === "workspace" && argv[1] === "drift") {
         const member = argv[argv.indexOf("--member") + 1]!;
+        if (!declared.includes(member)) {
+          writeFileSync(argv[argv.indexOf("-o") + 1]!, JSON.stringify({ error: { code: "member-required", message: `--member ${member} is not a member of w; it declares ${declared.join(", ")}` } }));
+          return 1;
+        }
         const doc = docs[member];
         if (doc === "fail" || doc === undefined) return 1;
         writeFileSync(argv[argv.indexOf("-o") + 1]!, JSON.stringify(doc));
@@ -96,14 +107,16 @@ function io(cwd: string): StageIo & { stdout: string[]; stderr: string[] } {
   return { stdout, stderr, cwd, env: {}, out: (s) => stdout.push(s), err: (s) => stderr.push(s) };
 }
 
-function repo(yml: string): string {
+/** A repository as `plywood init` leaves it: plywood.yml, and a workspace declaring one member per project. */
+function repo(yml: string, members: Array<[string, string]> = [["shop", "shop"], ["cart", "cart"]]): string {
   const dir = mkdtempSync(join(tmpdir(), "plywood-drift-"));
   mkdirSync(join(dir, ".git"));
   writeFileSync(join(dir, "plywood.yml"), yml);
+  writeFileSync(join(dir, "chant.workspace.json"), JSON.stringify({ name: "w", schema: 1, members: members.map(([name, d]) => ({ name, dir: d, kind: "pulumi" })) }));
   return dir;
 }
 
-const YML = 'stacks:\n  shop/dev: { dir: shop }\n  shop/prod: { dir: shop }\ndrift:\n  schedule: "0 6 * * *"\n';
+const YML = 'stacks:\n  shop/dev: { dir: shop }\n  cart/prod: { dir: cart }\ndrift:\n  schedule: "0 6 * * *"\n';
 
 afterEach(() => {
   setChantProductForTests("reset");
@@ -127,25 +140,25 @@ describe("drift config", () => {
 
 describe("plywood drift", () => {
   it("reads each stack through chant's workspace drift and exits with chant's drift code", async () => {
-    const chant = fakeChant({ "shop/dev": DRIFTED, "shop/prod": CLEAN });
+    const chant = fakeChant({ shop: DRIFTED, cart: CART_CLEAN });
     setChantProductForTests(chant.api);
     const out = io(repo(YML));
     const code = await drift([], true, FALLBACK_EXIT, out);
     expect(code).toBe(FALLBACK_EXIT.drift);
     expect(chant.calls.map((a) => a.slice(0, 4))).toEqual([
-      ["workspace", "drift", "--member", "shop/dev"],
-      ["workspace", "drift", "--member", "shop/prod"],
+      ["workspace", "drift", "--member", "shop"],
+      ["workspace", "drift", "--member", "cart"],
     ]);
     const env = JSON.parse(out.stdout[0]!);
     expect(env.stacks[0]).toMatchObject({ stack: "shop/dev", drifted: 1, rows: [{ urn: URN, attributes: ["visibilityTimeoutSeconds"] }] });
-    expect(env.stacks[1]).toMatchObject({ stack: "shop/prod", drifted: 0 });
+    expect(env.stacks[1]).toMatchObject({ stack: "cart/prod", drifted: 0 });
   });
 
   it("opens one issue naming the URN and attribute, edits it on a new finding, and a clean run closes it", async () => {
     const dir = repo(YML);
     const f = fakeForge();
     setDriftForgeForTests(async () => f.forge);
-    setChantProductForTests(fakeChant({ "shop/dev": DRIFTED }).api);
+    setChantProductForTests(fakeChant({ shop: DRIFTED }).api);
     expect(await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.drift);
     const issue = f.open.get(driftIssueMarker("shop/dev"))!;
     expect(issue.body).toContain(URN);
@@ -154,19 +167,20 @@ describe("plywood drift", () => {
     // The same finding leaves it alone; a changed one edits it.
     await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir));
     const changed: DriftDoc = { records: [{ ...DRIFTED.records![0]!, attributes: [{ path: "delaySeconds" }] }] };
-    setChantProductForTests(fakeChant({ "shop/dev": changed }).api);
+    setChantProductForTests(fakeChant({ shop: changed }).api);
     await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir));
 
-    setChantProductForTests(fakeChant({ "shop/dev": CLEAN }).api);
+    setChantProductForTests(fakeChant({ shop: CLEAN }).api);
     expect(await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.done);
     expect(f.actions).toEqual(["opened 1", "updated 1", "closed 1"]);
   });
 
   it("exits failed when a read cannot run, and maps --op back to its stack", async () => {
-    const chant = fakeChant({ "shop/dev": "fail" });
+    const chant = fakeChant({ shop: "fail" });
     setChantProductForTests(chant.api);
     expect(await drift(["--op", driftOpName("shop/dev")], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
     expect(chant.calls).toHaveLength(1);
+    expect(chant.calls[0]!.slice(0, 4)).toEqual(["workspace", "drift", "--member", "shop"]);
     expect(await drift(["--op", "plywood-drift-nope"], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
   });
 
@@ -182,6 +196,72 @@ describe("plywood drift", () => {
     expect(await drift([], false, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.failed);
     expect(out.stderr.join("\n")).toContain("chant#4550");
   });
+});
+
+describe("the member a stack is read under (plywood#50)", () => {
+  it("is the workspace member of the stack's project, not the stack key", async () => {
+    // As plywood init writes it: one member for the project, none for each stack.
+    const dir = repo('stacks:\n  shop/prod-us: { dir: "." }\n  shop/prod-eu: { dir: "." }\n', [["shop", "."]]);
+    const doc = parseConfig('stacks:\n  shop/prod-us: { dir: "." }\n  shop/prod-eu: { dir: "." }\n').doc;
+    expect(driftMember(dir, doc, "shop/prod-us")).toBe("shop");
+    const chant = fakeChant({ shop: { records: [{ address: "urn:pulumi:prod-us::shop::aws:sqs/queue:Queue::events", status: "drifted", attributes: [{ path: "messageRetentionSeconds" }] }] } }, ["shop"]);
+    setChantProductForTests(chant.api);
+    const out = io(dir);
+    expect(await drift(["--op", driftOpName("shop/prod-us")], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.drift);
+    expect(chant.calls[0]!.slice(0, 4)).toEqual(["workspace", "drift", "--member", "shop"]);
+    expect(JSON.parse(out.stdout[0]!).stacks[0]).toMatchObject({ stack: "shop/prod-us", ok: true, drifted: 1 });
+  });
+
+  it("takes the declaration's member for the stack's directory, then one named for the project, then the only one, else the project", () => {
+    const doc = parseConfig("stacks:\n  Shop App/dev: { dir: infra }\n  Shop App/prod: {}\n").doc;
+    const root = (members: Array<[string, string]>) => repo("", members);
+    expect(driftMember(root([["web", "infra"], ["Shop App", "other"]]), doc, "Shop App/dev")).toBe("web");
+    expect(driftMember(root([["web", "x"], ["Shop App", "other"]]), doc, "Shop App/prod")).toBe("Shop App");
+    expect(driftMember(root([["web", "x"], ["shop-app", "other"]]), doc, "Shop App/prod")).toBe("shop-app");
+    expect(driftMember(root([["only", "x"]]), doc, "Shop App/prod")).toBe("only");
+    expect(driftMember(root([["a", "x"], ["b", "y"]]), doc, "Shop App/prod")).toBe("Shop App");
+    expect(driftMember(mkdtempSync(join(tmpdir(), "plywood-drift-")), doc, "Shop App/prod")).toBe("Shop App");
+  });
+
+  it("fails the read of a stack when chant answers with another stack's export, rather than reporting its drift", async () => {
+    // chant 0.124.58 takes a member and no stack: with one project holding two stacks it can read either's export.
+    const dir = repo('stacks:\n  shop/dev: { dir: shop }\n  shop/prod: { dir: shop }\n');
+    const chant = fakeChant({ shop: DRIFTED });
+    setChantProductForTests(chant.api);
+    const out = io(dir);
+    expect(await drift([], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.failed);
+    const [dev, prod] = JSON.parse(out.stdout[0]!).stacks;
+    expect(dev).toMatchObject({ stack: "shop/dev", ok: true, drifted: 1 });
+    expect(prod).toMatchObject({ stack: "shop/prod", ok: false, drifted: 0 });
+    expect(prod.error).toContain("is about stack dev, not prod");
+  });
+});
+
+const real = await chantProduct();
+
+describe.runIf(real !== undefined)("against the installed chant's workspace drift (plywood#50)", () => {
+  it("finds the member plywood init declares for a stack of its project", async () => {
+    setChantProductForTests("reset");
+    const dir = mkdtempSync(join(tmpdir(), "plywood-drift-real-"));
+    mkdirSync(join(dir, ".git"));
+    writeFileSync(join(dir, "Pulumi.yaml"), "name: shop\nruntime: nodejs\n");
+    for (const s of ["dev", "prod-us"]) writeFileSync(join(dir, `Pulumi.${s}.yaml`), "config: {}\n");
+    writeFileSync(join(dir, "package.json"), '{"name":"shop","private":true}\n');
+    const was = process.cwd();
+    process.chdir(dir);
+    try {
+      const init = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge: "forgejo" }, FALLBACK_EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} });
+      expect(init.ok).toBe(true);
+      const out = io(dir);
+      await drift(["shop/prod-us"], true, FALLBACK_EXIT, out);
+      const read = JSON.parse(out.stdout[0]!).stacks[0] as { ok: boolean; error?: string };
+      // With no stored export and no pulumi the read cannot run, but it gets as far as the member's own read.
+      expect(read.error ?? "").not.toContain("member-required");
+      expect(read.error ?? "").not.toContain("is not a member");
+    } finally {
+      process.chdir(was);
+    }
+  }, 60_000);
 });
 
 describe("drift rows and fingerprint", () => {
@@ -208,6 +288,6 @@ describe("the scheduled drift jobs", () => {
     const chant = fakeChant({});
     await writeDriftJobs(chant.api, "forgejo", parseConfig(YML).doc, PRODUCT_WORDS, FALLBACK_EXIT, io(dir));
     expect(chant.calls).toEqual([["run", "--generate", "forgejo", "--spec", DRIFT_SPEC_FILE, "--output", ".forgejo/workflows"]]);
-    expect(readFileSync(join(dir, DRIFT_OP_FILE), "utf8")).toContain("plywood-drift-shop-prod");
+    expect(readFileSync(join(dir, DRIFT_OP_FILE), "utf8")).toContain("plywood-drift-cart-prod");
   });
 });

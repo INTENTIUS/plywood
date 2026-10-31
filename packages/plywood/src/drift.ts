@@ -5,7 +5,9 @@
  *
  *   plywood drift [<stack>...] [--op <name>] [--resource <urn>] [--env <env>]
  *                 [--forge github|gitlab|forgejo] [--respond issue|pull-request|up|none] [--json]
- *       For each stack, chant's `workspace drift --member <stack>`: the
+ *       For each stack, chant's `workspace drift --member <member>`, the
+ *       workspace member of the stack's project (`shop` for `shop/prod-us`;
+ *       see {@link driftMember}): the
  *       pulumi lexicon's drift read, `pulumi refresh --preview-only --json
  *       --target <urn>` per resource on stock Pulumi and `plunge drift
  *       --resource <urn> --stream` on plunge, over the export the last
@@ -57,6 +59,8 @@ import type { ChantProduct, ForgeKind } from "./chant-product";
 import { driftResponseOf, driftSettingsOf, driftStacksOf, DRIFT_RESPONSES, type DriftResponse } from "./config/drift";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
 import { stacksOf } from "./config/stacks";
+import { slug } from "./init/detect";
+import { memberOfDir } from "./init/render";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { chantPipelineOptions } from "./images";
@@ -205,7 +209,8 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     const results: StackDrift[] = [];
     try {
       const attribute = await attributionFor(doc, io);
-      for (const stack of stacks) results.push(await readStack(chant, stack, dir, { resource: resource.value, env: envFlag.value, ...(attribute ? { attribute } : {}) }));
+      const root = dirname(path);
+      for (const stack of stacks) results.push(await readStack(chant, stack, driftMember(root, doc, stack), dir, { resource: resource.value, env: envFlag.value, ...(attribute ? { attribute } : {}) }));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -298,10 +303,47 @@ export function setDriftNotifyFetchForTests(fetch: unknown): void {
   notifyFetch = fetch === "reset" ? undefined : fetch;
 }
 
-/** One stack's read: chant's `workspace drift`, written to a file plywood reads back. */
-async function readStack(chant: ChantProduct, stack: string, dir: string, opts: { resource?: string; env?: string; attribute?: Attribute }): Promise<StackDrift> {
+/**
+ * The workspace member chant's `workspace drift --member` takes for a stack
+ * (plywood#50). chant's members are projects, not stacks: `plywood init`
+ * declares one member per Pulumi project in chant.workspace.json, and the
+ * stack key is `<project>/<stack>`. The member is the one the declaration
+ * gives the stack's directory; else the one named for the key's project; else
+ * the only one the declaration has; else the key's project.
+ */
+export function driftMember(root: string, doc: RawConfig, stack: string): string {
+  const project = stack.includes("/") ? stack.slice(0, stack.indexOf("/")) : stack;
+  let declaration: Record<string, unknown> | undefined;
+  try {
+    declaration = JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8")) as Record<string, unknown>;
+  } catch {
+    return project;
+  }
+  const dir = stacksOf(doc)[stack]?.dir;
+  const byDir = dir !== undefined ? memberOfDir(declaration, dir) : undefined;
+  if (byDir) return byDir;
+  const names = (Array.isArray(declaration.members) ? (declaration.members as Array<{ name?: unknown }>) : []).flatMap((m) => (typeof m.name === "string" ? [m.name] : []));
+  if (names.includes(project)) return project;
+  const slugged = names.find((n) => n === slug(project));
+  if (slugged) return slugged;
+  return names.length === 1 ? names[0]! : project;
+}
+
+/** The stack names in a drift document's URNs (`urn:pulumi:<stack>::<project>::...`). */
+function stacksInDoc(doc: DriftDoc): string[] {
+  return [...new Set((doc.records ?? []).flatMap((r) => /^urn:pulumi:([^:]+)::/.exec(r.address)?.[1] ?? []))];
+}
+
+/**
+ * One stack's read: chant's `workspace drift` for the stack's member, written
+ * to a file plywood reads back. chant's command takes the member and no stack
+ * (chant 0.124.58), so it reads the export of the stack its store holds for
+ * the member, or the checked-in one. A document about another stack is a
+ * failed read, never a finding on this one.
+ */
+async function readStack(chant: ChantProduct, stack: string, member: string, dir: string, opts: { resource?: string; env?: string; attribute?: Attribute }): Promise<StackDrift> {
   const file = join(dir, `${driftOpName(stack)}.json`);
-  const argv = ["workspace", "drift", "--member", stack, ...(opts.resource ? ["--resource", opts.resource] : []), ...(opts.env ? ["--env", opts.env] : []), "-o", file];
+  const argv = ["workspace", "drift", "--member", member, ...(opts.resource ? ["--resource", opts.resource] : []), ...(opts.env ? ["--env", opts.env] : []), "-o", file];
   const code = await chant.runChantInProcess(argv, PRODUCT_WORDS);
   let doc: DriftDoc | undefined;
   try {
@@ -311,6 +353,11 @@ async function readStack(chant: ChantProduct, stack: string, dir: string, opts: 
   }
   if (code !== 0 || !doc || doc.error) {
     return { stack, ok: false, drifted: 0, rows: [], error: doc?.error ? `${doc.error.code}: ${doc.error.message}` : `chant workspace drift exited ${code}` };
+  }
+  const pulumiStack = stack.slice(stack.indexOf("/") + 1);
+  const read = stacksInDoc(doc);
+  if (read.some((s) => s !== pulumiStack)) {
+    return { stack, ok: false, drifted: 0, rows: [], error: `chant's drift read of member ${member} is about stack ${read.join(", ")}, not ${pulumiStack}: chant takes no stack for the read, so it used the export it holds for the member` };
   }
   const rows = driftRows(doc);
   const attribution = rows.length && opts.attribute ? await attributeStack(opts.attribute, stack, doc) : undefined;

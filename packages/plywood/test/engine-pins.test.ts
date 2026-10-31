@@ -35,10 +35,10 @@ describe("install lines", () => {
     const chant = fakeLines();
     setChantInstallLinesForTests(chant);
     expect(installLine("pulumi", "3.272.0")).toBe("chant-pulumi 3.272.0");
-    expect(installLine("plunge", "0.1.0")).toBe("chant-plunge 0.1.0");
+    expect(installLine("plunge", "0.2.0")).toBe("chant-plunge 0.2.0");
     expect(chant.calls).toEqual([
       ["pulumi", "3.272.0", { root: ENGINE_ROOT, sha256: pinnedSums("pulumi", "3.272.0") }],
-      ["plunge", "0.1.0", { root: ENGINE_ROOT, sha256: pinnedSums("plunge", "0.1.0") }],
+      ["plunge", "0.2.0", { root: ENGINE_ROOT, sha256: pinnedSums("plunge", "0.2.0") }],
     ]);
   });
 

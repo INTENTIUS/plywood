@@ -130,7 +130,7 @@ export const PLUNGE_REF = "812cfd894151027dbc22269a5a8b43fb53368ec2";
  * tags it, with stock Pulumi copied in from plywood's pulumi image (staging
  * is a stock stack, and plunge's adopt exports it with `pulumi stack
  * export`), and a local plunge build on PATH when the released plunge lacks
- * a feature a scenario reads (plunge 0.1.0 predates plunge#55's timings).
+ * a feature a scenario reads (the earlier pin, plunge 0.1.0, predated plunge#55's timings).
  * The command provider pw-action's resource needs comes with the plunge
  * image's Pulumi home (packages/plywood/src/images.ts IMAGE_PLUGINS).
  * `just e2e-image <linux plunge binary>` builds it from

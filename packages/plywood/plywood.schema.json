@@ -891,7 +891,7 @@
       ]
     },
     "plunge": {
-      "description": "The plunge release the jobs run, such as 0.1.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "description": "The plunge release the jobs run, such as 0.2.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
       "anyOf": [
         {
           "type": "string",

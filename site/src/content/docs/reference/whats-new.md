@@ -9,9 +9,11 @@ Each release lists its changes here, newest first.
 
 This release moves to chant 0.124.59, and a merged wave now applies the plans its pull request previewed. `plywood init` sets `approvals.preview` in the waves spec, and the pull request workflow keeps recording each wave's plans with `plywood run wave --record-plans`. The wave job compares its fresh digest with the recorded one before it applies anything. A different digest exits 4 and applies nothing, and so does a merge with no pull request or a wave whose plans were never recorded. `plywood run wave` then prints the next step, including the `plywood approve` line chant gives for the plans it just made.
 
-The wave jobs read the pull request through the job's token on GitHub and Forgejo. On GitLab they read a `CHANT_FORGE_TOKEN` CI/CD variable with `read_api`, which `plywood init` lists under the steps left for you. A repository written by an earlier release picks this up when you run `plywood init` again. You can also add `"approvals": { "preview": true }` to `.chant/op-waves/pulumi-up.spec.json` and `GITHUB_TOKEN: ${{ github.token }}` to each wave's `variables`, then run `plywood ci`.
+The wave jobs read the pull request through the job's token on GitHub and Forgejo. On GitLab they read a `CHANT_FORGE_TOKEN` CI/CD variable with `read_api`, which `plywood init` lists under the steps left for you. A repository written by an earlier version picks this up when you run `plywood init` again. You can also add `"approvals": { "preview": true }` to `.chant/op-waves/pulumi-up.spec.json` and `GITHUB_TOKEN: ${{ github.token }}` to each wave's `variables`, then run `plywood ci`.
 
 `plywood drift` passes the stack to chant, so a project with several stacks reads each stack's own stored export.
+
+Both images now carry plunge 0.2.0, checked against its checksums file, and a `plunge:` pin in `plywood.yml` takes the same version.
 
 ## In 0.2.0
 

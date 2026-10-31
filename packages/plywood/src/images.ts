@@ -52,12 +52,12 @@ export const REGISTRY = "ghcr.io/intentius";
 /**
  * The engine releases the images carry, and the version a job installs when
  * plywood.yml pins none. Pulumi matches the plunge corpus (3.272.0), which
- * plunge 0.1.0 is built from.
+ * plunge 0.2.0 is built from.
  */
 export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
   pulumi: "3.272.0",
   /** A plunge release (INTENTIUS/plunge, tag plunge-v<ver>), not the Pulumi version it is built from. */
-  plunge: "0.1.0",
+  plunge: "0.2.0",
 };
 
 /**
@@ -82,8 +82,8 @@ export const ARCHES: readonly Arch[] = ["x64", "arm64"];
 export const PINNED_SHA256: Readonly<Record<string, string>> = {
   "pulumi-v3.272.0-linux-x64.tar.gz": "58d545f2b98761051922008ebd381ecef95484d7f7a5ff7faa15d7a780ea84f6",
   "pulumi-v3.272.0-linux-arm64.tar.gz": "4f0741901b8982c4326b702dabf483c63d2cf77c88ac42dd752b72541284a534",
-  "plunge-v0.1.0-linux-x64.tar.gz": "22b89da39ab7dc11268c7b625fec3d99c0793c9c47bf8d031fa94e6967ee8187",
-  "plunge-v0.1.0-linux-arm64.tar.gz": "6855611b8cf8381d73f5ddf0b5c0a0d83bdc2a5bd8c50d415e52bb05a4574f83",
+  "plunge-v0.2.0-linux-x64.tar.gz": "c9c73d05cca9ad214b7f44230a6162cdcb6ad64bbfc725bc94688b997b191495",
+  "plunge-v0.2.0-linux-arm64.tar.gz": "c176a82f038164085aa19c8ad6530d6022e560e124050e535dbe364ae0473357",
 };
 
 /** Where plywood's images and install lines keep each release: the `engineRoot` a pinned step names. */

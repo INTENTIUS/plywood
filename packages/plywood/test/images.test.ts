@@ -30,12 +30,12 @@ const errors = (text: string) => problems(text).filter((p) => p.severity === "er
 
 describe("engine pins", () => {
   it("pins stock Pulumi at the corpus's release and plunge at a published one", () => {
-    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.272.0", plunge: "0.1.0" });
+    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.272.0", plunge: "0.2.0" });
     for (const engine of ["pulumi", "plunge"] as const) {
       const r = release(engine, TOOL_VERSIONS[engine]);
       for (const arch of ["x64", "arm64"] as const) expect(PINNED_SHA256[r.archive(arch)], r.archive(arch)).toMatch(/^[0-9a-f]{64}$/);
     }
-    expect(release("plunge", "0.1.0").checksums).toBe("plunge-v0.1.0-checksums.txt");
+    expect(release("plunge", "0.2.0").checksums).toBe("plunge-v0.2.0-checksums.txt");
   });
 
   it("installs Pulumi with no pin, linked onto PATH, skipping when the image has it", () => {
@@ -52,9 +52,9 @@ describe("engine pins", () => {
   });
 
   it("installs plunge for plunge stacks, at the pinned release", () => {
-    const s = settings("engine: plunge\nplunge: 0.1.0\nstacks:\n  shop/dev: {}\n");
-    expect(s.pipeline.engineSetup).toEqual([installLine("plunge", "0.1.0")]);
-    expect(s.members[0]).toMatchObject({ name: "shop/dev", engine: "plunge", engineVersion: "0.1.0" });
+    const s = settings("engine: plunge\nplunge: 0.2.0\nstacks:\n  shop/dev: {}\n");
+    expect(s.pipeline.engineSetup).toEqual([installLine("plunge", "0.2.0")]);
+    expect(s.members[0]).toMatchObject({ name: "shop/dev", engine: "plunge", engineVersion: "0.2.0" });
   });
 
   it("installs another release beside the linked one for a stack a glob pins", () => {
@@ -148,8 +148,8 @@ describe("Dockerfiles", () => {
 
   it("verify each archive against the release checksums and plywood's pinned sum", () => {
     const text = dockerfile("plunge");
-    expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.1.0/plunge-v0.1.0-checksums.txt");
-    expect(text).toContain(PINNED_SHA256["plunge-v0.1.0-linux-arm64.tar.gz"]);
+    expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.0/plunge-v0.2.0-checksums.txt");
+    expect(text).toContain(PINNED_SHA256["plunge-v0.2.0-linux-arm64.tar.gz"]);
     expect(text).toMatch(/^FROM node:22-bookworm-slim@sha256:[0-9a-f]{64}$/m);
     // Each download is checked in the same RUN line, before the node stage copies it.
     for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");
@@ -179,7 +179,7 @@ describe("Dockerfiles", () => {
   it("fails the fetch on a tampered checksums file", () => {
     // The fetch stage's shell, run against local files in place of the release.
     const dir = mkdtempSync(join(tmpdir(), "plywood-images-"));
-    const f = "plunge-v0.1.0-linux-x64.tar.gz";
+    const f = "plunge-v0.2.0-linux-x64.tar.gz";
     writeFileSync(join(dir, f), "not the archive");
     writeFileSync(join(dir, "sums"), `${"0".repeat(64)}  ${f}\n`);
     const run = dockerfile("plunge").split("\n").find((l) => l.startsWith("RUN set -e;"))!.slice(4)

@@ -8,7 +8,7 @@ A refused wave updates nothing. Its job prints the refusal and the command to ru
 | Refusal | Exit | Cause | Clear it |
 |---|---|---|---|
 | waiting | 3 | the wave's gate waits for an approval | `plywood approve wave-<k> --plan <digest>`, then `plywood up --wave <k>` |
-| moved | 4 | the preview at update time differs from the approved digest; on plunge, another update wrote a record the saved plan read | preview again and approve the new digest |
+| moved | 4 | the preview at update time differs from the approved digest; on plunge, another update wrote a record the saved plan read; on a merged wave, its plans differ from the ones its pull request previewed, or none were recorded | preview again and approve the new digest; for a merged wave, read the plans in the job log and run the `plywood approve` line the job prints, then run the job again |
 | held | 5 | another update or pull request holds a lock on a resource or stack this update touches | wait for a running update to end, or `/plywood unlock` on the pull request that holds it |
 | superseded | 6 | a newer push stands in for this one | nothing: the newer run updates the stacks |
 | denied | 7 | a Rego rule or a CrossGuard policy denied the preview | change the program, or `plywood override` |

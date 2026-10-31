@@ -2,7 +2,7 @@
  * The exit codes plywood leaves with. plywood owns no table: every code is
  * chant's (INTENTIUS/chant#4553), passed through unchanged.
  *
- * chant releases before the one that added the table (chant#4553) have none; the pinned 0.124.58 has it. The table
+ * chant releases before the one that added the table (chant#4553) have none; the pinned 0.124.59 has it. The table
  * is imported on first use and checked for the codes plywood reads; when the
  * installed chant lacks it, FALLBACK_EXIT stands in. Its numbers are the ones
  * ruled on chant#4553 (moved is 4, a policy denial is 7, a usage or config

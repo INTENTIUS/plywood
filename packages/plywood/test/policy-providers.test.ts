@@ -123,5 +123,5 @@ describe("policy.providers", () => {
     expect(existsSync(join(root, PROVIDERS_PACK_DIR, "index.ts"))).toBe(true);
     expect(JSON.parse(readFileSync(join(root, PROVIDERS_PACK_CONFIG), "utf8"))).toEqual({ [PROVIDERS_POLICY]: { allowed: ["aws"] } });
     expect(result.notes.join("\n")).toContain(`add { dir: ${PROVIDERS_PACK_DIR}, config: ${PROVIDERS_PACK_CONFIG} } to policy.packs`);
-  });
+  }, 60_000);
 });

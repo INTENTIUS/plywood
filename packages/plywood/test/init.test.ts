@@ -13,6 +13,7 @@ import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "../src/init/own-jobs";
 import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } from "../src/init/render";
 import { template } from "../src/templates";
 import { PRODUCT_WORDS } from "../src/words";
+import { setChantWavePreviewForTests, withWavePreview } from "../src/chant-next";
 import { setupPrompt } from "../../../site/src/prompts";
 import { unwrapWavesSpec } from "../src/waves-workflow";
 import { imageFor, imageReference } from "../src/images";
@@ -136,6 +137,7 @@ const TWO_PROJECTS = {
 afterEach(() => {
   setChantProductForTests("reset");
   setBucketCheckForTests("reset");
+  setChantWavePreviewForTests("reset");
 });
 
 describe("detection", () => {
@@ -182,6 +184,8 @@ describe("detection", () => {
   });
 });
 
+const TOKEN = { GITHUB_TOKEN: "${{ github.token }}" };
+
 describe("golden files", () => {
   it("one project with three stacks: an empty plywood.yml, a wave per environment, a component per stack", async () => {
     const chant = fakeChant();
@@ -208,18 +212,19 @@ describe("golden files", () => {
       gateName: "wave-{k}",
       branches: ["main"],
       step: { kind: "pulumi-up" },
-      approvals: { pullRequest: { gate: "up" } },
+      // 0.124.59: a merged wave applies what its pull request previewed, and reads the pull request with the job's token.
+      approvals: { pullRequest: { gate: "up" }, preview: true },
       waves: [
-        { name: "dev", gate: "on-destructive", runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }] },
-        { name: "staging", gate: "on-destructive", runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }] },
-        { name: "prod", gate: "on-destructive", runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }] },
+        { name: "dev", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }] },
+        { name: "staging", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }] },
+        { name: "prod", gate: "on-destructive", variables: TOKEN, runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }] },
       ],
     });
     expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8"))).toEqual({
       name: expect.any(String),
       schema: 1,
       members: [{ name: "shop", dir: "infra", kind: "pulumi" }],
-      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.58" }],
+      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.59" }],
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
     });
     const components = readFileSync(join(root, "plywood.component.ts"), "utf8");

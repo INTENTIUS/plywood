@@ -15,7 +15,7 @@
  * nothing.
  *
  * The subpath is imported on first use. A chant without it (one older than the
- * pinned 0.124.58) says so and exits with chant's `failed` code; `plywood audit` reads
+ * pinned 0.124.59) says so and exits with chant's `failed` code; `plywood audit` reads
  * the same ledger tables there.
  */
 import { dirname } from "node:path";

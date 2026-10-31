@@ -21,6 +21,6 @@ drift:
 | `up` | the issue and a gated update of the waves holding the drifted stacks |
 | `none` | the exit code only |
 
-`npx plywood drift shop/prod-east` reads one stack by hand.
+`npx plywood drift shop/prod-east` reads one stack by hand. Each read passes the stack to chant (`workspace drift --member <project> --stack <stack>`), so a project with several stacks reads each stack's own stored export. A stack the store holds no export for fails its read with `no-drift-read`, naming the stack.
 
 <WithPlunge feature="drift read by plunge drift with one provider read per resource and no program run" />

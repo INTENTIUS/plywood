@@ -31,7 +31,7 @@
  * always links onto PATH, and its Pulumi line skips when the `pulumi` on PATH
  * is that version without checking the versioned directory, which a step
  * pinned with `engineVersion` runs from. A lexicon without ci-setup
- * (the pinned 0.124.58 has it) leaves every line plywood's.
+ * (the pinned 0.124.59 has it) leaves every line plywood's.
  *
  * plywood hands the lines to chant's `prLoop.engineSetup` when the installed
  * chant reads that option and the job runs in chant's default image

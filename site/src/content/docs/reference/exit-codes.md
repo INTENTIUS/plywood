@@ -11,7 +11,7 @@ plywood exits with the codes of chant's one exit-code table and passes each thro
 | 1 | `failed` | something broke and no approval changes it; usage and config errors too |
 | 2 | `drift` | a drift check found drift |
 | 3 | `waiting` | a gate, a review or an earlier wave waits for a person |
-| 4 | `moved` | the approved preview or saved plan no longer matches the one that would apply, so nothing applied |
+| 4 | `moved` | the approved preview or saved plan no longer matches the one that would apply, or a merged wave's plans differ from the ones its pull request previewed, so nothing applied |
 | 5 | `held` | another run or open pull request holds a lock on a stack or resource the change touches |
 | 6 | `superseded` | a newer push applies in its place |
 | 7 | `denied` | policy denied the preview and no override counts |

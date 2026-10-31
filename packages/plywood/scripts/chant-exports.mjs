@@ -29,7 +29,7 @@ const CHANT = /^@intentius\/chant(?:-[a-z0-9-]+)?(?:\/.*)?$/;
 // lexicon's ci-setup (src/images.ts, chant#4592) and release-copy (src/stack-ops.ts, chant#4542). One the installed chant lacks resolves to a module
 // that throws when imported, so the bundle builds on the pin and the caller's
 // fallback takes over.
-const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|ci-product|parallelism|ci-control|bucket-check|components\/check-hooks|forge-check|ci-estate|policy-source)|chant-lexicon-pulumi\/(?:ci-setup|release-copy))$/;
+const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|op|ci-product|parallelism|ci-control|bucket-check|components\/check-hooks|forge-check|ci-estate|policy-source)|chant-lexicon-pulumi\/(?:ci-setup|release-copy))$/;
 
 /**
  * An esbuild plugin that leaves an @intentius/chant* import external when the

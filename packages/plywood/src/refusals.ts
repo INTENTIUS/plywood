@@ -54,3 +54,25 @@ export function explainRefusal(code: number, table: ExitTable, err: (s: string) 
   if (refusal) err(`${PRODUCT}: ${refusalLine(refusal, ctx)}`);
   return code;
 }
+
+/** The approve line chant prints when a merged wave is refused as moved: "Approve these plans to apply them: <command>". */
+export function approveLineIn(output: string): string | undefined {
+  const m = /Approve these plans to apply them:[ \t]*([^\r\n]+)/.exec(output);
+  const line = m?.[1]?.trim();
+  return line ? line : undefined;
+}
+
+/**
+ * What plywood says when `plywood run wave` exits with moved (4). With the
+ * waves spec's `approvals.preview` the wave applies what its pull request
+ * previewed; the plans it made now differ from the recorded ones, or none was
+ * recorded, so nothing was applied. `output` is what chant printed, to find
+ * the approve line it names.
+ */
+export function waveMovedLine(output: string): string {
+  const approve = approveLineIn(output);
+  const how = approve
+    ? `If a person has read the plans chant listed above and wants them applied, approve exactly them with: ${approve}, then run the job again.`
+    : `chant named no approval for these plans. Read the plans above, then approve them with '${PRODUCT} approve <wave gate> --plan <digest>' and run the job again.`;
+  return `A merged wave stopped with exit 4 and nothing in it was applied: its plans are not the ones its pull request previewed (or no preview was recorded for it). ${how} To apply only what a pull request previews, open a new pull request, let '${PRODUCT} run wave --record-plans' record its plans, and merge that.`;
+}

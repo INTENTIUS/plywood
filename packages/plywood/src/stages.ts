@@ -35,6 +35,7 @@ import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { unwrapWavesSpec, wavesEngine, writeWaveJobs } from "./waves-workflow";
 import { writeDriftJobs } from "./drift";
+import { waveMovedLine } from "./refusals";
 import { writeReviewJobs } from "./agents";
 import { writeAgentJobs } from "./agent-jobs";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
@@ -92,8 +93,36 @@ export async function withChant(what: string, table: ExitTable, io: StageIo, run
 
 /** A chant verb a generated job runs through the bin: passed to chant unchanged, with plywood's words. */
 export function passthrough(argv: string[], table: ExitTable, io: StageIo): Promise<number> {
+  if (argv[0] === "run" && argv[1] === "wave") return runWave(argv, table, io);
   return withChant(`${PRODUCT} ${argv[0]}`, table, io, (chant) => chant.runChantInProcess(argv, PRODUCT_WORDS));
 }
+
+/**
+ * `plywood run wave`: chant's op-wave job, passed through unchanged. Exit 4
+ * is the one code plywood explains. With the waves spec's
+ * `approvals.preview` it means the merged wave would apply plans its pull
+ * request did not preview (or no preview was recorded), so nothing was
+ * applied. chant has printed why, and the `approve` line that would let the
+ * plans through; plywood reads that line from what chant wrote to stderr and
+ * repeats it under its own message.
+ */
+async function runWave(argv: string[], table: ExitTable, io: StageIo): Promise<number> {
+  const seen: string[] = [];
+  const write = process.stderr.write;
+  process.stderr.write = ((chunk: unknown, ...rest: unknown[]) => {
+    seen.push(typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString("utf8"));
+    return (write as (...a: unknown[]) => boolean).call(process.stderr, chunk, ...rest);
+  }) as typeof process.stderr.write;
+  let code: number;
+  try {
+    code = await withChant(`${PRODUCT} run wave`, table, io, (chant) => chant.runChantInProcess(argv, PRODUCT_WORDS));
+  } finally {
+    process.stderr.write = write;
+  }
+  if (code === table.moved) io.err(`${PRODUCT}: ${waveMovedLine(seen.join(""))}`);
+  return code;
+}
+
 
 /**
  * `plywood check [--base <rev>] [<target>...] [--file <plywood.yml>] [--json]`.

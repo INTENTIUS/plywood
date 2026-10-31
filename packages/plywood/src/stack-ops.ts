@@ -37,7 +37,7 @@
  * own approval never counts.
  *
  * Everything chant runs here is reached through a feature-detect: a pulumi
- * lexicon older than the pinned 0.124.58 may have none of it, and then each verb
+ * lexicon older than the pinned 0.124.59 may have none of it, and then each verb
  * says so and exits with chant's `failed` code.
  */
 import { existsSync } from "node:fs";

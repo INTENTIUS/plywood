@@ -5,6 +5,7 @@
  *   gate            always, on-destructive (default) or never; a stack may set its own
  *   approval        ledger (default), sealed or pr-review, chant's approval sources
  *   approval_rules  stack glob to { role | roles, quorum }, as chant's quorum rules
+ *   preview         true makes a merged wave apply only what its pull request previewed (off by default)
  *
  * The author of a pull request never counts toward its own quorum, so every
  * rule carries `notAuthor` and the pipeline excludes the author's approval.
@@ -18,6 +19,7 @@ export const GATES = ["always", "on-destructive", "never"] as const;
 export const DEFAULT_GATE: ChantGatePolicy = "on-destructive";
 export const APPROVALS = ["ledger", "sealed", "pr-review"] as const;
 export const DEFAULT_APPROVAL: ChantApprovalSource = "ledger";
+export const DEFAULT_PREVIEW = false;
 export const APPROVAL_RULE_KEYS = ["role", "roles", "quorum"] as const;
 
 export interface ApprovalRuleSettings {
@@ -34,6 +36,16 @@ export function gateOf(doc: RawConfig): ChantGatePolicy {
   return typeof doc.gate === "string" && (GATES as readonly string[]).includes(doc.gate) ? (doc.gate as ChantGatePolicy) : DEFAULT_GATE;
 }
 
+/**
+ * Whether `plywood init` writes `approvals.preview` into the waves spec.
+ * Off by default since 0.3.1: with it on, the second of two disjoint merges
+ * on one stack is refused (plywood#55) and so is a pull request that creates
+ * an autonamed resource (plywood#56).
+ */
+export function previewOf(doc: RawConfig): boolean {
+  return doc.preview === true;
+}
+
 /** `approval_rules` as chant's quorum rules, in the order plywood.yml lists them. */
 export function quorumOf(rules: Record<string, ApprovalRuleSettings>): ChantQuorumRule[] {
   return Object.entries(rules).map(([glob, r]) => {
@@ -44,10 +56,15 @@ export function quorumOf(rules: Record<string, ApprovalRuleSettings>): ChantQuor
 
 export const approval: ConfigGroup = {
   name: "approval",
-  keys: ["gate", "approval", "approval_rules"],
+  keys: ["gate", "approval", "approval_rules", "preview"],
   schema: {
     gate: { type: "string", enum: [...GATES], default: DEFAULT_GATE, description: "always, on-destructive or never." },
     approval: { type: "string", enum: [...APPROVALS], default: DEFAULT_APPROVAL, description: "ledger, sealed or pr-review." },
+    preview: {
+      type: "boolean",
+      default: DEFAULT_PREVIEW,
+      description: "true: plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. Known limits: plywood#55 (the second of two disjoint merges is refused) and plywood#56 (a pull request that creates an autonamed resource is refused).",
+    },
     approval_rules: {
       type: "object",
       description: "Role and quorum per stack glob. Read at base.",
@@ -64,6 +81,7 @@ export const approval: ConfigGroup = {
   },
   check(doc) {
     const out: ConfigProblem[] = [...oneOf(doc.gate, GATES, "gate"), ...oneOf(doc.approval, APPROVALS, "approval")];
+    if (doc.preview !== undefined && typeof doc.preview !== "boolean") out.push(error("preview", "must be true or false"));
     const rules = doc.approval_rules;
     if (rules === undefined) return out;
     if (!isObject(rules)) return [...out, error("approval_rules", "must map a stack glob to { role, quorum }")];

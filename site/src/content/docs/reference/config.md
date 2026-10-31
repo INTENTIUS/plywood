@@ -25,6 +25,7 @@ drift: { schedule: "0 6 * * *" }
 | `backend` | `PULUMI_BACKEND_URL`, then `Pulumi.yaml`'s `backend.url` | the backend URL, for every stack or per stack under `stacks` |
 | `gate` | `on-destructive` | `always`, `on-destructive` or `never`: when a wave waits for an approval |
 | `approval` | `ledger` | `ledger`, `sealed` or `pr-review` |
+| `preview` | `false` | `true` makes `plywood init` set `approvals.preview` in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. Off by default since 0.3.1 because of two limits: the second of two merges that change different resources of one stack is refused, and a pull request that creates an autonamed resource is refused at merge |
 | `approval_rules` | none | per stack glob, `role` or `roles` from `.chant/trust.json` and a `quorum` (default 1); read at base |
 | `apply.when` | `merge` | `merge`, or `pull-request` for `/plywood up` before merge |
 | `apply.requires` | all four | with `when: pull-request`, the conditions an open pull request meets before `/plywood up` updates it: `approved`, `mergeable`, `undiverged`, `checks` |

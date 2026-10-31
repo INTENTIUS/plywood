@@ -53,7 +53,7 @@ import { identityClouds, pulumiCloudOf } from "./config/identity";
 import { notifyForChant } from "./config/observe";
 import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyPacksOf } from "./config/policy";
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
-import { gateOf } from "./config/approval";
+import { gateOf, previewOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
@@ -426,8 +426,8 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   adopt.push(...(await adoptStep(root, detected, doc, io.env, declaration.doc, opts.dryRun, files, notes, todo)));
 
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
-  // The waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
-  if (forge.kind === "gitlab" && chant && stacks.length > 0 && (await hasChantWavePreview())) {
+  // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
+  if (forge.kind === "gitlab" && chant && stacks.length > 0 && previewOf(doc) && (await hasChantWavePreview())) {
     todo.push(`Add a ${GITLAB_READ_TOKEN} CI/CD variable (a project access token with the read_api scope, masked and protected) so a wave can read the merge request it applies; without it the wave refuses`);
   }
   const failed = files.find((f) => f.status === "failed");
@@ -520,8 +520,8 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
     ...(settings.pipeline.notify ? { notify: { ...notifyForChant(settings.pipeline.notify, chant) } } : {}),
   });
   const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
-  // A merged wave applies what its pull request previewed, or exits 4 (chant 0.124.59's approvals.preview).
-  return (await hasChantWavePreview()) ? withWavePreview(named, forge) : named;
+  // Opt-in since 0.3.1 (`preview: true` in plywood.yml; plywood#55, plywood#56): a merged wave then applies what its pull request previewed, or exits 4 (chant 0.124.59's approvals.preview).
+  return previewOf(doc) && (await hasChantWavePreview()) ? withWavePreview(named, forge) : named;
 }
 
 /**

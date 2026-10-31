@@ -5,6 +5,14 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.1
+
+`plywood init` no longer sets `approvals.preview` in the waves spec, so a merged wave applies as it did before 0.3.0, and the wave jobs carry no forge token. Two bugs found on the 0.3.0 scenario runs make the setting unsafe as a default. With it on, the second of two merges that change different resources of one stack is refused with exit 4, and so is any pull request that creates an autonamed resource. chant is fixing both, and the default goes back to on afterward.
+
+Setting `preview: true` in `plywood.yml` and running `plywood init` again turns the behavior back on for a repository that wants it. A repository written by 0.3.0 keeps `approvals.preview` in `.chant/op-waves/pulumi-up.spec.json` when `plywood init` does not write the file again; delete the line to turn it off. When a merged wave exits 4, the message still prints the `plywood approve` line for a person to run.
+
+This release's images are `ghcr.io/intentius/plywood-pulumi:0.3.1-pulumi3.272.0` and `ghcr.io/intentius/plywood-plunge:0.3.1-plunge0.2.0`, named in the package by digest.
+
 ## In 0.3.0
 
 This release moves to chant 0.124.59, and a merged wave now applies the plans its pull request previewed. `plywood init` sets `approvals.preview` in the waves spec, and the pull request workflow keeps recording each wave's plans with `plywood run wave --record-plans`. The wave job compares its fresh digest with the recorded one before it applies anything. A different digest exits 4 and applies nothing, and so does a merge with no pull request or a wave whose plans were never recorded. `plywood run wave` then prints the next step, including the `plywood approve` line chant gives for the plans it just made.

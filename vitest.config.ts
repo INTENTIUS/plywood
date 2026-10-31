@@ -7,6 +7,7 @@ export default defineConfig({
   // npm ci installs.
   esbuild: { tsconfigRaw: readFileSync(new URL("./tsconfig.json", import.meta.url), "utf8") },
   test: {
+    globalSetup: ["./scripts/clean-tree-guard.mjs"],
     include: ["packages/*/test/**/*.test.ts", "e2e/test/**/*.test.ts"],
   },
 });

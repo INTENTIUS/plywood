@@ -5,6 +5,7 @@ import { toChantSettings } from "../src/chant-config";
 import { checkConfig, GROUPS, parseConfig, plywoodSchema } from "../src/config/index";
 import { PLYWOOD_KEY_FOR } from "../src/config/chant-keys";
 import { imageFor, imageReference, installLine, TOOL_VERSIONS } from "../src/images";
+import { publishedImage } from "./published-image";
 
 /** The line every config without a pin gets: Pulumi at plywood's release, on PATH. */
 const DEFAULT_SETUP = [installLine("pulumi", TOOL_VERSIONS.pulumi)];
@@ -47,7 +48,7 @@ describe("plywood.yml", () => {
         policyPacks: [{ dir: "policy/aws-guard" }],
         drift: { schedule: "0 6 * * *", stacks: ["shop/dev", "shop/prod-us"], respond: "issue" },
         engineSetup: DEFAULT_SETUP,
-        image: imageReference(imageFor("pulumi")),
+        image: publishedImage("pulumi"),
       },
     });
   });
@@ -57,7 +58,7 @@ describe("plywood.yml", () => {
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
       members: [],
       memberDefaults: {},
-      pipeline: { gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP, image: imageReference(imageFor("pulumi")) },
+      pipeline: { gate: "on-destructive", approval: "ledger", excludeAuthor: true, engineSetup: DEFAULT_SETUP, image: publishedImage("pulumi") },
     });
   });
 

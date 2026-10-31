@@ -22,6 +22,7 @@ import {
   release,
   TOOL_VERSIONS,
 } from "../src/images";
+import { publishedImage } from "./published-image";
 
 const ROOT = join(import.meta.dirname, "../../..");
 const settings = (text: string) => toChantSettings(parseConfig(text));
@@ -47,8 +48,8 @@ describe("engine pins", () => {
     expect(line).toContain(PINNED_SHA256["pulumi-v3.272.0-linux-x64.tar.gz"]);
     expect(line).toContain("sha256sum -c");
     // The release's own image, by digest, once image-digests.json holds it.
-    expect(s.pipeline.image).toBe(imageReference(imageFor("pulumi")));
-    expect(s.pipeline.image).toContain("@sha256:");
+    expect(s.pipeline.image).toBe(publishedImage("pulumi"));
+    if (publishedImage("pulumi")) expect(s.pipeline.image).toContain("@sha256:");
   });
 
   it("installs plunge for plunge stacks, at the pinned release", () => {

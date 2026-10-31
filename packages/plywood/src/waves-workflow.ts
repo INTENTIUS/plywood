@@ -24,6 +24,8 @@
  *      with its install lines, as the pull request workflow does. chant's
  *      generator and its wave jobs read both forms (`parseOpWavesSpec`), and
  *      plywood's own readers unwrap it ({@link unwrapWavesSpec}).
+ *   2c. A workflow-level concurrency group per commit is added (plywood#51),
+ *      so Forgejo does not cancel a merge's wave jobs when the next merge lands.
  *   3. On a chant before chant#4607, each job line chant wrote as
  *      `chant run wave ...` becomes the line productPipelineJobs gave, with
  *      plywood's bin. From chant#4607 the generator writes the words' bin in
@@ -34,6 +36,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 
 import { dirname, join } from "node:path";
 import { hasChant4607, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { chantPipelineOptions } from "./images";
+import { withRunGroup } from "./init/run-group";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
 import { OP_NAME, PRODUCT, type ProductWordsInput } from "./words";
@@ -210,11 +213,10 @@ export async function writeWaveJobs(
   // chant#4607: the generator writes plywood's bin itself; before it, plywood swaps the lines.
   const lines = hasChant4607(chant) ? undefined : binLines(waves, words.bin);
   for (const file of files) {
-    if (lines) {
-      const text = readFileSync(file, "utf8");
-      const next = withBinLines(text, lines);
-      if (next !== text) writeFileSync(file, next);
-    }
+    // plywood#51: Forgejo cancels a merge's wave jobs when the next merge lands, unless the workflow sets a group.
+    const text = readFileSync(file, "utf8");
+    const next = withRunGroup(lines ? withBinLines(text, lines) : text, forge, "commit");
+    if (next !== text) writeFileSync(file, next);
     io.err(`${PRODUCT} ci: waves workflow at ${file.slice(io.cwd.length + 1)}`);
   }
   if (forge === "gitlab") {

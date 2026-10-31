@@ -12,6 +12,7 @@ import type { ChantProduct, ForgeKind } from "../chant-product";
 import type { ProductWordsInput } from "../words";
 import { keepOwnJobs } from "./own-jobs";
 import { withNoteControl, type NoteControlStep } from "./note-control";
+import { withRunGroup } from "./run-group";
 
 export interface WriteWorkflowInput {
   /** Where the build runs: the repository root. */
@@ -43,7 +44,7 @@ export async function writeWorkflow(chant: Pick<ChantProduct, "runChantInProcess
     if (previous !== undefined) writeFileSync(file, previous);
     return { code: code !== 0 ? code : 1, file, status: "failed", kept: [] };
   }
-  const generated = withNoteControl(readFileSync(file, "utf8"), input.forge, input.noteControl);
+  const generated = withRunGroup(withNoteControl(readFileSync(file, "utf8"), input.forge, input.noteControl), input.forge, "pull-request");
   const { text, kept } = keepOwnJobs(previous, generated, input.forge);
   writeFileSync(file, text);
   return { code, file, status: text === previous ? "unchanged" : "written", kept };

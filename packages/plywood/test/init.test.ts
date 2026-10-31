@@ -8,6 +8,7 @@ import { FALLBACK_EXIT } from "../src/exit-codes";
 import { initLines, parseInitArgs, runInit, type InitIo, type InitOptions } from "../src/init";
 import { bucketTarget, setBucketCheckForTests, type BucketReport } from "../src/init/backend";
 import { detect, environmentOf, forgeOfRemote, stackNames } from "../src/init/detect";
+import { withRunGroup } from "../src/init/run-group";
 import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "../src/init/own-jobs";
 import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } from "../src/init/render";
 import { template } from "../src/templates";
@@ -260,8 +261,8 @@ describe("golden files", () => {
       const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
       expect(r.forge.kind).toBe(forge);
       expect(r.files.find((f) => f.file === file)?.status).toBe("written");
-      // The pipeline is chant's generator output, unchanged: plywood holds no job YAML.
-      expect(readFileSync(join(root, file), "utf8")).toBe(forge === "gitlab" ? GENERATED_GITLAB : GENERATED);
+      // The pipeline is chant's generator output: plywood holds no job YAML. On Forgejo it adds the concurrency group (plywood#51).
+      expect(readFileSync(join(root, file), "utf8")).toBe(forge === "gitlab" ? GENERATED_GITLAB : forge === "forgejo" ? withRunGroup(GENERATED, "forgejo", "pull-request") : GENERATED);
       expect(chant.calls[0]!.argv.slice(0, 6)).toEqual(["build", root, "--components", "--generate", forge, "--pr-loop"]);
       expect(chant.calls[0]!.argv).toContain("--before-script");
       expect(chant.pipelines[0]!.waves).toMatchObject({ name: "pulumi-up" });

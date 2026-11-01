@@ -239,3 +239,54 @@ export function driftIssueHolds(issues: readonly IssueView[], o: { title: string
   if (!row.includes(o.attribute)) return no(`issue #${open[0]!.number}'s row for ${o.name} does not name ${o.attribute}: ${row.trim()}`);
   return ok(`issue #${open[0]!.number} names ${o.name} with ${o.attribute}`);
 }
+
+// ── plywood#60's claims ─────────────────────────────────────────────────
+
+/** A dotted path into a chant report, as a `path=value` word names it. */
+const at = (o: unknown, path: string): unknown => path.split(".").reduce<unknown>((v, k) => (v === null || typeof v !== "object" ? undefined : (v as Record<string, unknown>)[k]), o);
+
+/**
+ * Whether a report holds each `path=value` (a dotted path; an array holds a
+ * value when one element equals it). chant's pr-plan.json and pr-apply.json
+ * carry `status`, `refusal` and `policy` (pr-loop.ts `PrReport`).
+ */
+export function reportHolds(report: unknown, wants: readonly string[]): CheckResult {
+  for (const w of wants) {
+    const i = w.indexOf("=");
+    if (i < 1) throw new Error(`report takes path=value, not ${w}`);
+    const v = at(report, w.slice(0, i));
+    const want = w.slice(i + 1);
+    const hit = Array.isArray(v) ? v.map(String).includes(want) : v !== undefined && v !== null && String(v) === want;
+    if (!hit) return no(`the report's ${w.slice(0, i)} is ${JSON.stringify(v)}, not ${want}`);
+  }
+  return ok(`the report holds ${wants.join(", ")}`);
+}
+
+/** A line of `_gates/policy-override.jsonl`, the fields read here, and of its applied records. */
+export interface OverrideLines {
+  resolutions: ReadonlyArray<{ gate: string; resolvedBy: string; note?: string; planDigest?: string }>;
+  applied: ReadonlyArray<{ gate: string; planDigest: string }>;
+}
+
+/**
+ * pw-policy-override's record check: `by` overrode `subject` with a reason,
+ * and an applied record of that override's digest spends it.
+ */
+export function overrideRecorded(l: OverrideLines, o: { subject: string; by: string }): CheckResult {
+  const line = l.resolutions.find((r) => r.gate === o.subject && r.resolvedBy === o.by);
+  if (!line) return no(`the ledger holds no override of ${o.subject} by ${o.by}`);
+  if (!line.note?.trim()) return no(`the override of ${o.subject} by ${o.by} gives no reason`);
+  const bare = (d: string | undefined) => d?.replace(/^sha256:/, "");
+  if (!l.applied.some((a) => a.gate === o.subject && bare(a.planDigest) === bare(line.planDigest))) return no(`no applied record spends the override of ${o.subject} by ${o.by}`);
+  return ok(`${o.by} overrode ${o.subject} (${line.note.trim()}), and an applied record spends it`);
+}
+
+/** pw-estate's check: dora.json under plywood's schema counts at least `min` deployments, and the page exists. */
+export function doraCounts(dora: { schema?: unknown; estate?: { deployments?: unknown } } | null, page: string | null, min: number): CheckResult {
+  if (!dora) return no("no dora.json under the report URL");
+  if (dora.schema !== "plywood.dora/v1") return no(`dora.json's schema is ${String(dora.schema)}, not plywood.dora/v1`);
+  const n = typeof dora.estate?.deployments === "number" ? dora.estate.deployments : 0;
+  if (n < min) return no(`dora.json counts ${n} deployments, not ${min} or more`);
+  if (!page || page.trim() === "") return no("no estate.html under the report URL");
+  return ok(`dora.json counts ${n} deployments, and estate.html is there`);
+}

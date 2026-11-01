@@ -5,6 +5,7 @@ import { checkConfig, parseConfig } from "../../packages/plywood/src/config/inde
 import { ADOPT_OP_FILE, adoptOpFile } from "../../packages/plywood/src/init/adopt";
 import { BUCKETS, FLOCI_NET, plungeStoreUrl, s3BackendUrl } from "../bench";
 import { claimsProblems } from "../claims";
+import { renderEvidence } from "../evidence";
 import { harness, type Scenario } from "../harness";
 import { PLUNGE_CLAIMS_DATA } from "../plunge-claims";
 import { dryRun, jobLogCopies, lint } from "../main";
@@ -14,7 +15,7 @@ const ROOT = join(import.meta.dirname, "..", "..");
 
 describe("plywood's scenarios", () => {
   it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside, and plywood#39's", () => {
-    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-action", "pw-adopt", "pw-canary", "pw-disjoint", "pw-drift", "pw-moved-plan", "pw-moved-preview", "pw-one-note"]);
+    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-action", "pw-adopt", "pw-audit", "pw-canary", "pw-comment-up", "pw-disjoint", "pw-drift", "pw-estate", "pw-mcp", "pw-moved-plan", "pw-moved-preview", "pw-notify", "pw-one-note", "pw-policy-deny", "pw-policy-override", "pw-traces"]);
     expect(SCENARIO_CLAIMS).toEqual({
       "pw-disjoint": "plunge/disjoint-updates",
       "pw-moved-plan": "plunge/saved-plan-moved",
@@ -24,6 +25,14 @@ describe("plywood's scenarios", () => {
       "pw-canary": "wave/canary",
       "pw-drift": "drift/issue",
       "pw-action": "action/gated-replace",
+      "pw-policy-deny": "policy/denied-preview",
+      "pw-policy-override": "policy/override",
+      "pw-audit": "audit/approved-update",
+      "pw-comment-up": "apply/comment-up",
+      "pw-notify": "notify/signed-webhook",
+      "pw-traces": "telemetry/wave-trace",
+      "pw-estate": "estate/dora",
+      "pw-mcp": "mcp/read-only",
     });
   });
 
@@ -44,7 +53,7 @@ describe("plywood's scenarios", () => {
   it("lint clean through `just e2e lint`", async () => {
     const out: string[] = [];
     expect(await lint(await harness(), (l) => void out.push(l))).toBe(0);
-    expect(out).toHaveLength(8);
+    expect(out).toHaveLength(16);
   });
 
   it("catch a scenario that drifted from plywood's rules", () => {
@@ -162,9 +171,15 @@ describe("pw-adopt", () => {
 });
 
 describe("the recorded rows", () => {
+  // plywood#60's scenarios have no run yet, and EVIDENCE.md is rendered from the bench, so `just e2e render` adds them.
+  // Once it does, the second expect below fails until this list is empty.
+  const NOT_RENDERED_YET = ["pw-audit", "pw-comment-up", "pw-estate", "pw-mcp", "pw-notify", "pw-policy-deny", "pw-policy-override", "pw-traces"];
+
   it("lists every scenario and plunge feature on EVIDENCE.md", () => {
     const page = readFileSync(join(ROOT, "EVIDENCE.md"), "utf8");
-    for (const id of Object.keys(SCENARIO_CLAIMS)) expect(page).toContain(`\`${id}\``);
+    for (const id of Object.keys(SCENARIO_CLAIMS).filter((x) => !NOT_RENDERED_YET.includes(x))) expect(page).toContain(`\`${id}\``);
+    for (const id of NOT_RENDERED_YET) expect(page).not.toContain(`\`${id}\``);
+    for (const id of NOT_RENDERED_YET) expect(renderEvidence([])).toContain(`\`${id}\``);
     for (const c of PLUNGE_CLAIMS_DATA) expect(page).toContain(`\`${c.id}\``);
   });
 

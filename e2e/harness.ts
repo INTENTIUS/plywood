@@ -95,6 +95,7 @@ interface StepBase {
 export type ScenarioStep =
   | (StepBase & { do: "open" | "open-concurrent"; branch: string; overlay: string; title: string; body?: string })
   | (StepBase & { do: "plan" | "approve" | "merge"; pull: string })
+  | (StepBase & { do: "comment"; pull: string; body: string; as?: "author" | "reviewer" | "admin" })
   | (StepBase & { do: "apply"; merge: string })
   | (StepBase & { do: "out-of-band"; command: string[] })
   | (StepBase & { do: "kill-job"; match?: string });
@@ -177,6 +178,8 @@ export interface PullForgePort {
   deleteBranch(name: string): Promise<void>;
   comments?(pull: number): Promise<string[]>;
   issues?(): Promise<Array<{ number: number; title: string; body: string; open: boolean }>>;
+  /** chant#4650: the driver's comment step. */
+  postComment?(pull: number, body: string, as: "author" | "reviewer" | "admin"): Promise<void>;
 }
 
 export interface Clock {
@@ -267,7 +270,11 @@ export interface HarnessModule {
     clock: Clock;
     checkout?: string;
     emailDomain?: string;
-  }) => PullForgePort & { comments(pull: number): Promise<string[]>; issues(): Promise<Array<{ number: number; title: string; body: string; open: boolean }>> };
+  }) => PullForgePort & {
+    comments(pull: number): Promise<string[]>;
+    issues(): Promise<Array<{ number: number; title: string; body: string; open: boolean }>>;
+    pullInfo(pull: number): Promise<{ number: number; title: string; branch: string; head: string } | undefined>;
+  };
   forgejoApi<T = unknown>(
     url: string,
     token: string,

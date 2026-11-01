@@ -78,7 +78,9 @@ export function dryRun(s: Scenario): string[] {
               ? `run ${step.command.map((w) => expandWord(w, env)).join(" ")}`
               : step.do === "kill-job"
                 ? `kill a job${step.match ? ` matching ${step.match}` : ""}`
-                : `${step.do} ${"pull" in step ? step.pull : ""}`;
+                : step.do === "comment"
+                  ? `comment ${JSON.stringify(step.body)} on ${step.pull} as ${step.as ?? "author"}`
+                  : `${step.do} ${"pull" in step ? step.pull : ""}`;
       const expect = (step.expect ?? []).map((e) => JSON.stringify(e)).join(", ");
       lines.push(`  ${step.id}: ${what}${expect ? `; expect ${expect}` : ""}`);
     }
@@ -231,6 +233,14 @@ async function claim(h: HarnessModule, id: string): Promise<number> {
       return pull === undefined ? undefined : forge.comments(pull);
     },
     issues: () => forge.issues(),
+    pullReport: async (branch, stage) => {
+      const pull = await newestPull(h, urls.forgejo, st.admin.token, branch);
+      const head = pull === undefined ? undefined : (await forge.pullInfo(pull))?.head;
+      if (pull === undefined || !head) return undefined;
+      const text = await reports.get(`shop/${pull}/${head}/pr-${stage}.json`);
+      return text === null ? undefined : (JSON.parse(text) as unknown);
+    },
+    report: (key) => reports.get(`shop/${key}`),
   };
   const result = await h.runClaim(
     scenario,

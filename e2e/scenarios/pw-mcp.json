@@ -1,0 +1,37 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-mcp",
+  "product": "plywood",
+  "claim": "mcp/read-only",
+  "title": "plywood mcp, in the job image, serves plywood's read tools and no tool that writes (stdio; no agent or model)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "tools",
+      "do": "out-of-band",
+      "label": "a stdio client lists the tools, refuses one that writes, and calls plywood:stacks",
+      "command": [
+        "plywood-e2e",
+        "mcp",
+        "${PLYWOOD_E2E_MCP_TIER:-read-only}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_MCP_TIER": "propose"
+    },
+    "note": "The server starts with --propose, which adds plywood:request_from_template, a tool that may open a pull request: the tools step must fail."
+  }
+}

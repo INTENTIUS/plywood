@@ -1,0 +1,136 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-audit",
+  "product": "plywood",
+  "claim": "audit/approved-update",
+  "title": "An approved, merged update leaves its approval, update and run rows in plywood audit (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "waves",
+      "do": "out-of-band",
+      "label": "main puts prod-us first in the waves",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_WAVES:-stock-first}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/audit-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "events-merge",
+      "do": "merge",
+      "pull": "events"
+    },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's first wave job is on the ledger",
+      "command": [
+        "plywood-e2e",
+        "wait-runs",
+        "pulumi-up",
+        "1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "do": "out-of-band",
+      "label": "plywood audit runs holds the wave job that applied prod-us",
+      "command": [
+        "plywood-e2e",
+        "audit",
+        "runs",
+        "op=pulumi-up",
+        "status=ok",
+        "wave.applied=shop/prod-us"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "approvals",
+      "do": "out-of-band",
+      "label": "plywood audit approvals holds the reviewer's approval",
+      "command": [
+        "plywood-e2e",
+        "audit",
+        "approvals",
+        "kind=resolution",
+        "op=pulumi-up",
+        "gate=up",
+        "resolved_by=forgejo@forgejo:3000:reviewer"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "updates",
+      "do": "out-of-band",
+      "label": "plywood audit updates holds the update under that approval",
+      "command": [
+        "plywood-e2e",
+        "audit",
+        "updates",
+        "op=pulumi-up",
+        "approved_by=forgejo@forgejo:3000:reviewer"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_WAVES": "stock-without-prod-us"
+    },
+    "note": "main's waves leave prod-us out, so the approved merge updates nothing on it, no wave job applies it, and the runs step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

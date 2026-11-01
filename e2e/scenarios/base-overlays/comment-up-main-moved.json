@@ -1,0 +1,1 @@
+{"append": {"plywood.yml": "apply:\n  when: pull-request\n"}, "files": {"notes.txt": "main moved after the approval\n"}}

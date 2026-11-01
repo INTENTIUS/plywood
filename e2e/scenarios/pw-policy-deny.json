@@ -1,0 +1,120 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-policy-deny",
+  "product": "plywood",
+  "claim": "policy/denied-preview",
+  "title": "A change the policy at base denies shows denied on its preview, and /plywood up refuses it and leaves the queue as it was (Forgejo only; policy.command, no Rego engine)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "policy",
+      "do": "out-of-band",
+      "label": "main sets apply.when: pull-request and a policy that freezes the events queue, and plywood init writes the workflow",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_POLICY:-policy-frozen-events}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/policy-deny-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "denied",
+      "do": "out-of-band",
+      "label": "the preview's report says the policy denied it, by the rule's id",
+      "command": [
+        "plywood-e2e",
+        "report",
+        "e2e/policy-deny-events",
+        "plan",
+        "policy.result=denied",
+        "policy.rules=main.deny_frozen"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "up",
+      "do": "comment",
+      "pull": "events",
+      "body": "/plywood up",
+      "as": "author"
+    },
+    {
+      "id": "refused",
+      "do": "out-of-band",
+      "label": "the update job, with the plan approved, refused with chant's policy-denied",
+      "command": [
+        "plywood-e2e",
+        "report",
+        "e2e/policy-deny-events",
+        "apply",
+        "status=refused",
+        "refusal=policy-denied"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "nothing",
+      "do": "out-of-band",
+      "label": "floci's queue keeps the seed's retention",
+      "command": [
+        "plywood-e2e",
+        "queue-retention",
+        "prod-us",
+        "3600"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_POLICY": "policy-frozen-nothing"
+    },
+    "note": "main's policy freezes a queue that does not exist, so nothing is denied and the denied step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

@@ -25,11 +25,13 @@ import { join, dirname } from "node:path";
 import { readRunLedger } from "@intentius/chant/lifecycle/run-ledger";
 import { readGateLedger } from "@intentius/chant/lifecycle/gate-ledger";
 import { readGatedRequests, type GatedRequestRead } from "@intentius/chant/lifecycle/gated-request";
+import { readOverrideLedger } from "@intentius/chant/lifecycle/override-ledger";
 import { actionScript } from "./action";
 import { BUCKETS, FLOCI_NET, FORGEJO_NET, ORG, PROJECT, REPO, jobEnv, plungeStoreUrl, s3BackendUrl } from "./bench";
 import {
   canaryFirst,
   disjointTogether,
+  doraCounts,
   driftIssueHolds,
   expandWord,
   finishedRuns,
@@ -37,6 +39,8 @@ import {
   lockishKeys,
   movedNotGated,
   oneNote,
+  overrideRecorded,
+  reportHolds,
   stackTarget,
   targetIsStack,
   waitsAtGate,
@@ -48,6 +52,7 @@ import {
 import { driftIssueTitle, driftOpName } from "../packages/plywood/src/words";
 import type { ApproveInput, Arm, BucketPort, Clock, HarnessModule, LedgerRecord, Person, SafeRunInstance } from "./harness";
 import { overlayFiles, readOverlay } from "./overlays";
+import { MCP_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROWS_JS } from "./probes";
 
 // ── reports ─────────────────────────────────────────────────────────────
 
@@ -188,6 +193,12 @@ export class ForgeLedger {
     return pending.filter((p) => p.timestamp >= since).pop();
   }
 
+  /** The override ledger's approvals and applied records, for pw-policy-override's record check. */
+  async overrides(): Promise<{ resolutions: Array<{ gate: string; resolvedBy: string; note?: string; planDigest?: string }>; applied: Array<{ gate: string; planDigest: string }> }> {
+    const cwd = await this.fetch();
+    return readOverrideLedger({ cwd });
+  }
+
   /** The gated requests of `op`, oldest first, for the harness's gated outcome (a gated request writes no op-run record). */
   async gatedRequests(op: string): Promise<GatedRequestRead[]> {
     const cwd = await this.fetch();
@@ -281,7 +292,7 @@ export interface CommandContext {
   h: Pick<HarnessModule, "RUNNER_JOB_ENV">;
   clock: Clock;
   safe: Pick<SafeRunInstance, "run" | "log">;
-  ledger: Pick<ForgeLedger, "runs" | "pending">;
+  ledger: Pick<ForgeLedger, "runs" | "pending"> & Partial<Pick<ForgeLedger, "overrides">>;
   observer: Pick<LockObserver, "result">;
   /** The chant environment the scenario's runs are recorded under. */
   env: string;
@@ -307,6 +318,10 @@ export interface CommandContext {
   pullComments?(branch: string): Promise<string[] | undefined>;
   /** The shop repository's issues. */
   issues?(): Promise<IssueView[]>;
+  /** The newest pull request from `branch`'s report of a stage at its head, or undefined while there is none. */
+  pullReport?(branch: string, stage: "plan" | "apply"): Promise<unknown>;
+  /** A key of the reports bucket, below its `shop/` prefix, or null. */
+  report?(key: string): Promise<string | null>;
 }
 
 /** The arm's name for a branch a step named: the harness pushes `<branch>-break` in the BREAK arm. */
@@ -369,6 +384,37 @@ export function driftJobScript(stack: string): string {
   ].join("\n");
 }
 
+/** The script `queue-retention` runs: the stack's events queue's retention on floci, read as floci takes SQS, compared with `seconds`. */
+export function queueRetentionScript(stack: string, seconds: string): string {
+  if (!/^\d+$/.test(seconds)) throw new Error(`queue-retention takes seconds, not ${seconds}`);
+  const read = `node -e 'fetch(process.argv[1]+"/",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({Action:"GetQueueAttributes",Version:"2012-11-05",QueueUrl:process.argv[2],"AttributeName.1":"MessageRetentionPeriod"}).toString()}).then(async(r)=>{const t=await r.text();const m=/<Name>MessageRetentionPeriod<\\/Name>\\s*<Value>(\\d+)<\\/Value>/.exec(t);if(!r.ok||!m){console.error("floci answered "+r.status+": "+t);process.exit(1)}if(m[1]!==process.argv[3]){console.error("the queue keeps "+m[1]+"s, not "+process.argv[3]+"s");process.exit(1)}console.log("the queue keeps "+m[1]+"s")})' ${quote(FLOCI_NET)} "$url" ${quote(seconds)}`;
+  return [`url=$(PULUMI_BACKEND_URL=${quote(stockBackend(stack))} pulumi stack output eventsQueueUrl --stack ${quote(stack)})`, 'test -n "$url"', read].join("\n");
+}
+
+/** The script `audit` runs: `plywood audit <table> --json`, then a row that holds every path=value (./probes.ts ROWS_JS). */
+export function auditScript(table: string, wants: readonly string[]): string {
+  return [`plywood audit ${quote(table)} --json > /tmp/plywood-e2e-audit.json`, `node -e ${quote(ROWS_JS)} /tmp/plywood-e2e-audit.json ${wants.map(quote).join(" ")}`].join("\n");
+}
+
+/** The script `mcp` runs in a clone of main: the stdio client over `plywood mcp`, with --propose for that tier. */
+export function mcpScript(tier: string): string {
+  if (tier !== "read-only" && tier !== "propose") throw new Error(`mcp takes read-only or propose, not ${tier}`);
+  return `node -e ${quote(MCP_JS)} shop/prod-us plywood mcp${tier === "propose" ? " --propose" : ""}`;
+}
+
+/** The `docker` argv that puts a fresh receiver on the bench's network: the old one goes first, with what it held. */
+export function receiverArgv(image: string): string[][] {
+  return [
+    ["docker", "rm", "-f", RECEIVER],
+    ["docker", "run", "-d", "--rm", "--name", RECEIVER, "--network", PROJECT, "--entrypoint", "node", image, "-e", RECEIVER_JS, RECEIVED_FILE, String(RECEIVER_PORT)],
+  ];
+}
+
+/** The `docker exec` argv of one read of the receiver (./probes.ts RECEIVED_JS). */
+export function receivedArgv(args: readonly string[]): string[] {
+  return ["docker", "exec", RECEIVER, "node", "-e", RECEIVED_JS, RECEIVED_FILE, ...args];
+}
+
 /** The commands `plywood-e2e` takes, with their arguments. */
 export const COMMANDS: Record<string, string> = {
   "wait-runs": "<op> <count> [<stack>]: wait until the ledger holds <count> wave jobs of <op> since the arm started, only those that targeted <stack> when given",
@@ -390,6 +436,17 @@ export const COMMANDS: Record<string, string> = {
   "sqs-retention": "<stack> <seconds>: set the stack's events queue's retention on floci by hand, in a job container",
   "drift-job": "<stack>: the scheduled drift job's command for shop/<stack>, in a job container with Forgejo's job variables",
   "drift-issue": "<stack> <name> <attribute>: one open drift issue for shop/<stack> with a row for <name> naming <attribute> (./checks.ts driftIssueHolds)",
+  report: "<branch> <plan|apply> <path=value>...: the branch's pull request's report at its head holds each value; an apply report is waited for, since a later /plywood up writes over it (./checks.ts reportHolds)",
+  "queue-retention": "<stack> <seconds>: the stack's events queue keeps <seconds> on floci, read in a job container",
+  override: "<branch> <reviewer|author> <rule> <reason>...: plywood override of the branch's pull request's op as that person, in a job container",
+  overridden: "<branch> <login>: the ledger holds <login>'s reasoned override of the branch's pull request, spent (./checks.ts overrideRecorded)",
+  audit: "<approvals|updates|runs|review-stacks> <path=value>...: a row of plywood audit --json in a job container holds each value (./probes.ts ROWS_JS)",
+  "job-ledger": "<word>...: as job, with the forge's ledger under the command",
+  dora: "<min>: dora.json under the report URL counts <min> deployments or more, and estate.html is there (./checks.ts doraCounts)",
+  receiver: ": a fresh receiver on the bench's network (./probes.ts RECEIVER_JS)",
+  received: "<trace <service> <stack>|metric <name>|signed <event> <source> <target> <key>>: the receiver holds it, read until it does or a minute passes (./probes.ts RECEIVED_JS)",
+  "notify-drift-job": "<stack> <signing key>: the drift-job command with notify's webhook at the receiver, signed with <key>",
+  mcp: "<read-only|propose>: a stdio client over plywood mcp in a job container: the tools listed, none that writes, and plywood:stacks called (./probes.ts MCP_JS)",
 };
 
 const say = (c: CommandContext, r: CheckResult): number => {
@@ -410,10 +467,11 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       // plywood#22 finding 10: with a stack, only the wave jobs that targeted it count.
       const stack = a[2];
       const of = stack ? ` on ${stack}` : "";
-      const deadline = c.clock.now() + c.waitLimit * 1000;
+      const deadline = c.clock.now() + Math.max(c.waitLimit - 30, 30) * 1000;
       for (;;) {
         const n = finishedRuns(await c.ledger.runs(c.env, a[0]!), a[0]!, c.since(), true, stack);
         if (n >= want) return say(c, { code: 0, line: `${n} ${a[0]} wave jobs${of} on the ledger` });
+        // Inside the step's own limit, so a wait that gives up breaks the arm and does not stall it.
         if (c.clock.now() >= deadline) return say(c, { code: 124, line: `${n} of ${want} ${a[0]} wave jobs${of} after ${c.waitLimit}s` });
         await c.clock.sleep(5000);
       }
@@ -528,6 +586,77 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       if (!c.issues) throw new Error("plywood-e2e drift-issue needs the forge's issues");
       return say(c, driftIssueHolds(await c.issues(), { title: driftIssueTitle(`shop/${a[0]}`), name: a[1]!, attribute: a[2]! }));
     }
+    case "report": {
+      need(3);
+      if (!c.pullReport) throw new Error("plywood-e2e report needs the reports");
+      const [, stage, ...wants] = a;
+      if (stage !== "plan" && stage !== "apply") throw new Error(`report takes plan or apply, not ${stage}`);
+      const branch = armBranch(a[0]!, c.armEnv());
+      const deadline = c.clock.now() + Math.max(c.waitLimit - 30, 30) * 1000;
+      for (;;) {
+        const report = await c.pullReport(branch, stage);
+        const r: CheckResult = report === undefined ? { code: 1, line: `no pr-${stage}.json at the head of ${branch}` } : reportHolds(report, wants);
+        // A plan report stands once the driver read it; an apply report is written over by the next /plywood up.
+        if (r.code === 0 || stage === "plan" || c.clock.now() >= deadline) return say(c, r);
+        await c.clock.sleep(5000);
+      }
+    }
+    case "queue-retention":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, queueRetentionScript(a[0]!, a[1]!)));
+    case "override": {
+      need(4);
+      if (!c.pullReport) throw new Error("plywood-e2e override needs the reports");
+      const [, who, rule, ...reason] = a;
+      if (who !== "reviewer" && who !== "author") throw new Error(`override takes reviewer or author, not ${who}`);
+      const plan = (await c.pullReport(armBranch(a[0]!, c.armEnv()), "plan")) as { op?: string } | undefined;
+      if (!plan?.op) return say(c, { code: 1, line: `no plan report names ${a[0]}'s op` });
+      const person = c[who];
+      const line = `plywood override ${quote(plan.op)} --rule ${quote(rule!)} --reason ${quote(reason.join(" "))} --approver ${quote(person.login)}`;
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person }, withForgeLedger(line)));
+    }
+    case "overridden": {
+      need(2);
+      if (!c.pullReport || !c.ledger.overrides) throw new Error("plywood-e2e overridden needs the reports and the ledger");
+      const plan = (await c.pullReport(armBranch(a[0]!, c.armEnv()), "plan")) as { op?: string } | undefined;
+      if (!plan?.op) return say(c, { code: 1, line: `no plan report names ${a[0]}'s op` });
+      return say(c, overrideRecorded(await c.ledger.overrides(), { subject: plan.op, by: a[1]! }));
+    }
+    case "audit":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(auditScript(a[0]!, a.slice(1)))));
+    case "job-ledger":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(a.map(quote).join(" "))));
+    case "dora": {
+      need(1);
+      if (!c.report) throw new Error("plywood-e2e dora needs the reports");
+      const text = await c.report("estate/dora.json");
+      return say(c, doraCounts(text === null ? null : (JSON.parse(text) as Parameters<typeof doraCounts>[0]), await c.report("estate/estate.html"), Number(a[0])));
+    }
+    case "receiver": {
+      const [gone, start] = receiverArgv(c.jobImage);
+      await c.safe.run(gone!);
+      return c.safe.run(start!);
+    }
+    case "received": {
+      need(2);
+      // A wave job records its run before it sends its trace (op-waves-run.ts closeOpWaveEvents).
+      const deadline = c.clock.now() + 60_000;
+      for (;;) {
+        const code = await c.safe.run(receivedArgv(a));
+        if (code === 0 || c.clock.now() >= deadline) return code;
+        await c.clock.sleep(5000);
+      }
+    }
+    case "notify-drift-job": {
+      need(2);
+      const env = { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: c.author.token, PLYWOOD_E2E_HOOK_URL: `${RECEIVER_URL}/hook`, PLYWOOD_E2E_HOOK_KEY: a[1]! };
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, driftJobScript(a[0]!)));
+    }
+    case "mcp":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, mcpScript(a[0]!)));
     default:
       throw new Error(`plywood-e2e has no command ${name ?? "(none)"}; it takes ${Object.keys(COMMANDS).join(", ")}`);
   }

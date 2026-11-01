@@ -1,6 +1,6 @@
 # plywood
 
-Sophisticated automation for Pulumi.
+Pulumi ops and governance.
 
 Built on chant; can run plunge as its engine.
 

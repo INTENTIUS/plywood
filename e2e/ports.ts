@@ -460,7 +460,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     case "action": {
       need(2);
       const env = { PULUMI_BACKEND_URL: stockBackend(a[0]!) };
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, actionScript(a[0]!, a[1]!, c.author.login)));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, withForgeLedger(actionScript(a[0]!, a[1]!, c.author.login))));
     }
     case "approve-pending": {
       need(1);

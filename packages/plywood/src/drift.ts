@@ -93,7 +93,7 @@ export const DRIFT_STATUSES = ["drifted", "missing"] as const;
 
 /** The parts of chant's drift document plywood reads (`@intentius/chant/drift-record`). */
 export interface DriftDoc {
-  records?: Array<{ address: string; status: string; observedAt?: string; attributes?: Array<{ path: string }> }>;
+  records?: Array<{ address: string; status: string; observedAt?: string; attributes?: Array<{ path: string }>; unobserved?: { reason?: string; detail?: string } }>;
   counts?: Record<string, number>;
   error?: { code: string; message: string };
 }
@@ -351,6 +351,13 @@ async function readStack(chant: ChantProduct, stack: string, member: string, dir
     return { stack, ok: false, drifted: 0, rows: [], error: doc?.error ? `${doc.error.code}: ${doc.error.message}` : `chant workspace drift exited ${code}` };
   }
   const rows = driftRows(doc);
+  // A resource chant could not read is not one that matches: with nothing drifted, the stack's state is unknown.
+  const unread = (doc.records ?? []).filter((r) => r.status === "not-observed");
+  if (rows.length === 0 && unread.length > 0) {
+    const first = unread[0]!;
+    const why = first.unobserved?.detail ?? first.unobserved?.reason ?? "no reason given";
+    return { stack, ok: false, drifted: 0, rows: [], error: `${unread.length} resource${unread.length === 1 ? "" : "s"} could not be read, so the stack's drift is unknown: ${first.address}: ${why}` };
+  }
   const attribution = rows.length && opts.attribute ? await attributeStack(opts.attribute, stack, doc) : undefined;
   return { stack, ok: true, drifted: rows.length, rows, observedAt: observedAt(doc), ...(attribution ? { attribution } : {}) };
 }

@@ -1,0 +1,1 @@
+{"append": {"plywood.yml": "waves:\n  - [shop/prod-us]\n  - [shop/prod-eu]\n  - [shop/dev]\n  - [shop/staging]\ndrift:\n  schedule: \"0 6 * * *\"\n  stacks: [shop/prod-us]\nnotify:\n  webhook: { url: PLYWOOD_E2E_HOOK_URL, key: PLYWOOD_E2E_HOOK_KEY }\n  on: [drift]\n"}}

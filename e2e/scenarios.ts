@@ -36,6 +36,22 @@
  * rotate, which the seed adds to the shop program (./action.ts), with the
  * command provider from plywood's images.
  *
+ * plywood#60's scenarios, for the features plywood#59 lists with no recorded
+ * run. All run on Forgejo alone, and every one of them says so in its BREAK
+ * note. The job image has neither conftest nor opa, so the policy is
+ * plywood.yml's policy.command printing conftest's shape: no Rego runs here.
+ *
+ * | scenario           | claim                 | what the BREAK arm changes                         |
+ * |--------------------|-----------------------|----------------------------------------------------|
+ * | pw-policy-deny     | policy/denied-preview | the policy freezes a queue that does not exist     |
+ * | pw-policy-override | policy/override       | a person .chant/overriders does not list overrides |
+ * | pw-audit           | audit/approved-update | main's waves leave prod-us out                     |
+ * | pw-comment-up      | apply/comment-up      | main moves after the approval                      |
+ * | pw-notify          | notify/signed-webhook | the job signs with a key the receiver lacks        |
+ * | pw-traces          | telemetry/wave-trace  | telemetry.traces: false                            |
+ * | pw-estate          | estate/dora           | main's waves leave prod-us out                     |
+ * | pw-mcp             | mcp/read-only         | the server starts with --propose                   |
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -60,6 +76,14 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-canary": "wave/canary",
   "pw-drift": "drift/issue",
   "pw-action": "action/gated-replace",
+  "pw-policy-deny": "policy/denied-preview",
+  "pw-policy-override": "policy/override",
+  "pw-audit": "audit/approved-update",
+  "pw-comment-up": "apply/comment-up",
+  "pw-notify": "notify/signed-webhook",
+  "pw-traces": "telemetry/wave-trace",
+  "pw-estate": "estate/dora",
+  "pw-mcp": "mcp/read-only",
 };
 
 /** The scenario files in `dir`, by id. */

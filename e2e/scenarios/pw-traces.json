@@ -1,0 +1,129 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-traces",
+  "product": "plywood",
+  "claim": "telemetry/wave-trace",
+  "title": "A wave job sends an OTLP trace named plywood, with a span for the stack it updated (Forgejo only; the receiver is the bench's, not a collector)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "receiver",
+      "do": "out-of-band",
+      "label": "a receiver starts on the bench's network",
+      "command": [
+        "plywood-e2e",
+        "receiver"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "telemetry",
+      "do": "out-of-band",
+      "label": "main names the receiver as telemetry.endpoint",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_TELEMETRY:-telemetry-on}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/traces-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "events-merge",
+      "do": "merge",
+      "pull": "events"
+    },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's wave job settled prod-us",
+      "command": [
+        "plywood-e2e",
+        "wait-stacks",
+        "pulumi-up",
+        "prod-us"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "the update applied prod-us",
+      "command": [
+        "plywood-e2e",
+        "applied",
+        "pulumi-up",
+        "prod-us"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "trace",
+      "do": "out-of-band",
+      "label": "the receiver holds a trace of service plywood with a plywood.stack span for prod-us",
+      "command": [
+        "plywood-e2e",
+        "received",
+        "trace",
+        "plywood",
+        "prod-us"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_TELEMETRY": "telemetry-off"
+    },
+    "note": "telemetry.traces: false, so the wave job sends no trace and the trace step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

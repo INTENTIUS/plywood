@@ -1,0 +1,143 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-estate",
+  "product": "plywood",
+  "claim": "estate/dora",
+  "title": "plywood estate writes the estate page and dora.json counting an applied update, and sends the DORA gauges (Forgejo only; one week of one update, no rates judged)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "receiver",
+      "do": "out-of-band",
+      "label": "a receiver starts on the bench's network",
+      "command": [
+        "plywood-e2e",
+        "receiver"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "telemetry",
+      "do": "out-of-band",
+      "label": "main names the receiver as telemetry.endpoint",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_TELEMETRY:-telemetry-on}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/estate-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "events-merge",
+      "do": "merge",
+      "pull": "events"
+    },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's first wave job is on the ledger",
+      "command": [
+        "plywood-e2e",
+        "wait-runs",
+        "pulumi-up",
+        "1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "estate",
+      "do": "out-of-band",
+      "label": "plywood estate reads the ledger and writes under reports.url",
+      "command": [
+        "plywood-e2e",
+        "job-ledger",
+        "plywood",
+        "estate"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dora",
+      "do": "out-of-band",
+      "label": "dora.json counts the applied update, and the page is there",
+      "command": [
+        "plywood-e2e",
+        "dora",
+        "1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "gauges",
+      "do": "out-of-band",
+      "label": "the receiver holds the deployment gauge",
+      "command": [
+        "plywood-e2e",
+        "received",
+        "metric",
+        "plywood_dora_deployments_per_week"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_TELEMETRY": "telemetry-without-prod-us"
+    },
+    "note": "main's waves leave prod-us out, so the merge applies nothing, and dora.json counts no deployment: the dora step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

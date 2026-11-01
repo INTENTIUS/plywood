@@ -47,6 +47,7 @@ import {
 import { addRotateAction } from "./action";
 import type { HarnessModule, Person } from "./harness";
 import { jobArgv, sh } from "./ports";
+import { RECEIVER } from "./probes";
 import { makeBucket } from "./secure-bucket";
 
 export interface BenchState {
@@ -262,6 +263,8 @@ export async function resetCloud(c: SeedContext, st: BenchState): Promise<void> 
 
 /** Stop the stack and remove its volumes. The state directory stays. */
 export async function down(c: Pick<SeedContext, "state" | "log">): Promise<void> {
+  // The receiver is no compose service, and a container left on the network keeps compose from removing it.
+  await sh("docker", ["rm", "-f", RECEIVER]).catch(() => "");
   await compose(c.state, ["down", "--volumes", "--remove-orphans"]);
   c.log(`down; files under ${c.state} are kept`);
 }

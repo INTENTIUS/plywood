@@ -1,0 +1,116 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-comment-up",
+  "product": "plywood",
+  "claim": "apply/comment-up",
+  "title": "/plywood up on an approved pull request updates its head before merge, and only while the head holds main's tip (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "before-merge",
+      "do": "out-of-band",
+      "label": "main sets apply.when: pull-request with every apply.requires check",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "comment-up"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/comment-up-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "main",
+      "do": "out-of-band",
+      "label": "main stays where the pull request branched from: laying the same overlay again changes nothing",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_MAIN:-comment-up}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "up",
+      "do": "comment",
+      "pull": "events",
+      "body": "/plywood up",
+      "as": "author"
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "the comment's job applied the pull request's head",
+      "command": [
+        "plywood-e2e",
+        "report",
+        "e2e/comment-up-events",
+        "apply",
+        "status=applied"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "do": "out-of-band",
+      "label": "floci's queue has the new retention before any merge",
+      "command": [
+        "plywood-e2e",
+        "queue-retention",
+        "prod-us",
+        "7200"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_MAIN": "comment-up-main-moved"
+    },
+    "note": "main moves after the approval, so the head no longer holds its tip, the undiverged check is unmet, nothing applies, and the applied step must fail. On Forgejo any commenter can start the job; this does not test who may comment. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

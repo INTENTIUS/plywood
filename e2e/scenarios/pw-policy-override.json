@@ -1,0 +1,160 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-policy-override",
+  "product": "plywood",
+  "claim": "policy/override",
+  "title": "A listed person's reasoned override lets one denied change update, and the ledger keeps who, why and that it is spent (Forgejo only; policy.command, no Rego engine)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "policy",
+      "do": "out-of-band",
+      "label": "main sets apply.when: pull-request, a policy that freezes the events queue, and .chant/overriders listing reviewer",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "policy-frozen-events"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/policy-override-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "up-denied",
+      "do": "comment",
+      "pull": "events",
+      "body": "/plywood up",
+      "as": "author"
+    },
+    {
+      "id": "refused",
+      "do": "out-of-band",
+      "label": "the update job refused, which records the denial the override answers",
+      "command": [
+        "plywood-e2e",
+        "report",
+        "e2e/policy-override-events",
+        "apply",
+        "status=refused",
+        "refusal=policy-denied"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "override",
+      "do": "out-of-band",
+      "label": "a person overrides the denial with a reason",
+      "command": [
+        "plywood-e2e",
+        "override",
+        "e2e/policy-override-events",
+        "${PLYWOOD_E2E_OVERRIDER:-reviewer}",
+        "main.deny_frozen",
+        "e2e: the freeze does not cover this change"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "up-overridden",
+      "do": "comment",
+      "pull": "events",
+      "body": "/plywood up",
+      "as": "author"
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "the second update job applied the same plan",
+      "command": [
+        "plywood-e2e",
+        "report",
+        "e2e/policy-override-events",
+        "apply",
+        "status=applied"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "do": "out-of-band",
+      "label": "floci's queue has the new retention",
+      "command": [
+        "plywood-e2e",
+        "queue-retention",
+        "prod-us",
+        "7200"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "recorded",
+      "do": "out-of-band",
+      "label": "the ledger holds reviewer's override with its reason, and its applied record spends it",
+      "command": [
+        "plywood-e2e",
+        "overridden",
+        "e2e/policy-override-events",
+        "reviewer"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_OVERRIDER": "author"
+    },
+    "note": "The author, whom .chant/overriders at base does not list, records the override: it does not count, the second update job refuses again, and the applied step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+  }
+}

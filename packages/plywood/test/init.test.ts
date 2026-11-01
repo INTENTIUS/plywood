@@ -488,6 +488,12 @@ describe("flags, templates and pure parts", () => {
     expect(checkConfig(parseConfig(text)).filter((p) => p.severity === "error")).toEqual([]);
   });
 
+  it("holds a denied wave when Rego rules are configured (plywood#65)", () => {
+    const stacks = [{ key: "shop/dev", project: "shop", stack: "dev", dir: ".", backend: "file://" }] as never;
+    expect(wavesSpec({ stacks, gate: "never", branch: "main", policy: true })).toMatchObject({ holds: { policy: true } });
+    expect(wavesSpec({ stacks, gate: "never", branch: "main" })).not.toHaveProperty("holds");
+  });
+
   it("waves follow plywood.yml when it lists them, and a wave's gate is its strictest stack's", () => {
     const stacks = [
       { key: "a/dev", project: "a", stack: "dev", dir: "a" },

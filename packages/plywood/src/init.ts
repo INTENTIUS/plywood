@@ -509,7 +509,9 @@ async function preCommitStep(root: string, config: string, dryRun: boolean): Pro
 /** The waves spec with chant's names filled (chant `productWavesSpec`), else as plywood builds it. */
 async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>, forge: ForgeKind): Promise<Record<string, unknown>> {
   const runner = waveRunner(chantPipelineOptions(settings.pipeline, false).runner);
+  const rego = isObject(doc.policy) && (typeof doc.policy.rego === "string" || doc.policy.source !== undefined || doc.policy.command !== undefined);
   const base = wavesSpec({
+    ...(rego ? { policy: true } : {}),
     stacks,
     ordered,
     gate: gateOf(doc),

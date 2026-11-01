@@ -7,4 +7,6 @@ description: 'plywood override records a person''s reasoned approval of one deni
 npx plywood override shop/prod --rule main.deny_public_bucket --reason "retiring the old site bucket"
 ```
 
+A denial on a change names its own subject, such as `pr-7-shop`, so pass the one the denial prints in place of the stack.
+
 The override names the stack and each rule that denied it, with a reason. A Rego rule is `<package>.<rule>` and a CrossGuard policy is `crossguard.<pack>.<policy>`, as the denial lists them. The override binds the preview's digest and those rules. It is a row in the [chant workspace ledger](https://intentius.io/chant/cli/ledger/). Only a person listed in `.chant/overriders` at base, one per line, may record one that counts. Under `approval: sealed` it needs `--sign`. Each covers one preview, and the update spends it.

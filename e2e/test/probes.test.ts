@@ -132,7 +132,7 @@ describe("the policy overlays", () => {
 
   it("list reviewer as the one overrider, and pass plywood's config check", () => {
     expect(base("policy-frozen-events")[".chant/overriders"]).toBe("reviewer\n");
-    expect(readFileSync(join(BASE_OVERLAYS_DIR, "policy-frozen-events.json"), "utf8")).toContain("requires: [approved, mergeable, undiverged]");
+    expect(readFileSync(join(BASE_OVERLAYS_DIR, "policy-frozen-events.json"), "utf8")).not.toContain("requires:");
     const yml = readFileSync(join(import.meta.dirname, "..", "scenarios", "base", "plywood.yml"), "utf8");
     for (const name of ["policy-frozen-events", "comment-up", "notify-drift", "telemetry-on", "stock-without-prod-us"]) {
       const spec = readOverlay(BASE_OVERLAYS_DIR, name);

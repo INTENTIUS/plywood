@@ -110,6 +110,7 @@ describe("plywood-e2e commands", () => {
     expect(last(t.ran[0]!)).toContain("plywood audit 'runs' --json > /tmp/plywood-e2e-audit.json");
     expect(last(t.ran[0]!)).toContain("git fetch -q origin chant/lifecycle:chant/lifecycle");
     expect(auditScript("updates", ["a=b"])).toContain("/tmp/plywood-e2e-audit.json 'a=b'");
+    expect(auditScript("runs", ["a=b"], "2026-11-02T00:00:00.000Z")).toContain("plywood audit 'runs' --since '2026-11-02T00:00:00.000Z' --json");
   });
 
   it("job-ledger passes the words and dora reads what plywood estate wrote", async () => {

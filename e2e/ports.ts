@@ -391,9 +391,12 @@ export function queueRetentionScript(stack: string, seconds: string): string {
   return [`url=$(PULUMI_BACKEND_URL=${quote(stockBackend(stack))} pulumi stack output eventsQueueUrl --stack ${quote(stack)})`, 'test -n "$url"', read].join("\n");
 }
 
+/** When this arm last set main up: `audit` reads only what came after it, so a run from an earlier scenario cannot pass for this one. */
+let configuredAt: string | undefined;
+
 /** The script `audit` runs: `plywood audit <table> --json`, then a row that holds every path=value (./probes.ts ROWS_JS). */
-export function auditScript(table: string, wants: readonly string[]): string {
-  return [`plywood audit ${quote(table)} --json > /tmp/plywood-e2e-audit.json`, `node -e ${quote(ROWS_JS)} /tmp/plywood-e2e-audit.json ${wants.map(quote).join(" ")}`].join("\n");
+export function auditScript(table: string, wants: readonly string[], since?: string): string {
+  return [`plywood audit ${quote(table)}${since ? ` --since ${quote(since)}` : ""} --json > /tmp/plywood-e2e-audit.json`, `node -e ${quote(ROWS_JS)} /tmp/plywood-e2e-audit.json ${wants.map(quote).join(" ")}`].join("\n");
 }
 
 /** The script `mcp` runs in a clone of main: the stdio client over `plywood mcp`, with --propose for that tier. */
@@ -532,6 +535,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       need(1);
       if (!c.overlay || !c.admin) throw new Error("plywood-e2e configure needs the admin and the overlays");
       const files = Buffer.from(JSON.stringify(c.overlay(a[0]!, "base")), "utf8").toString("base64");
+      configuredAt = new Date(c.clock.now()).toISOString();
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.admin, env: { PLYWOOD_E2E_FILES: files } }, configureScript(a[0]!)));
     }
     case "push": {
@@ -624,7 +628,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     }
     case "audit":
       need(2);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(auditScript(a[0]!, a.slice(1)))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(auditScript(a[0]!, a.slice(1), configuredAt))));
     case "job-ledger":
       need(1);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(a.map(quote).join(" "))));

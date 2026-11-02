@@ -43,7 +43,7 @@ const CART_CLEAN: DriftDoc = { records: [{ address: "urn:pulumi:prod::cart::aws:
  * A fake chant that writes `docs[member]` where `workspace drift -o` asks, and records each call.
  * Like chant's command (workspace/drift-cli.ts), it takes a workspace member of the declaration
  * and refuses anything else with `member-required`; a stack key is not a member (plywood#50).
- * With `--stack` (chant 0.124.66) it reads that stack's export, and answers `no-drift-read`
+ * With `--stack` (chant 0.124.67) it reads that stack's export, and answers `no-drift-read`
  * naming the stack when `stored` lists the member's exports and the stack is not among them.
  */
 function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly string[] = ["shop", "cart"], stored: Record<string, readonly string[]> = {}) {

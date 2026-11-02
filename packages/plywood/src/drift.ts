@@ -210,7 +210,11 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     try {
       const attribute = await attributionFor(doc, io);
       const root = dirname(path);
-      for (const stack of stacks) results.push(await readStack(chant, stack, driftMember(root, doc, stack), dir, { resource: resource.value, env: envFlag.value, ...(attribute ? { attribute } : {}) }));
+      for (const stack of stacks) {
+        // The stack's own backend, as its pulumi-up step has: chant's read takes it from the environment.
+        const backend = stacksOf(doc)[stack]?.backend ?? (typeof doc.backend === "string" ? doc.backend : undefined);
+        results.push(await withBackend(backend, () => readStack(chant, stack, driftMember(root, doc, stack), dir, { resource: resource.value, env: envFlag.value, ...(attribute ? { attribute } : {}) })));
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -360,6 +364,19 @@ async function readStack(chant: ChantProduct, stack: string, member: string, dir
   }
   const attribution = rows.length && opts.attribute ? await attributeStack(opts.attribute, stack, doc) : undefined;
   return { stack, ok: true, drifted: rows.length, rows, observedAt: observedAt(doc), ...(attribution ? { attribution } : {}) };
+}
+
+/** Run `read` with PULUMI_BACKEND_URL set to `backend`, when there is one, and put it back after. */
+async function withBackend<T>(backend: string | undefined, read: () => Promise<T>): Promise<T> {
+  if (backend === undefined) return read();
+  const before = process.env.PULUMI_BACKEND_URL;
+  process.env.PULUMI_BACKEND_URL = backend;
+  try {
+    return await read();
+  } finally {
+    if (before === undefined) delete process.env.PULUMI_BACKEND_URL;
+    else process.env.PULUMI_BACKEND_URL = before;
+  }
 }
 
 /** chant's audit-log reads and drift.audit_log, for the attribution. */

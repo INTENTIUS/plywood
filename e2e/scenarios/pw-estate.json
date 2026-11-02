@@ -136,8 +136,8 @@
   "break": {
     "env": {
       "BREAK": "1",
-      "PLYWOOD_E2E_TELEMETRY": "telemetry-without-prod-us"
+      "PLYWOOD_E2E_TELEMETRY": "telemetry-none"
     },
-    "note": "main's waves leave prod-us out, so the merge applies nothing, and dora.json counts no deployment: the dora step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
+    "note": "main's plywood.yml names no telemetry endpoint, so nothing reaches the receiver: the gauges step must fail. dora.json is not the BREAK's target, because it counts the bench's earlier runs too. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' comment and status paths are not exercised."
   }
 }

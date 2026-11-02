@@ -197,6 +197,22 @@ describe("plywood drift", () => {
     expect(await drift(["--op", driftOpName("shop/dev")], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
   });
 
+  it("reads a stack on its own backend, and puts the environment back", async () => {
+    const yml = "stacks:\n  shop/dev:\n    dir: .\n    backend: s3://own-store\n";
+    const chant = fakeChant({ shop: { records: [] } });
+    const run = chant.api.runChantInProcess;
+    let seen: string | undefined;
+    chant.api.runChantInProcess = async (...args) => {
+      seen = process.env.PULUMI_BACKEND_URL;
+      return run(...args);
+    };
+    setChantProductForTests(chant.api);
+    const before = process.env.PULUMI_BACKEND_URL;
+    await drift(["shop/dev"], false, FALLBACK_EXIT, io(repo(yml)));
+    expect(seen).toBe("s3://own-store");
+    expect(process.env.PULUMI_BACKEND_URL).toBe(before);
+  });
+
   it("with respond up, updates the waves holding the drifted stacks", () => {
     const doc = parseConfig("waves: [[shop/dev], [shop/prod]]\n").doc;
     expect(wavesHolding(doc, ["shop/prod"])).toEqual([2]);

@@ -166,7 +166,7 @@ describe("the scenarios' BREAK arms", () => {
       ["pw-comment-up", "PLYWOOD_E2E_MAIN", "comment-up-main-moved"],
       ["pw-notify", "PLYWOOD_E2E_SIGNING_KEY", "another-key"],
       ["pw-traces", "PLYWOOD_E2E_TELEMETRY", "telemetry-off"],
-      ["pw-estate", "PLYWOOD_E2E_TELEMETRY", "telemetry-without-prod-us"],
+      ["pw-estate", "PLYWOOD_E2E_TELEMETRY", "telemetry-none"],
     ];
     for (const [id, key, value] of cases) {
       const s = readScenario(id);

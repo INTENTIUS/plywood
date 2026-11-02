@@ -1,5 +1,5 @@
 /**
- * chant 0.124.65's `approvals.preview` (plywood#52): a merged wave applies the
+ * chant 0.124.66's `approvals.preview` (plywood#52): a merged wave applies the
  * plans its pull request previewed, or exits 4. Off by default since 0.3.1
  * (plywood#55, plywood#56); `preview: true` in plywood.yml turns it on. The pull request workflow
  * records the plans (`run wave --record-plans`), and the wave job reads the

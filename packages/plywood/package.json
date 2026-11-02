@@ -34,10 +34,10 @@
     "prepack": "node scripts/build-cli.mjs"
   },
   "dependencies": {
-    "@intentius/chant": "0.124.65",
-    "@intentius/chant-lexicon-forgejo": "0.124.65",
-    "@intentius/chant-lexicon-github": "0.124.65",
-    "@intentius/chant-lexicon-gitlab": "0.124.65",
-    "@intentius/chant-lexicon-pulumi": "0.124.65"
+    "@intentius/chant": "0.124.66",
+    "@intentius/chant-lexicon-forgejo": "0.124.66",
+    "@intentius/chant-lexicon-github": "0.124.66",
+    "@intentius/chant-lexicon-gitlab": "0.124.66",
+    "@intentius/chant-lexicon-pulumi": "0.124.66"
   }
 }

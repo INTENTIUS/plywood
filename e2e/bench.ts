@@ -3,7 +3,9 @@
  * F): the names, ports, backends and job environment the seed, the driver
  * and the tutorial pages share.
  *
- * The stack is the harness's (`harnessStack`): floci at the harness's pin,
+ * The stack is the harness's (`harnessStack`): floci on the harness's other
+ * line, FLOCI_CHANGE_SET_IMAGE (63d8f1ed), which keeps SNS tags (plywood#53;
+ * the maintainer's ruling of 2026-11-02),
  * Forgejo and forgejo-runner on one network. plywood keeps the project name,
  * the port variables and the default ports of its own bench in stack/, so
  * the tutorial pages read the same on both: Forgejo on 127.0.0.1:3390 and
@@ -74,8 +76,13 @@ export const REPORT_URL = `s3://${BUCKETS.reports}/shop`;
 export const PASSPHRASE = "plywood-tutorial";
 
 /** The bench's stack, from the harness. */
-export function benchStack(h: Pick<HarnessModule, "harnessStack">): HarnessStackShape {
-  return h.harnessStack({ project: PROJECT, envPrefix: ENV_PREFIX, ports: { ...PORTS } });
+export function benchStack(h: Pick<HarnessModule, "harnessStack" | "FLOCI_CHANGE_SET_IMAGE">): HarnessStackShape {
+  return h.harnessStack({ project: PROJECT, envPrefix: ENV_PREFIX, ports: { ...PORTS }, flociImage: h.FLOCI_CHANGE_SET_IMAGE });
+}
+
+/** The floci build the bench runs, by digest, which each claim row names. */
+export function benchFlociDigest(h: Pick<HarnessModule, "FLOCI_CHANGE_SET_DIGEST">): string {
+  return h.FLOCI_CHANGE_SET_DIGEST;
 }
 
 /** Host URLs, after the port variables. */

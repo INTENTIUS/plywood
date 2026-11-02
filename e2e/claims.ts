@@ -10,6 +10,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { appendRunRecord, readRunLedger } from "@intentius/chant/lifecycle/run-ledger";
 import type { ClaimRow, ClaimRun, ClaimsDoc, HarnessModule, LedgerRecord, Scenario, SafeRunInstance } from "./harness";
+import { benchFlociDigest } from "./bench";
 import { writeEvidence } from "./evidence";
 import { sh } from "./ports";
 
@@ -37,7 +38,7 @@ export async function recordAndRender(o: {
   scanDirs?: string[];
 }): Promise<{ row: ClaimRow; doc: ClaimsDoc }> {
   const verdict = o.safe.scan(o.scanDirs);
-  const row = o.h.claimRow({ scenario: o.scenario, productCommit: o.productCommit, engine: o.engine, verdicts: o.run.verdicts, at: new Date(), floci: o.h.FLOCI_DIGEST, chant: o.chant });
+  const row = o.h.claimRow({ scenario: o.scenario, productCommit: o.productCommit, engine: o.engine, verdicts: o.run.verdicts, at: new Date(), floci: benchFlociDigest(o.h), chant: o.chant });
   const ledger = claimsLedger(o.state);
   await ensureLedger(ledger);
   // recordClaimRow throws on a scan that was not CLEAN, and nothing is written.

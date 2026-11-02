@@ -30,11 +30,11 @@ volumes:
     name: plywood-tutorial-runner-data
 
 services:
-  # The floci build choudoufu pins in live/floci-image, the same digest the
-  # plunge corpus records in tests/plunge-corpus/emulator-images, so the
-  # tutorial runs against the emulator the corpus baseline was recorded on.
+  # The harness's other floci line, FLOCI_CHANGE_SET_IMAGE (63d8f1ed), which
+  # keeps SNS tags, as the e2e bench runs it (plywood#53; the maintainer's
+  # ruling of 2026-11-02).
   floci:
-    image: ghcr.io/lex00/floci@sha256:5ec92ae8046445d62c0009590dd09f04560886e5a5ef31248cb3fcc09b2961ec
+    image: ghcr.io/lex00/floci@sha256:63d8f1ed5ef595d7356c6f76318f3d76bc31ce3250cdf2dd8d14bd4d59604b8d
     container_name: plywood-tutorial-floci
     ports:
       - "127.0.0.1:${PLYWOOD_TUTORIAL_FLOCI_PORT:-4590}:4566"

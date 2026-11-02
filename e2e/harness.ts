@@ -39,6 +39,7 @@ export interface HarnessStackOptions {
   ports?: Partial<Record<"floci" | "forgejo" | "clickhouse" | "postgres", number>>;
   bind?: string | null;
   forgejoActions?: boolean;
+  flociImage?: string;
 }
 
 /** A run record on chant's ledger, the fields the bench reads (chant `OpRunRecord`). */
@@ -228,6 +229,8 @@ export interface HarnessModule {
   E2E_HARNESS_FLOOR: string;
   FLOCI_DIGEST: string;
   FLOCI_IMAGE: string;
+  FLOCI_CHANGE_SET_DIGEST: string;
+  FLOCI_CHANGE_SET_IMAGE: string;
   E2E_CLAIMS_SCHEMA: string;
   CLAIM_OP: string;
   HARNESS_HOSTS: { floci: string; forgejo: string };

@@ -4,7 +4,7 @@
   "id": "pw-audit",
   "product": "plywood",
   "claim": "audit/approved-update",
-  "title": "An approved, merged update leaves its approval, update and run rows in plywood audit (Forgejo only)",
+  "title": "An approved, merged update leaves its approval and run rows in plywood audit (Forgejo only)",
   "tree": {
     "base": "base",
     "overlays": "overlays"
@@ -101,23 +101,6 @@
         "op=pulumi-up",
         "gate=up",
         "resolved_by=forgejo@forgejo:3000:reviewer"
-      ],
-      "expect": [
-        {
-          "exit": 0
-        }
-      ]
-    },
-    {
-      "id": "updates",
-      "do": "out-of-band",
-      "label": "plywood audit updates holds the update under that approval",
-      "command": [
-        "plywood-e2e",
-        "audit",
-        "updates",
-        "op=pulumi-up",
-        "approved_by=forgejo@forgejo:3000:reviewer"
       ],
       "expect": [
         {

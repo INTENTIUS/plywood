@@ -173,7 +173,7 @@ describe("pw-adopt", () => {
 describe("the recorded rows", () => {
   // plywood#60's scenarios have no run yet, and EVIDENCE.md is rendered from the bench, so `just e2e render` adds them.
   // Once it does, the second expect below fails until this list is empty.
-  const NOT_RENDERED_YET = ["pw-audit", "pw-comment-up", "pw-estate", "pw-mcp", "pw-notify", "pw-policy-deny", "pw-policy-override", "pw-traces"];
+  const NOT_RENDERED_YET: string[] = [];
 
   it("lists every scenario and plunge feature on EVIDENCE.md", () => {
     const page = readFileSync(join(ROOT, "EVIDENCE.md"), "utf8");

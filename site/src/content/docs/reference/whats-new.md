@@ -5,6 +5,18 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.2
+
+plywood now pins chant 0.124.67, which fixes the refusal 0.3.1 worked around for disjoint merges: with `approvals.preview` on, a wave compares the plans it makes against the recorded ones without plunge's refresh steps, which had made unchanged plans look moved. chant also refuses a change that Rego or CrossGuard denies as policy-denied before it can merge.
+
+With Rego rules in `plywood.yml`, `plywood init` adds `holds.policy` to the waves spec. Each wave then holds any run the rules deny. Run `plywood init` again to pick this up.
+
+`plywood drift` reads each stack on the backend `plywood.yml` sets for it, not the job's. A stack with resources chant could not read now fails with the first one and its reason, where it used to report that the stack matches.
+
+When a denial on a pull request prints its own subject, such as `pr-7-shop`, pass that subject to `plywood override` in place of the stack.
+
+The package names `plywood-pulumi:0.3.2-pulumi3.272.0` and `plywood-plunge:0.3.2-plunge0.2.0` on `ghcr.io/intentius` by digest.
+
 ## In 0.3.1
 
 `plywood init` no longer sets `approvals.preview` in the waves spec, so a merged wave applies as it did before 0.3.0, and the wave jobs carry no forge token. Two bugs found on the 0.3.0 scenario runs make the setting unsafe as a default. With it on, the second of two merges that change different resources of one stack is refused with exit 4, and so is any pull request that creates an autonamed resource. chant is fixing both, and the default goes back to on afterward.

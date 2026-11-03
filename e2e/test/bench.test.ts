@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BUCKETS, FLOCI_NET, JOB_IMAGE, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
+import { BUCKETS, FLOCI_IMAGE, FLOCI_NET, JOB_IMAGE, PORTS, PROJECT, composeDoc, hostUrls, jobEnv, jobImageDockerfile, plungeStoreUrl } from "../bench";
 import { harness, setHarnessForTests, type HarnessStackShape } from "../harness";
 import { bucketCalls, makeBucket, type Fetch } from "../secure-bucket";
 import { setYamlKeys, overlayFiles } from "../overlays";
@@ -50,6 +50,11 @@ describe("the bench's stack", () => {
     const compose = readFileSync(join(ROOT, "stack", "compose.yml"), "utf8");
     expect(compose).toContain("PLYWOOD_TUTORIAL_FLOCI_PORT:-4590");
     expect(compose).toContain("PLYWOOD_TUTORIAL_FORGEJO_PORT:-3390");
+  });
+
+  it("runs plywood's floci pin on both benches", () => {
+    expect(FLOCI_IMAGE).toMatch(/^ghcr\.io\/lex00\/floci@sha256:[0-9a-f]{64}$/);
+    expect(readFileSync(join(ROOT, "stack", "compose.yml"), "utf8")).toContain(`image: ${FLOCI_IMAGE}\n`);
   });
 
   it("gives every job a file:// backend, no update check, floci and plunge's lister at floci", () => {

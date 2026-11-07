@@ -22,7 +22,6 @@ import { mcp } from "./agents";
 import { drift } from "./drift";
 import { estate } from "./estate";
 import { notify } from "./notify";
-import { useChantPolicySource } from "./config/policy";
 import { guard } from "./guard";
 import { configIdentities, forgeCheck } from "./identities";
 import { control } from "./control";
@@ -158,8 +157,6 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   }
   // chant's verified install lines, when the installed pulumi lexicon has them (chant#4592); the config translation is synchronous.
   await useChantInstallLines();
-  // Whether chant reads ci.policy.source and ci.policy.packs (chant#4613); the config check and translation read it.
-  await useChantPolicySource();
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
   if (verb !== "config" && verb !== "init" && verb !== "tips" && verb !== "upgrade") await applyTelemetry(stageIo.cwd, stageIo.env);

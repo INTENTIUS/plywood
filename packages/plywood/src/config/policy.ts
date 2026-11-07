@@ -26,13 +26,12 @@
  * `crossguard.<pack>.<policy>`, the id `plywood override --rule` takes.
  * Either kind of denial exits with chant's `denied` code, 7.
  *
- * `source` and `ci.policy.packs` need chant's policy source
- * (`@intentius/chant/policy-source`, `CI_POLICY_SOURCE_FLOOR`). The config
- * translation is synchronous, so the CLI awaits {@link useChantPolicySource}
- * once before a command. On a chant without it (older than the pinned 0.124.58) `source`
- * is refused as before and packs ride in the step input alone.
+ * `source` is chant's policy source (`@intentius/chant/policy-source`,
+ * chant#4613): chant checks it (`assertGatePolicySource`) and fetches it at
+ * the ref the base names, and `ci.policy.packs` lists the packs.
  */
 import { posix } from "node:path";
+import { assertGatePolicySource } from "@intentius/chant/policy-source";
 import { error, isObject, oneOf, onlyKeys, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 
 /** chant's result shapes (`GATE_POLICY_ENGINES`, @intentius/chant/gate-policy). */
@@ -41,50 +40,12 @@ export type PolicyEngine = (typeof POLICY_ENGINES)[number];
 
 export const POLICY_KEYS = ["rego", "engine", "namespace", "command", "packs", "source", "providers"] as const;
 export const PACK_KEYS = ["dir", "config"] as const;
-export const SOURCE_KEYS = ["repo", "ref", "path"] as const;
-
-/** chant's accepted repository forms for `ci.policy.source.repo` (policy-source.ts). */
-const SOURCE_REPO = /^(https?:\/\/[^\s/]+\/\S+|ssh:\/\/[^\s/]+\/\S+|file:\/\/\/?\S+|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:\S+)$/;
-const SOURCE_REF = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
-
-let policySource = false;
-let policySourceLoading: Promise<boolean> | undefined;
-
-/** True when the installed chant reads `ci.policy.source` and `ci.policy.packs` (chant#4613). */
-export function useChantPolicySource(): Promise<boolean> {
-  policySourceLoading ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4613).
-      const m: Record<string, unknown> = await import("@intentius/chant/policy-source");
-      policySource = typeof m.CI_POLICY_SOURCE_FLOOR === "string" && typeof m.assertGatePolicySource === "function";
-    } catch {
-      policySource = false;
-    }
-    return policySource;
-  })();
-  return policySourceLoading;
-}
-
-/** Whether {@link useChantPolicySource} found chant's policy source. */
-export function chantHasPolicySource(): boolean {
-  return policySource;
-}
-
-/** Tests say whether chant has the policy source. `reset` forgets it and the import. */
-export function setChantPolicySourceForTests(has: boolean | "reset"): void {
-  policySource = has === true;
-  policySourceLoading = has === "reset" ? undefined : Promise.resolve(has === true);
-}
 
 /** Keys a reader of terragucci's `policy` or Pulumi Deployments may reach for, and why plywood has none. */
 const NO_SUCH_KEY: Readonly<Record<string, string>> = {
   allow_unattended: "chant's gate denies and holds only; a non-empty change always waits for a person, so there is no unattended outcome",
   outcomes: "a Rego rule's name sets its outcome: deny_* denies, hold_* holds, warn_* is a note line",
 };
-
-/** Why `policy.source` is refused on a chant without chant#4613. */
-const SOURCE_NEEDS_CHANT =
-  "is a shared policy source from a git ref, which needs chant >= the release after 0.124.54 (chant#4613's ci.policy.source); on this chant, vendor the rules into the repository, where they are read at base";
 
 /** chant's `ci.policy.source` (`GatePolicySource`, chant#4613). */
 export interface ChantPolicySource {
@@ -162,19 +123,14 @@ export function policySourceOf(doc: RawConfig): ChantPolicySource | undefined {
   return { repo: src.repo, ref: src.ref, ...(typeof src.path === "string" ? { path: cleanPath(src.path) } : {}) };
 }
 
-/**
- * chant's `ci.policy` for plywood.yml's policy keys, or undefined when it
- * sets none. `chantReadsSource` (default: what {@link useChantPolicySource}
- * found) adds `source` and lists the packs in `packs`; without it the packs
- * ride in each step's input alone.
- */
-export function chantPolicyOf(doc: RawConfig, chantReadsSource = chantHasPolicySource()): ChantPolicySettings | undefined {
+/** chant's `ci.policy` for plywood.yml's policy keys, or undefined when it sets none: `source`, and the packs in `packs`. */
+export function chantPolicyOf(doc: RawConfig): ChantPolicySettings | undefined {
   const p = doc.policy;
   if (!isObject(p)) return undefined;
   const rego = typeof p.rego === "string" ? cleanPath(p.rego) : undefined;
   const command = Array.isArray(p.command) ? (p.command as string[]) : undefined;
-  const source = chantReadsSource ? policySourceOf(doc) : undefined;
-  const packs = chantReadsSource ? policyPacksOf(doc) : [];
+  const source = policySourceOf(doc);
+  const packs = policyPacksOf(doc);
   if (rego === undefined && command === undefined && p.engine === undefined && p.namespace === undefined && !source && packs.length === 0) return undefined;
   return {
     ...(typeof p.engine === "string" ? { engine: p.engine as PolicyEngine } : {}),
@@ -192,8 +148,8 @@ export function chantPolicyOf(doc: RawConfig, chantReadsSource = chantHasPolicyS
  * alone; otherwise the step carries them too (chant reads a pack listed in
  * both once, from base).
  */
-export function stepPolicyPacksOf(doc: RawConfig, chantReadsSource = chantHasPolicySource()): PolicyPack[] {
-  return chantReadsSource && policySourceOf(doc) ? [] : policyPacksOf(doc);
+export function stepPolicyPacksOf(doc: RawConfig): PolicyPack[] {
+  return policySourceOf(doc) ? [] : policyPacksOf(doc);
 }
 
 export const policy: ConfigGroup = {
@@ -213,7 +169,7 @@ export const policy: ConfigGroup = {
           type: "object",
           additionalProperties: false,
           required: ["repo", "ref"],
-          description: "A shared rule set from a git ref, fetched by the job at the ref the base names (chant >= the release after 0.124.54). packs are then paths inside it.",
+          description: "A shared rule set from a git ref, fetched by the job at the ref the base names. packs are then paths inside it.",
           properties: {
             repo: { type: "string", description: "The repository: https://, ssh:// or file:// URL, or git@<host>:<path>." },
             ref: { type: "string", description: "A tag, a branch or a full commit." },
@@ -254,17 +210,15 @@ export const policy: ConfigGroup = {
     const out: ConfigProblem[] = [];
     for (const k of Object.keys(p)) if (k in NO_SUCH_KEY) out.push(error(`policy.${k}`, `is not a plywood key: ${NO_SUCH_KEY[k]}`));
     if (p.source !== undefined) {
-      if (!chantHasPolicySource()) out.push(error("policy.source", SOURCE_NEEDS_CHANT));
-      else if (!isObject(p.source)) out.push(error("policy.source", "is { repo, ref, path }"));
-      else {
-        const src = p.source;
-        out.push(...onlyKeys(src, SOURCE_KEYS, "policy.source"));
-        if (typeof src.repo !== "string" || !SOURCE_REPO.test(src.repo) || src.repo.startsWith("-")) out.push(error("policy.source.repo", "is a git URL: https://, ssh://, file:// or git@<host>:<path>"));
-        if (typeof src.ref !== "string" || !SOURCE_REF.test(src.ref) || src.ref.includes("..") || src.ref.endsWith("/")) out.push(error("policy.source.ref", "is a tag, a branch or a commit"));
-        if (src.path !== undefined) out.push(...repoPath(src.path, "policy.source.path"));
-        // chant takes the Rego directory from the source's path, so a workspace directory beside it would be read nowhere.
-        if (p.rego !== undefined) out.push(error("policy.rego", "goes with no policy.source: with a source, policy.source.path names the Rego directory inside it"));
+      // chant's own check (chant#4613), its message keyed by the setting it names.
+      try {
+        assertGatePolicySource("policy.source", p.source);
+      } catch (e) {
+        const m = /^(\S+) (.*)$/.exec((e as Error).message);
+        out.push(error(m?.[1] ?? "policy.source", m?.[2] ?? (e as Error).message));
       }
+      // chant takes the Rego directory from the source's path, so a workspace directory beside it would be read nowhere.
+      if (p.rego !== undefined) out.push(error("policy.rego", "goes with no policy.source: with a source, policy.source.path names the Rego directory inside it"));
     }
     out.push(...onlyKeys(Object.fromEntries(Object.entries(p).filter(([k]) => !(k in NO_SUCH_KEY))), POLICY_KEYS, "policy"));
     if (p.rego !== undefined) out.push(...repoPath(p.rego, "policy.rego"));

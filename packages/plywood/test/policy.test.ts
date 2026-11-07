@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { packsForStack, policyPacksOf, setChantPolicySourceForTests } from "../src/config/policy";
+import { packsForStack, policyPacksOf } from "../src/config/policy";
 import { FALLBACK_EXIT } from "../src/exit-codes";
 import { componentsFile, stepInput } from "../src/init/render";
 import { refusalLine, refusalOf } from "../src/refusals";
@@ -15,14 +15,15 @@ const errors = (text: string) => checkConfig(parseConfig(text)).filter((p) => p.
 describe("policy in plywood.yml", () => {
   it("turns rego into chant's ci.policy and packs into the pipeline", () => {
     const s = toChantSettings(parseConfig("policy:\n  rego: policy/\n  engine: opa\n  namespace: plywood\n  packs: [policy/aws-guard, { dir: ./policy/tags, config: policy/tags.json }]\n"));
-    expect(s.ci.policy).toEqual({ engine: "opa", path: "policy", namespace: "plywood" });
+    // chant reads the packs at base from ci.policy.packs, so a pull request cannot drop them (chant#4613).
+    expect(s.ci.policy).toEqual({ engine: "opa", path: "policy", namespace: "plywood", packs: [{ dir: "policy/aws-guard" }, { dir: "policy/tags", config: "policy/tags.json" }] });
     expect(s.pipeline.policyPacks).toEqual([{ dir: "policy/aws-guard" }, { dir: "policy/tags", config: "policy/tags.json" }]);
   });
 
   it("sets nothing when policy is absent, and only packs when only packs are listed", () => {
     expect(toChantSettings(parseConfig("")).ci.policy).toBeUndefined();
     const s = toChantSettings(parseConfig("policy: { packs: [guard] }"));
-    expect(s.ci.policy).toBeUndefined();
+    expect(s.ci.policy).toEqual({ packs: [{ dir: "guard" }] });
     expect(s.pipeline.policyPacks).toEqual([{ dir: "guard" }]);
   });
 
@@ -32,14 +33,6 @@ describe("policy in plywood.yml", () => {
       expect(found.map((p) => p.key)).toEqual([`policy.${key}`]);
       expect(found[0]!.message).toContain("is not a plywood key");
     }
-  });
-
-  it("refuses a git-ref source on a chant without chant#4613's ci.policy.source", () => {
-    setChantPolicySourceForTests(false);
-    const found = errors("policy: { source: { repo: https://git.acme.internal/policy.git, ref: v1 } }");
-    expect(found.map((p) => p.key)).toEqual(["policy.source"]);
-    expect(found[0]!.message).toContain("chant#4613");
-    setChantPolicySourceForTests("reset");
   });
 
   it("refuses paths outside the repository, a command without {input}, an unknown engine and a pack listed twice", () => {

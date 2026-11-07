@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { toChantSettings } from "../src/chant-config";
 import { chantNotifyOf, notifyForChant } from "../src/config/observe";
-import { chantPolicyOf, setChantPolicySourceForTests, stepPolicyPacksOf } from "../src/config/policy";
+import { chantPolicyOf, stepPolicyPacksOf } from "../src/config/policy";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { estate, estateSchedules, setChantEstateForTests, type ChantEstate } from "../src/estate";
 import { FALLBACK_EXIT } from "../src/exit-codes";
@@ -41,7 +41,6 @@ afterEach(() => {
   setChantForgeCheckForTests("reset");
   setChantEstateForTests("reset");
   setChantProductForTests("reset");
-  setChantPolicySourceForTests("reset");
 });
 
 const IDENTITY_YML = [
@@ -239,7 +238,6 @@ describe("policy.source and ci.policy.packs on chant#4613", () => {
   const SHARED = "policy:\n  source: { repo: \"https://git.acme.internal/policy.git\", ref: v3, path: rego }\n  packs: [guard]\n";
 
   it("maps policy.source onto ci.policy.source, and the packs into ci.policy.packs read from it", () => {
-    setChantPolicySourceForTests(true);
     expect(errors(SHARED)).toEqual([]);
     const s = toChantSettings(parseConfig(SHARED));
     expect(s.ci.policy).toEqual({ source: { repo: "https://git.acme.internal/policy.git", ref: "v3", path: "rego" }, packs: [{ dir: "guard" }] });
@@ -248,26 +246,22 @@ describe("policy.source and ci.policy.packs on chant#4613", () => {
   });
 
   it("lists the repository's packs in ci.policy.packs too, so a pull request cannot drop them", () => {
-    setChantPolicySourceForTests(true);
     const s = toChantSettings(parseConfig("policy:\n  rego: policy\n  packs: [policy/aws-guard, { dir: policy/tags, config: policy/tags.json }]\n"));
     expect(s.ci.policy).toEqual({ path: "policy", packs: [{ dir: "policy/aws-guard" }, { dir: "policy/tags", config: "policy/tags.json" }] });
     expect(s.pipeline.policyPacks).toEqual([{ dir: "policy/aws-guard" }, { dir: "policy/tags", config: "policy/tags.json" }]);
   });
 
   it("refuses a bad repo or ref, an unknown key, and rego beside a source", () => {
-    setChantPolicySourceForTests(true);
     expect(errors("policy: { source: { repo: \"--upload-pack=x\", ref: v1 } }").map((p) => p.key)).toEqual(["policy.source.repo"]);
     expect(errors("policy: { source: { repo: \"git@git.acme.internal:policy.git\", ref: \"a..b\" } }").map((p) => p.key)).toEqual(["policy.source.ref"]);
     expect(errors("policy: { source: { repo: \"file:///srv/policy.git\", ref: main, depth: 1 } }").map((p) => p.key)).toContain("policy.source.depth");
     expect(errors("policy: { rego: policy, source: { repo: \"file:///srv/policy.git\", ref: main } }").map((p) => p.key)).toEqual(["policy.rego"]);
   });
 
-  it("keeps today's translation on a chant without the policy source", () => {
-    setChantPolicySourceForTests(false);
+  it("passes the packs in the step input when there is no shared source", () => {
     const doc = parseConfig("policy: { rego: policy, packs: [guard] }").doc;
-    expect(chantPolicyOf(doc)).toEqual({ path: "policy" });
+    expect(chantPolicyOf(doc)).toEqual({ path: "policy", packs: [{ dir: "guard" }] });
     expect(stepPolicyPacksOf(doc)).toEqual([{ dir: "guard" }]);
-    expect(errors(SHARED).map((p) => p.key)).toEqual(["policy.source"]);
   });
 });
 

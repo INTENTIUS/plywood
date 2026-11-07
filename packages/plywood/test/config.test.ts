@@ -35,7 +35,7 @@ describe("plywood.yml", () => {
     const config = parseConfig(text);
     expect(errors(text)).toEqual([]);
     expect(toChantSettings(config)).toEqual({
-      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", policy: { path: "policy" } },
+      ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan", policy: { path: "policy", packs: [{ dir: "policy/aws-guard" }] } },
       members: [
         { name: "shop/dev", dir: "infra" },
         { name: "shop/prod-us", dir: "infra" },

@@ -14,9 +14,7 @@
  * metrics endpoint is set. Without one it prints the estate and writes
  * nothing.
  *
- * The subpath is imported on first use. A chant without it (one older than the
- * pinned 0.124.59) says so and exits with chant's `failed` code; `plywood audit` reads
- * the same ledger tables there.
+ * The subpath is imported on first use.
  */
 import { dirname } from "node:path";
 import { chantProduct } from "./chant-product";
@@ -48,34 +46,22 @@ export interface ChantEstate {
   reportPut(target: unknown): unknown;
 }
 
-let estateModule: Promise<ChantEstate | undefined> | undefined;
+let estateModule: Promise<ChantEstate> | undefined;
 
-/** chant's estate, or undefined when the installed chant lacks `@intentius/chant/ci-estate`. */
-export function chantEstate(): Promise<ChantEstate | undefined> {
+/** chant's estate (`@intentius/chant/ci-estate`, chant#4612) and report store, imported on first use. */
+export function chantEstate(): Promise<ChantEstate> {
   estateModule ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4612).
-      const m: Record<string, unknown> = await import("@intentius/chant/ci-estate");
-      const r: Record<string, unknown> = await import("@intentius/chant/pr-report-url");
-      if (!["readEstateLedger", "buildLedgerEstate", "writeEstate"].every((f) => typeof m[f] === "function")) return undefined;
-      if (typeof r.parseReportUrl !== "function" || typeof r.reportPut !== "function") return undefined;
-      return { ...m, parseReportUrl: r.parseReportUrl, reportPut: r.reportPut } as unknown as ChantEstate;
-    } catch {
-      return undefined;
-    }
+    const m = await import("@intentius/chant/ci-estate");
+    const r = await import("@intentius/chant/pr-report-url");
+    return { readEstateLedger: m.readEstateLedger, buildLedgerEstate: m.buildLedgerEstate, writeEstate: m.writeEstate, parseReportUrl: r.parseReportUrl, reportPut: r.reportPut } as unknown as ChantEstate;
   })();
   return estateModule;
 }
 
-/** Tests stand in a fake chant estate (or none, for the fallback). `reset` goes back to the real import. */
-export function setChantEstateForTests(fake: ChantEstate | undefined | "reset"): void {
+/** Tests stand in a fake chant estate. `reset` goes back to the real import. */
+export function setChantEstateForTests(fake: ChantEstate | "reset"): void {
   estateModule = fake === "reset" ? undefined : Promise.resolve(fake);
 }
-
-/** The message `plywood estate` prints on a chant without the estate. */
-export const ESTATE_NEEDS_CHANT =
-  `${PRODUCT} estate needs chant >= the release after 0.124.54, which carries @intentius/chant/ci-estate (chant#4612). ` +
-  `Run '${PRODUCT} audit' for the ledger's rows on this chant.`;
 
 /** The drift Ops plywood ci writes, and their schedule, for chant to judge. */
 export function estateSchedules(config: PlywoodConfig): { schedules: EstateSchedule[]; driftOps: string[] } {
@@ -98,11 +84,6 @@ export async function estate(args: string[], json: boolean, table: ExitTable, io
   }
   if (rest.length) return usage(`estate does not take ${rest.join(" ")}`, table, io);
   const chant = await chantEstate();
-  if (!chant) {
-    if (json) io.out(JSON.stringify({ command: "estate", ok: false, exitCode: table.failed, error: ESTATE_NEEDS_CHANT }));
-    else io.err(`${PRODUCT}: ${ESTATE_NEEDS_CHANT}`);
-    return table.failed;
-  }
   const path = flags["--file"] ?? findConfig(io.cwd);
   let config: PlywoodConfig | undefined;
   if (path) {

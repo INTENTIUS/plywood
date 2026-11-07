@@ -50,7 +50,6 @@ import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
 import { identityClouds, pulumiCloudOf } from "./config/identity";
-import { notifyForChant } from "./config/observe";
 import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyPacksOf } from "./config/policy";
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
 import { gateOf, previewOf } from "./config/approval";
@@ -518,8 +517,7 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
     branch,
     ...(runner !== undefined ? { runner } : {}),
     ...(settings.pipeline.quorum?.length ? { quorum: settings.pipeline.quorum } : {}),
-    // notify.relay only on a chant with the relay (chant#4611); an older chant refuses the setting.
-    ...(settings.pipeline.notify ? { notify: { ...notifyForChant(settings.pipeline.notify, chant) } } : {}),
+    ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
   });
   const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
   // Opt-in since 0.3.1 (`preview: true` in plywood.yml; plywood#55, plywood#56): a merged wave then applies what its pull request previewed, or exits 4 (chant 0.124.59's approvals.preview).

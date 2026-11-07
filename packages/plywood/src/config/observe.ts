@@ -46,19 +46,8 @@ export interface ChantNotifyConfig {
   slack?: string;
   teams?: string;
   events?: ChantNotifyEvent[];
-  /** The variable holding the relay key (chant#4611). A chant before it refuses the setting, so plywood init leaves it out there ({@link notifyForChant}). */
+  /** The variable holding the relay key (chant#4611). */
   relay?: string;
-}
-
-/**
- * The notify config for the installed chant: `relay` only when chant has
- * the relay (`NOTIFY_RELAY_FLOOR` on @intentius/chant/ci-product), since an
- * older chant refuses a setting it does not know.
- */
-export function notifyForChant(notify: ChantNotifyConfig, chant: { NOTIFY_RELAY_FLOOR?: string } | undefined): ChantNotifyConfig {
-  if (notify.relay === undefined || typeof chant?.NOTIFY_RELAY_FLOOR === "string") return { ...notify };
-  const { relay: _relay, ...rest } = notify;
-  return rest;
 }
 
 export interface TelemetrySettings {
@@ -167,7 +156,6 @@ export const observe: ConfigGroup = {
           out.push(...variable(n.relay, "notify.relay"));
           // The relay answers a click in Slack or a reply in Teams; the generic webhook has neither.
           if (n.slack === undefined && n.teams === undefined) out.push(error("notify.relay", "needs notify.slack or notify.teams: approvals come back from a chat message"));
-          else out.push(warning("notify.relay", "needs chant >= the release after 0.124.54 (chant#4611); plywood init leaves it out of the waves spec on a chant without the relay"));
         }
         for (const chat of ["slack", "teams"] as const) {
           const c = n[chat];

@@ -101,10 +101,6 @@ export interface ChantProduct {
   CI_AGENT_FLOOR?: string;
   /** The `agent` of a scheduled drift Op (chant#4616). */
   productDriftAgent?(words: ProductWordsInput | ProductWords, op: string, options?: Record<string, unknown>): Record<string, unknown>;
-  /** Present when chant's notify has the relay and `chant notify relay` (chant#4611). */
-  NOTIFY_RELAY_FLOOR?: string;
-  /** chant's relay server (chant#4611); its presence says `notify relay` runs in process. */
-  startRelayServer?: (...args: unknown[]) => unknown;
   /** The standing pending gates waiting on a plan digest, with the pull request a `pr-<n>` op names (chant#4607). */
   pendingGatesByPlan?(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
   /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */

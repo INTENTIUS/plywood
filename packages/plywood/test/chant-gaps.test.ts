@@ -222,15 +222,18 @@ describe("plywood estate on chant#4612", () => {
     expect(JSON.parse(t.out[0]!).overdue).toEqual(overdue);
   });
 
-  it("refuses a report URL chant cannot read, and says so on a chant without ci-estate", async () => {
+  it("refuses a report URL chant cannot read", async () => {
     const { fake } = fakeEstate();
     setChantEstateForTests(fake);
     setChantProductForTests(undefined);
     expect(await estate(["--report-url", "ftp://x"], false, FALLBACK_EXIT, io(repo({ "plywood.yml": DRIFT_YML })).stageIo)).toBe(FALLBACK_EXIT.failed);
-    setChantEstateForTests(undefined);
-    const t = io(tmpdir());
-    expect(await estate([], false, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
-    expect(t.err.join("\n")).toContain("chant#4612");
+  });
+
+  it("imports chant's estate from the pinned chant, with no feature-detect", async () => {
+    setChantEstateForTests("reset");
+    const { chantEstate } = await import("../src/estate");
+    const real = await chantEstate();
+    for (const f of ["readEstateLedger", "buildLedgerEstate", "writeEstate", "parseReportUrl", "reportPut"] as const) expect(typeof real[f]).toBe("function");
   });
 });
 

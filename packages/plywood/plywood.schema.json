@@ -286,7 +286,7 @@
             "repo",
             "ref"
           ],
-          "description": "A shared rule set from a git ref, fetched by the job at the ref the base names (chant >= the release after 0.124.54). packs are then paths inside it.",
+          "description": "A shared rule set from a git ref, fetched by the job at the ref the base names. packs are then paths inside it.",
           "properties": {
             "repo": {
               "type": "string",

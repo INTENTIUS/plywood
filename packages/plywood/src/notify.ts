@@ -9,24 +9,12 @@
  * otherwise). plywood.yml's `notify.relay` names the variable holding the
  * key; the relay reads it as CHANT_RELAY_KEY, with SLACK_SIGNING_SECRET or
  * TEAMS_WEBHOOK_SECRET.
- *
- * On a chant without the relay the command says so and exits with chant's
- * `failed` code.
  */
 import type { ExitTable } from "./exit-codes";
 import { usage, withChant, type StageIo } from "./stages";
 import { PRODUCT, PRODUCT_WORDS } from "./words";
 
-export const RELAY_NEEDS_CHANT = `${PRODUCT} notify relay needs chant >= the release after 0.124.54, which carries chant notify relay (chant#4611).`;
-
 export async function notify(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
   if (args[0] !== "relay") return usage(`unknown notify command '${args[0] ?? ""}'. Run '${PRODUCT} notify relay'.`, table, io);
-  return withChant(`${PRODUCT} notify relay`, table, io, (chant) => {
-    if (typeof chant.startRelayServer !== "function") {
-      if (json) io.out(JSON.stringify({ command: "notify relay", ok: false, exitCode: table.failed, error: RELAY_NEEDS_CHANT }));
-      else io.err(`${PRODUCT}: ${RELAY_NEEDS_CHANT}`);
-      return Promise.resolve(table.failed);
-    }
-    return chant.runChantInProcess(["notify", ...args], PRODUCT_WORDS);
-  });
+  return withChant(`${PRODUCT} notify relay`, table, io, (chant) => chant.runChantInProcess(["notify", ...args], PRODUCT_WORDS));
 }

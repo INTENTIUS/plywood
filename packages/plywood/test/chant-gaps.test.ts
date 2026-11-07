@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { toChantSettings } from "../src/chant-config";
-import { chantNotifyOf, notifyForChant } from "../src/config/observe";
+import { chantNotifyOf } from "../src/config/observe";
 import { chantPolicyOf, stepPolicyPacksOf } from "../src/config/policy";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { estate, estateSchedules, setChantEstateForTests, type ChantEstate } from "../src/estate";
@@ -134,18 +134,13 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
 
   it("turns notify.relay into chant's relay setting, beside a chat channel", () => {
     expect(chantNotifyOf(parseConfig("notify: { slack: { webhook: SLACK_URL }, relay: RELAY_KEY }").doc)).toEqual({ slack: "SLACK_URL", relay: "RELAY_KEY" });
+    // The pin carries the relay (chant#4611), so the setting is passed on with no warning.
+    expect(checkConfig(parseConfig("notify: { slack: { webhook: SLACK_URL }, relay: RELAY_KEY }")).filter((p) => p.key === "notify.relay")).toEqual([]);
     expect(errors("notify: { slack: { webhook: S }, relay: https://relay.acme.internal }").map((p) => p.key)).toEqual(["notify.relay"]);
     expect(errors("notify: { webhook: { url: U, key: K }, relay: RELAY_KEY }").map((p) => p.key)).toEqual(["notify.relay"]);
   });
 
-  it("leaves relay out of the waves spec on a chant without the relay", () => {
-    const n = { slack: "SLACK_URL", relay: "RELAY_KEY" };
-    expect(notifyForChant(n, { NOTIFY_RELAY_FLOOR: "0.125.0" })).toEqual(n);
-    expect(notifyForChant(n, {})).toEqual({ slack: "SLACK_URL" });
-    expect(notifyForChant(n, undefined)).toEqual({ slack: "SLACK_URL" });
-  });
-
-  it("runs chant's notify relay in process with plywood's words, and says so on a chant without it", async () => {
+  it("runs chant's notify relay in process with plywood's words", async () => {
     const calls: Array<{ argv: string[]; words: unknown }> = [];
     const base = {
       assertProductWords: (w: unknown) => w,
@@ -153,13 +148,9 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
       approveLine: () => "",
       runChantInProcess: async (argv: string[], words: unknown) => (calls.push({ argv, words }), 0),
     } as unknown as ChantProduct;
-    setChantProductForTests({ ...base, startRelayServer: () => undefined, NOTIFY_RELAY_FLOOR: "0.125.0" });
+    setChantProductForTests(base);
     expect(await notify(["relay"], false, FALLBACK_EXIT, io(tmpdir()).stageIo)).toBe(0);
     expect(calls).toEqual([{ argv: ["notify", "relay"], words: PRODUCT_WORDS }]);
-    setChantProductForTests(base);
-    const t = io(tmpdir());
-    expect(await notify(["relay"], false, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
-    expect(t.err.join("\n")).toContain("chant#4611");
     expect(await notify(["send"], false, FALLBACK_EXIT, io(tmpdir()).stageIo)).toBe(FALLBACK_EXIT.failed);
   });
 });

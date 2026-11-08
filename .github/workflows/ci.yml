@@ -33,6 +33,8 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Unit tests
+        run: npm test
       - name: Bundle check
         run: npm run bundle-check -w @intentius/plywood
       - name: Workflows match their declarations

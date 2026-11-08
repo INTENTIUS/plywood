@@ -13,3 +13,7 @@ A feature stays inside plywood only for a reason that belongs to its Pulumi audi
 plywood credits engine features to [plunge](https://intentius.io/plunge/). A feature that needs plunge's engine names plunge where plywood describes it.
 
 The rule and the issues behind it are on chant's [CI products on chant](https://intentius.io/chant/concepts/ci-products/) page and in [chant#4530](https://github.com/INTENTIUS/chant/issues/4530).
+
+## Checks
+
+`.github/workflows/ci.yml`, rendered from `ci/ci.ts` with `just ci`, runs on every pull request and push to main. Its `package` job typechecks, builds, runs the unit tests (`npm test`), checks the bundle, and fails when a committed workflow differs from its declaration. Its `site` job lints the docs' prose and builds the site. Run `npm test` before you push. A change that breaks the suite doesn't merge.

@@ -5,9 +5,9 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
-## In 0.3.4
+## In 0.3.5
 
-The label before this one was never published because its first cut could not push its tag.
+The two labels before this one were cut but never published, because the release workflow stopped before npm each time.
 
 `plywood init` writes `approvals.preview` into the waves spec again now that the plan digest no longer refuses disjoint merges or autonamed creates. A repository that wants the 0.3.2 behavior sets `preview: false` in `plywood.yml` before it runs `plywood init`.
 

@@ -58,6 +58,7 @@ images platform="" checksums="": build
       tool="$(node -e 'const s=require("fs").readFileSync("packages/plywood/src/images.ts","utf8");const m=new RegExp(process.argv[1]+": \"([^\"]+)\"").exec(s);console.log(m[1])' "$engine")"
       docker build {{ if platform == "" { "" } else { "--platform " + platform } }} \
         {{ if checksums == "" { "" } else { "--build-arg CHECKSUMS_URL=" + checksums } }} \
+        --build-arg CHANT_RELEASE_LABEL="$version" \
         -f "images/plywood-$engine/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool" .
     done
 
@@ -113,14 +114,6 @@ tutorial-scan:
 #   just e2e down                 remove the bench's containers and volumes
 e2e *args:
     npx tsx e2e/main.ts {{args}}
-
-# The release's version (AGENTS.md, Releasing): packages/plywood/package.json,
-# package-lock.json and both Dockerfiles' version label. Merge it to main with
-# the Changes page's `## In <version>` section, then dispatch publish.yml with
-# that version as the label.
-release-bump version:
-    npm version {{version}} --no-git-tag-version -w @intentius/plywood
-    npm run images -w @intentius/plywood
 
 # Install the site's dependencies from its lock file.
 site-install:

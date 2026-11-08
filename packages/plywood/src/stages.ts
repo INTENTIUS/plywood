@@ -30,6 +30,7 @@ import { locksOf } from "./config/locks";
 import { hasActions } from "./config/stacks";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
+import { chantBuildFlags, chantPipelineOptions } from "./images";
 import { writeWorkflow } from "./init/workflow";
 import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { unwrapWavesSpec, wavesEngine, writeWaveJobs } from "./waves-workflow";
@@ -277,7 +278,9 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const noteControl = await noteControlTarget(config.doc, io.cwd);
     let plan: WorkflowPlan;
     try {
-      plan = workflowPlan(chant, config.doc, forge, env, waves, [], { reviewStacks, prJobs, ...(noteControl ? { control: noteControl } : {}) });
+      // plywood#48: the image and engine install lines plywood.yml gives, as plywood init passes them.
+      const engine = chantBuildFlags(chantPipelineOptions(pipeline, false));
+      plan = workflowPlan(chant, config.doc, forge, env, waves, engine, { reviewStacks, prJobs, ...(noteControl ? { control: noteControl } : {}) });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;

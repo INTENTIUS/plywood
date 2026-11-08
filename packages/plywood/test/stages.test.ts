@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { EXIT } from "../src/exit-codes";
+import { toChantSettings } from "../src/chant-config";
+import { parseConfig } from "../src/config/index";
+import { chantBuildFlags, chantPipelineOptions, imageFor, imageReference, installLine, TOOL_VERSIONS } from "../src/images";
 import { check, ci, passthrough, pipelineShape, preview, type StageIo } from "../src/stages";
 import { TIPS } from "../src/tips";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
@@ -189,8 +192,21 @@ describe("plywood ci", () => {
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
       "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up", "--stale-notes",
+      "--image", imageReference(imageFor("pulumi")), "--before-script", installLine("pulumi", TOOL_VERSIONS.pulumi),
       "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
+  });
+
+  it("keeps plywood.yml's image and engine install lines in the build, as plywood init does (plywood#48)", async () => {
+    const yml = "image: plywood-tutorial-job:local\nplunge: 0.2.0\nstacks:\n  shop/dev: {}\n";
+    const chant = fakeChant();
+    setChantProductForTests(chant.api);
+    expect(await ci(["--forge", "forgejo"], false, EXIT, io(repo(yml)))).toBe(0);
+    const argv = chant.calls[0]!.argv;
+    const want = chantBuildFlags(chantPipelineOptions(toChantSettings(parseConfig(yml)).pipeline, false));
+    expect(want.slice(0, 2)).toEqual(["--image", "plywood-tutorial-job:local"]);
+    expect(want).toContain("--before-script");
+    expect(argv.slice(argv.indexOf("--image"), argv.indexOf("--image") + want.length)).toEqual(want);
   });
 
   it("asks for the /plywood preview comment's jobs on a chant with chant#4620 (plywood#28), and not before", async () => {

@@ -47,7 +47,7 @@ describe("engine pins", () => {
     expect(line).toContain("pulumi-3.272.0-checksums.txt");
     expect(line).toContain(PINNED_SHA256["pulumi-v3.272.0-linux-x64.tar.gz"]);
     expect(line).toContain("sha256sum -c");
-    // The release's own image, by digest, once image-digests.json holds it.
+    // The release's own image, by digest, in a release's build (CHANT_RELEASE_DIGESTS); by tag in any other.
     expect(s.pipeline.image).toBe(publishedImage("pulumi"));
     if (publishedImage("pulumi")) expect(s.pipeline.image).toContain("@sha256:");
   });

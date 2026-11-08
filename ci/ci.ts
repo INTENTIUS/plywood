@@ -51,7 +51,7 @@ export const pkg = new Job({
       name: "Workflows match their declarations",
       run: [
         "npx chant build ci -o .github/workflows/ci.yml --format yaml",
-        "npx chant build publish -o .github/workflows/publish.yml --format yaml",
+        "npx chant release workflow --forge github",
         "npx chant ci workflow --token-secret CI_GREEN_TOKEN",
         "git diff --exit-code -- .github/workflows",
       ].join("\n"),

@@ -5,8 +5,9 @@
  * images, `plywood-pulumi` and `plywood-plunge`, each carry one engine at its
  * pin plus the plywood bundle; scripts/build-images.mjs renders their
  * Dockerfiles from this module into images/<name>/Dockerfile. A job runs in
- * the image for its engine, by digest once the image is published
- * (image-digests.json), and runs the install lines for any pin the image
+ * the image for its engine, by digest in a release's bundle (the digests
+ * chant's release cut recorded, which scripts/build-cli.mjs bakes in), and
+ * runs the install lines for any pin the image
  * does not carry: a `pulumi:` or `plunge:` version in plywood.yml, per stack
  * glob.
  *
@@ -40,7 +41,10 @@
  */
 // A named import, so the bundle carries the version and not the whole package.json.
 import { version as PLYWOOD_VERSION } from "../package.json";
-import digests from "./image-digests.json" with { type: "json" };
+
+/** The release's image digests by reference, baked in by scripts/build-cli.mjs from CHANT_RELEASE_DIGESTS; empty outside a release build. */
+declare const __PLYWOOD_IMAGE_DIGESTS__: Record<string, string> | undefined;
+const digests: Record<string, string> = typeof __PLYWOOD_IMAGE_DIGESTS__ !== "undefined" ? __PLYWOOD_IMAGE_DIGESTS__ : {};
 import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
@@ -225,7 +229,7 @@ export function imageTag(engine: EngineName, version = PLYWOOD_VERSION): string 
 }
 
 /** The image a job for `engine` runs in. */
-export function imageFor(engine: EngineName, table: Record<string, string> = digests as Record<string, string>): ImageRef {
+export function imageFor(engine: EngineName, table: Record<string, string> = digests): ImageRef {
   const repository = `${REGISTRY}/${imageName(engine)}`;
   const tag = imageTag(engine);
   const digest = table[`${repository}:${tag}`];

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import { toChantSettings } from "../src/chant-config";
 import { parseConfig } from "../src/config/index";
-import { ENGINE_ROOT, installLine, installLines, pinnedSums, unlinkedInstallLine } from "../src/images";
+import { ENGINE_ROOT, installLine, installLines, pinnedSums } from "../src/images";
 import { initStacks } from "../src/init";
 import type { Detected } from "../src/init/detect";
 import { componentsFile, stepInput, wavesSpec } from "../src/init/render";
@@ -25,12 +25,12 @@ describe("install lines", () => {
     expect(installLine("pulumi", "3.280.0")).toBe(pulumiInstallLine("3.280.0", { root: ENGINE_ROOT }));
   });
 
-  it("keep plywood's line for a pin that is not linked", () => {
+  it("take chant's unlinked line for a pin that is not linked", () => {
     expect(installLines([
       { engine: "pulumi", version: "3.272.0", linked: true },
       { engine: "pulumi", version: "3.200.0", linked: false },
-    ])).toEqual([unlinkedInstallLine("pulumi", "3.200.0"), installLine("pulumi", "3.272.0")]);
-    expect(unlinkedInstallLine("pulumi", "3.200.0")).not.toContain("/usr/local/bin");
+    ])).toEqual([pulumiInstallLine("3.200.0", { root: ENGINE_ROOT, link: false }), installLine("pulumi", "3.272.0")]);
+    expect(installLine("pulumi", "3.200.0", false)).not.toContain("/usr/local/bin");
   });
 });
 

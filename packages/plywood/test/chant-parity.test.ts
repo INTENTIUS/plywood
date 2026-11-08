@@ -2,6 +2,7 @@
  * plywood on chant's parity features (chant#4624 to #4636). Those read off
  * the ci-product entry are stood in with and without their floor.
  */
+import { CHANT_DEFAULTS, STUB_CHANT } from "./chant-defaults";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -34,8 +35,7 @@ function fakeChant(extra: Partial<ChantProduct> = {}, file = "jobs:\n  plan:\n  
       };
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv) => {
       calls.push(argv);
       const out = argv.indexOf("--output");
@@ -72,14 +72,14 @@ afterEach(() => {
 
 describe("plywood preview --refresh and --target-dependents (chant#4627)", () => {
   it("passes both to pr-plan", async () => {
-    const chant = fakeChant({ prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    const chant = fakeChant({  });
     setChantProductForTests(chant.api);
     expect(await preview(["shop/dev", "--base", "a", "--pr", "1", "--refresh", "--target", "urn:x", "--target-dependents"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]).toEqual(expect.arrayContaining(["components", "pr-plan", "--member", "shop/dev", "--refresh", "--target", "urn:x", "--target-dependents"]));
   });
 
   it("refuses --target-dependents without a --target", async () => {
-    const chant = fakeChant({ prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    const chant = fakeChant({  });
     setChantProductForTests(chant.api);
     const p = io(repo());
     expect(await preview(["--base", "a", "--pr", "1", "--target-dependents"], false, EXIT, p)).toBe(1);
@@ -206,8 +206,8 @@ describe("the drift jobs' identities (chant#4631)", () => {
 
   it("puts them on the spec when asked", () => {
     const doc = parseConfig(yml).doc;
-    expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *").ops[0]).not.toHaveProperty("cloud");
-    expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", undefined, { cloud: true, env: "production" }).ops[0]).toHaveProperty("update");
+    expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", STUB_CHANT).ops[0]).not.toHaveProperty("cloud");
+    expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", STUB_CHANT, { cloud: true, env: "production" }).ops[0]).toHaveProperty("update");
   });
 
   it("raises the update job's contents to write on GitHub and Forgejo once chant takes it (chant#4631 ruling)", () => {
@@ -220,7 +220,7 @@ describe("the drift jobs' identities (chant#4631)", () => {
     expect(perms("github", false)).toBeUndefined();
     expect(perms("github")).toBeUndefined();
     expect(driftCloudFields(doc, "github", "shop/dev", "issue", "production", { contentsWrite: true })).not.toHaveProperty("update");
-    const op = (contentsWrite: boolean) => driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", undefined, { cloud: true, contentsWrite, env: "production" }).ops[0] as { update: { permissions?: unknown } };
+    const op = (contentsWrite: boolean) => driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", STUB_CHANT, { cloud: true, contentsWrite, env: "production" }).ops[0] as { update: { permissions?: unknown } };
     expect(op(true).update.permissions).toEqual({ contents: "write" });
     expect(op(false).update.permissions).toBeUndefined();
   });

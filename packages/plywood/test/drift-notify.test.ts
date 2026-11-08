@@ -11,7 +11,7 @@ import { makeNotifyEvent, sendNotify, verifyWebhook } from "@intentius/chant/not
 import { parseConfig } from "../src/config/index";
 import { chantNotifyOf } from "../src/config/observe";
 import { driftFingerprint, driftNotifyVariables } from "../src/drift";
-import { DRIFT_NOTIFY_NEEDS_CHANT, notifiesDrift, runFingerprint, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
+import { notifiesDrift, runFingerprint, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
 
 const KEY = "loopback-signing-key";
 const received: Array<{ headers: IncomingHttpHeaders; body: string }> = [];
@@ -74,13 +74,6 @@ describe("the drift event", () => {
     const waves = chantNotifyOf(parseConfig("notify: { slack: { webhook: SLACK_URL }, on: [wave-waiting] }\n").doc);
     expect(notifiesDrift(waves)).toBe(false);
     expect(await sendDriftNotice({ notify: waves, results: results(), stackFingerprint: driftFingerprint, chant, env: env(), log: () => {} })).toBeUndefined();
-  });
-
-  it("on a chant without driftNotifyFields the run says no event was sent", async () => {
-    received.length = 0;
-    const notice = await sendDriftNotice({ notify, results: results(), stackFingerprint: driftFingerprint, chant: undefined, env: env(), log: () => {} });
-    expect(notice).toMatchObject({ sent: false, reason: DRIFT_NOTIFY_NEEDS_CHANT });
-    expect(received).toEqual([]);
   });
 
   it("the same findings give the same fingerprint, in any order", () => {

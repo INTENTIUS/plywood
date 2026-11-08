@@ -32,8 +32,7 @@
  * is that version without checking the versioned directory, which a step
  * pinned with `engineVersion` runs from.
  *
- * plywood hands the lines to chant's `prLoop.engineSetup` when the installed
- * chant reads that option and the job runs in chant's default image
+ * plywood hands the lines to chant as `beforeScript`
  * ({@link chantPipelineOptions}). A stack pinned to a release that is not
  * linked gets `engineVersion` and `engineRoot` on its `pulumi-up` step
  * (src/config/images.ts, src/init/render.ts `stepInput`), and the step runs
@@ -404,8 +403,6 @@ export interface ChantEngineOptions {
   image?: string;
   /** `ComponentPipelineOptions.beforeScript`: lines every job runs first, in any image. */
   beforeScript?: string[];
-  /** `PrLoopPipelineOptions.engineSetup` (chant#4550): run in chant's default image in place of its OpenTofu install. */
-  prLoop?: { engineSetup: string[] };
   /** `runners`, as plywood.yml gives it; the waves spec takes the `up` stage's (src/init/render.ts `waveRunner`). */
   runner?: ChantRunner;
 }
@@ -416,41 +413,16 @@ export interface ChantEngineOptions {
  * no product engine lines over argv, so they go to `--before-script` there.
  */
 export function chantBuildFlags(o: ChantEngineOptions): string[] {
-  const lines = [...(o.beforeScript ?? []), ...(o.prLoop?.engineSetup ?? [])];
+  const lines = o.beforeScript ?? [];
   return [...(o.image ? ["--image", o.image] : []), ...lines.flatMap((l) => ["--before-script", l])];
 }
 
 /**
- * The options chant's pipeline takes for plywood's image and lines. In
- * chant's default image, with a chant that reads `engineSetup`, the lines
- * replace chant's OpenTofu install; otherwise every job runs them first,
- * where each skips the engines the image already carries.
+ * The options chant's pipeline takes for plywood's image and lines: every
+ * job runs the lines first, and each skips the engines the image already
+ * carries.
  */
-export function chantPipelineOptions(p: { image?: string; engineSetup?: string[]; runner?: ChantRunner }, chantReadsEngineSetup: boolean): ChantEngineOptions {
+export function chantPipelineOptions(p: { image?: string; engineSetup?: string[]; runner?: ChantRunner }): ChantEngineOptions {
   const lines = p.engineSetup ?? [];
-  const out: ChantEngineOptions = { ...(p.image ? { image: p.image } : {}), ...(p.runner !== undefined ? { runner: p.runner } : {}) };
-  if (lines.length === 0) return out;
-  if (!p.image && chantReadsEngineSetup) out.prLoop = { engineSetup: [...lines] };
-  else out.beforeScript = [...lines];
-  return out;
-}
-
-let hook: Promise<boolean> | undefined;
-
-/**
- * Whether the installed chant takes a product's engine lines: chant#4550's
- * `@intentius/chant/ci-product` with `prLoopSetup`. A chant before the
- * release that added them has neither, and the answer is false.
- */
-export function chantReadsEngineSetup(): Promise<boolean> {
-  hook ??= (async () => {
-    try {
-      // @ts-ignore older chants have no such subpath
-      const m: Record<string, unknown> = await import("@intentius/chant/ci-product");
-      return typeof m.prLoopSetup === "function" && typeof m.engineSetupLines === "function";
-    } catch {
-      return false;
-    }
-  })();
-  return hook;
+  return { ...(p.image ? { image: p.image } : {}), ...(p.runner !== undefined ? { runner: p.runner } : {}), ...(lines.length ? { beforeScript: [...lines] } : {}) };
 }

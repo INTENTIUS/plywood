@@ -17,9 +17,8 @@
  *            waves, what an open pull request needs before `/plywood up`,
  *            and the image, engine install lines and runners (plywood#12).
  *
- * `ci.lockGrain` is chant#4552's key (ruling A: target, resource or repo).
- * A chant without the lock grain build ignores it; plywood writes it, and
- * nothing more, until that build lands.
+ * `ci.lockGrain` is chant#4552's key (ruling A: target, resource or repo),
+ * which chant reads at base.
  *
  * Each config group writes its own part (src/config/<group>.ts).
  */

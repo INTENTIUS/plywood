@@ -50,7 +50,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { toChantSettings } from "./chant-config";
-import { driftOpFields, hasChantAgent } from "./agent-jobs";
+import { driftOpFields } from "./agent-jobs";
 import type { JobSettings } from "./config/jobs";
 import { chantNotifyOf, type ChantNotifyConfig } from "./config/observe";
 import { chantDriftNotify, notifiesDrift, sendDriftNotice, type DriftNotice } from "./drift-notify";
@@ -239,11 +239,7 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     }
     if (respond === "pull-request" && results.some((r) => r.drifted > 0)) {
       // chant#4616: the drift agent is a job of its own after this one, which runs on the drift exit code.
-      io.err(
-        hasChantAgent(chant)
-          ? `${PRODUCT} drift: respond.drift is pull-request; in CI the agent job after this one opens or updates the pull request (agent.drift)`
-          : `${PRODUCT} drift: respond.drift is pull-request; this chant has no agent job (chant#4616), so this run kept the issue only`,
-      );
+      io.err(`${PRODUCT} drift: respond.drift is pull-request; in CI the agent job after this one opens or updates the pull request (agent.drift)`);
     }
 
     // plywood#30: one signed drift event per run through chant's notify, unless the finding is the last run's.
@@ -287,12 +283,12 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
 /** The run's drift event (src/drift-notify.ts): sent through chant's notify with plywood's words, or why not. */
 async function driftNotice(chant: ChantProduct, doc: RawConfig, results: StackDrift[], environment: string | undefined, io: StageIo): Promise<DriftNotice | undefined> {
   const notify = chantNotifyOf(doc);
-  const loaded = notifiesDrift(notify) ? await chantDriftNotify() : undefined;
+  if (!notifiesDrift(notify)) return undefined;
   return sendDriftNotice({
     notify,
     results,
     stackFingerprint: driftFingerprint,
-    chant: loaded ? { ...loaded, words: chant.assertProductWords(PRODUCT_WORDS) } : undefined,
+    chant: { ...(await chantDriftNotify()), words: chant.assertProductWords(PRODUCT_WORDS) },
     env: io.env,
     ...(environment ? { environment } : {}),
     log: io.err,
@@ -457,15 +453,14 @@ export function driftOpSpec(
   forge: ForgeKind,
   stacks: readonly string[],
   schedule: string,
-  chant?: ChantProduct,
+  chant: ChantProduct,
   opts: { cloud?: boolean; contentsWrite?: boolean; env?: string } = {},
 ): { ops: unknown[]; options: Record<string, unknown> } {
   const respond = driftResponseOf(doc);
-  // With chant's agent job (chant#4616) the drift run keeps the issue and the agent job opens the pull request.
-  const agentJob = hasChantAgent(chant) && respond === "pull-request";
-  const findingMode = respond === "none" ? "report" : respond === "pull-request" && !agentJob ? (forge === "gitlab" ? "merge-request" : "pull-request") : "issue";
+  // The drift run keeps the issue, and with respond.drift: pull-request chant's agent job (chant#4616) opens the pull request.
+  const findingMode = respond === "none" ? "report" : "issue";
   const pipeline = toChantSettings({ doc }).pipeline;
-  const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
+  const engine = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) });
   return {
     ops: stacks.map((s) => ({ name: driftOpName(s), trigger: { kind: "cron", schedule }, findingMode, ...driftOpFields(chant, doc, driftOpName(s), respond), ...withNotifyVariables(driftJobFields(forge, pipeline.jobs, s), driftNotifyVariables(forge, chantNotifyOf(doc))), ...(opts.cloud ? driftCloudFields(doc, forge, s, respond, opts.env ?? "production", { contentsWrite: opts.contentsWrite === true }) : {}) })),
     options: {

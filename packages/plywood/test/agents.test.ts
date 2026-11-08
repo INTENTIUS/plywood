@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +12,7 @@ import { guard } from "../src/guard";
 import type { StageIo } from "../src/stages";
 import { PRODUCT_WORDS, TEMPLATE_REQUEST_WORDS } from "../src/words";
 
-function fakeChant(hookFloor = true) {
+function fakeChant() {
   const calls: Array<{ argv: string[]; options?: { mcp?: unknown } }> = [];
   const api: ChantProduct = {
     assertProductWords: (w) => w as never,
@@ -19,14 +20,11 @@ function fakeChant(hookFloor = true) {
       throw new Error("not used");
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv, _words, options) => {
       calls.push({ argv, ...(options ? { options } : {}) });
       return 0;
     },
-    ...(hookFloor ? { PRODUCT_MCP_HOOK_FLOOR: "0.125.0" } : {}),
-    PRODUCT_TOOL_PROPOSE_WORDS: ["request", "propose"],
   };
   return { api, calls };
 }
@@ -69,12 +67,6 @@ describe("plywood mcp", () => {
     expect(await tools[0]!.handler({})).toMatchObject({ stacks: { "shop/dev": { dir: "shop" } } });
   });
 
-  it("says so when the installed chant has no product tool hook", async () => {
-    setChantProductForTests(fakeChant(false).api);
-    const out = io(repo("{}\n"));
-    await mcp([], false, EXIT, out);
-    expect(out.stderr.join("\n")).toContain("chant#4555");
-  });
 });
 
 /**

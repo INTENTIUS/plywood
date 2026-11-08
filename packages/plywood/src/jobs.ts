@@ -12,39 +12,12 @@
  *
  * A passed secret is written as the forge's reference to it
  * (`${{ secrets.<name> }}` on GitHub and Forgejo, `$<name>` on GitLab),
- * never as a value. chant#4625 is feature-detected through
- * `@intentius/chant/parallelism`, a module it added; without it the waves
- * and drift jobs still get the variables and environments, which chant had
- * already, and the pull request jobs and `parallelism` say they need it.
+ * never as a value.
  */
 import type { ChantRunner, ChantRunnerSpec } from "./chant-config";
 import type { ForgeKind } from "./chant-product";
 import type { ForgeEnvironment, JobSettings } from "./config/jobs";
 import { globMatches } from "./config/images";
-
-let detected: Promise<boolean> | undefined;
-
-/** Whether the installed chant has chant#4625: runners, variables, secrets and parallelism on the pull request jobs, parallelism on op waves. */
-export function hasChant4625(): Promise<boolean> {
-  detected ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4625).
-      const m: Record<string, unknown> = await import("@intentius/chant/parallelism");
-      return typeof m.mapLimited === "function" && typeof m.parallelismProblem === "function";
-    } catch {
-      return false;
-    }
-  })();
-  return detected;
-}
-
-/** Tests say whether chant#4625 is there; `reset` goes back to the real import. */
-export function setChant4625ForTests(has: boolean | "reset"): void {
-  detected = has === "reset" ? undefined : Promise.resolve(has);
-}
-
-/** What `plywood ci` says when plywood.yml asks for something only chant#4625 does. */
-export const JOBS_NEED_CHANT = "needs chant's runners, variables, passed secrets and parallelism on the pull request jobs (chant#4625), which this chant lacks";
 
 /** The forge's reference to a secret, as a job's variable value. */
 export function secretReference(forge: ForgeKind, secret: string): string {
@@ -95,7 +68,7 @@ interface Wave {
  * shares cannot also split by environment, and is refused by name.
  * `parallelism` goes on the spec only with chant#4625.
  */
-export function withJobSettings(spec: Record<string, unknown>, s: JobSettings, forge: ForgeKind, opts: { parallelism: boolean }): Record<string, unknown> {
+export function withJobSettings(spec: Record<string, unknown>, s: JobSettings, forge: ForgeKind): Record<string, unknown> {
   const variables = jobVariables(forge, s);
   const waves = (Array.isArray(spec.waves) ? (spec.waves as Wave[]) : []).map((wave) => {
     const out: Wave = { ...wave };
@@ -124,7 +97,7 @@ export function withJobSettings(spec: Record<string, unknown>, s: JobSettings, f
     out.groups = [...byEnv.values()].map((g) => ({ name: groupName(g.environment, taken), runs: g.runs, ...(g.environment ? { environment: { ...g.environment } } : {}) }));
     return out;
   });
-  return { ...spec, waves, ...(opts.parallelism && s.parallelism !== undefined && spec.step !== undefined ? { parallelism: s.parallelism } : {}) };
+  return { ...spec, waves, ...(s.parallelism !== undefined && spec.step !== undefined ? { parallelism: s.parallelism } : {}) };
 }
 
 /** chant#4625's runner stages from plywood's: preview is plan, up is apply. */
@@ -171,18 +144,9 @@ export function wantsChant4625(s: JobSettings | undefined, runner: ChantRunner |
   return runner !== undefined || (s !== undefined && (Object.keys(s.variables).length > 0 || Object.keys(s.secrets).length > 0 || s.parallelism !== undefined));
 }
 
-/** The pull request jobs' part of the settings, for `plywood init` and `plywood ci`: chant's options and build flags with chant#4625, else a note when plywood.yml asks for them. */
+/** The pull request jobs' part of the settings, for `plywood init` and `plywood ci`: chant's options and build flags (chant#4625). */
 export async function prJobsFor(pipeline: { jobs?: JobSettings; runner?: ChantRunner }): Promise<{ options: Record<string, unknown>; flags: string[]; notes: string[] }> {
   if (!wantsChant4625(pipeline.jobs, pipeline.runner)) return { options: {}, flags: [], notes: [] };
-  if (!(await hasChant4625())) {
-    const asked = [
-      ...(pipeline.runner !== undefined ? ["runners"] : []),
-      ...(pipeline.jobs && Object.keys(pipeline.jobs.variables).length ? ["env"] : []),
-      ...(pipeline.jobs && Object.keys(pipeline.jobs.secrets).length ? ["pass"] : []),
-      ...(pipeline.jobs?.parallelism !== undefined ? ["parallelism"] : []),
-    ];
-    return { options: {}, flags: [], notes: [`${asked.join(", ")} on the pull request jobs ${JOBS_NEED_CHANT}; the waves and drift jobs have ${asked.filter((k) => k !== "parallelism").join(", ") || "none of them"}`] };
-  }
   const { flags, notes } = prLoopJobFlags(pipeline.jobs, pipeline.runner);
   return { options: prLoopJobOptions(pipeline.jobs, pipeline.runner), flags, notes };
 }

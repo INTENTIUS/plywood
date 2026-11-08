@@ -74,9 +74,8 @@ export function setChantStackActionForTests(fake: ChantStackAction | "reset"): v
 /** The stack and action an action job was started for, read through chant (chant#4654). */
 async function fromEvent(env: NodeJS.ProcessEnv): Promise<{ stack: string; name: string } | { error: string }> {
   const chant = await chantProduct();
-  if (!chant) return { error: `${PRODUCT} action --from-event reads the action job's comment or inputs through chant's productActionFromEnv, and chant's product entry did not load` };
   const words = chant.assertProductWords({ ...PRODUCT_WORDS, commands: { ...PRODUCT_WORDS.commands, ...ACTION_COMMAND } });
-  const asked = chant.productActionFromEnv!(words, env);
+  const asked = chant.productActionFromEnv(words, env);
   if (asked.kind === "refused") return { error: `the action job was asked for no action: ${asked.reason}` };
   return { stack: asked.member, name: asked.address };
 }

@@ -14,8 +14,8 @@
  * backend. The version most stacks of an engine run is linked onto PATH; a
  * stack pinned to another gets its binary's path as `engineBin`, and
  * `engineVersion` with `engineRoot` for its pulumi-up step (chant#4592). The
- * install lines are src/images.ts's (chant's when the installed lexicon has
- * them) and check the release checksums.
+ * install lines are src/images.ts's (chant's for a linked release) and check
+ * the release checksums.
  */
 import { DIGEST, ENGINE_ROOT, imageFor, imageReference, installLines, engineBin, parsePlugin, PLUGIN, TOOL_VERSIONS, type EngineName, type EnginePin } from "../images";
 import type { ChantRunner } from "../chant-config";

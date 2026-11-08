@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -77,8 +78,7 @@ function fakeChant(code = 0) {
       };
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv) => {
       calls.push({ argv });
       const out = argv.indexOf("--output");
@@ -440,25 +440,6 @@ describe("the bucket check", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("says the bucket was not checked on a chant without the check", async () => {
-    setChantProductForTests(fakeChant().api);
-    setBucketCheckForTests(undefined);
-    const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, EXIT, io(root, { PULUMI_BACKEND_URL: "s3://state" }));
-    expect(r.notes.join("\n")).toContain("@intentius/chant/bucket-check (chant#4558)");
-  });
-});
-
-describe("on a chant without the product pipeline", () => {
-  it("writes the config files and says the spec and workflow need a newer chant", async () => {
-    setChantProductForTests(undefined);
-    const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, EXIT, io(root));
-    expect(r.ok).toBe(true);
-    expect(r.files.find((f) => f.file === ".chant/op-waves/pulumi-up.spec.json")).toMatchObject({ status: "skipped" });
-    expect(r.files.find((f) => f.file === ".github/workflows/plywood.yml")).toMatchObject({ status: "skipped" });
-    expect(r.files.find((f) => f.file === "plywood.yml")).toMatchObject({ status: "written" });
-  });
 });
 
 describe("flags, templates and pure parts", () => {

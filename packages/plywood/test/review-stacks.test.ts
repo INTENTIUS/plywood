@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import type { ChantProduct } from "../src/chant-product";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { reviewStackName } from "../src/config/review-stacks";
-import { chantReviewStacks, REVIEW_GATE, reviewSuffixOf, setChantReviewStacksForTests } from "../src/review-stacks";
+import { REVIEW_GATE, reviewSuffixOf } from "../src/review-stacks";
 import { componentsFile } from "../src/init/render";
 import { workflowPlan } from "../src/stages";
 import { approveTarget } from "../src/up";
@@ -21,12 +22,10 @@ const chant = {
     comments: {},
   }),
   approveLine: () => "",
-  pendingGatesByPlan: async () => [],
-  parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
+  ...CHANT_DEFAULTS,
   runChantInProcess: async () => 0,
 } as unknown as ChantProduct;
 
-afterEach(() => setChantReviewStacksForTests("reset"));
 
 describe("review_stacks", () => {
   it("names each review stack pr-{number}, with an optional suffix, and refuses any other pattern", () => {
@@ -62,15 +61,9 @@ describe("plywood approve review", () => {
 describe("the review stack jobs", () => {
   const doc = parseConfig("review_stacks: { template: shop/dev }").doc;
 
-  it("go on chant's build with --pr-env once the pulumi lexicon can remove a review stack", async () => {
-    setChantReviewStacksForTests(true);
-    expect(workflowPlan(chant, doc, "github", "production", undefined, [], { reviewStacks: await chantReviewStacks() }).argv).toContain("--pr-env");
-  });
-
-  it("stay off on a lexicon without the review stack argv, and with no review_stacks", async () => {
-    setChantReviewStacksForTests(false);
-    expect(workflowPlan(chant, doc, "github", "production", undefined, [], { reviewStacks: await chantReviewStacks() }).argv).not.toContain("--pr-env");
-    expect(workflowPlan(chant, {}, "github", "production", undefined, [], { reviewStacks: true }).argv).not.toContain("--pr-env");
+  it("go on chant's build with --pr-env when plywood.yml sets review_stacks", () => {
+    expect(workflowPlan(chant, doc, "github", "production", undefined, []).argv).toContain("--pr-env");
+    expect(workflowPlan(chant, {}, "github", "production", undefined, []).argv).not.toContain("--pr-env");
   });
 });
 

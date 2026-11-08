@@ -11,9 +11,7 @@
  * An `s3://`, `gs://` or `azblob://` backend (with or without `plunge+`)
  * gets chant's shared bucket check (`@intentius/chant/bucket-check`,
  * chant#4558): versioning, a lifecycle rule that expires noncurrent
- * versions, and the public access block. The check only reads. It is
- * reached through a feature-detect, since a chant older than the pinned 0.124.77
- * may lack it.
+ * versions, and the public access block. The check only reads.
  */
 import type { DetectedProject } from "./detect";
 
@@ -133,32 +131,16 @@ export function bucketTarget(url: string, env: NodeJS.ProcessEnv): BucketTarget 
   return undefined;
 }
 
-/** The message init prints when the installed chant has no bucket check. */
-export function needsBucketCheckMessage(builtChant: string): string {
-  return (
-    "the bucket check needs chant >= the release after 0.124.54, which carries @intentius/chant/bucket-check (chant#4558). " +
-    `This plywood was built with chant ${builtChant}, which lacks it, so the bucket was not checked.`
-  );
-}
+let cached: Promise<ChantBucketCheck> | undefined;
 
-let cached: Promise<ChantBucketCheck | undefined> | undefined;
-
-/** chant's bucket check, or undefined when the installed chant lacks it. */
-export function chantBucketCheck(): Promise<ChantBucketCheck | undefined> {
-  cached ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4558).
-      const m: Record<string, unknown> = await import("@intentius/chant/bucket-check");
-      return typeof m.checkBucket === "function" ? (m as unknown as ChantBucketCheck) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's bucket check (chant#4558). */
+export function chantBucketCheck(): Promise<ChantBucketCheck> {
+  cached ??= import("@intentius/chant/bucket-check").then((m) => m as unknown as ChantBucketCheck);
   return cached;
 }
 
-/** Tests stand in a fake check (or none). `reset` goes back to the real import. */
-export function setBucketCheckForTests(fake: ChantBucketCheck | undefined | "reset"): void {
+/** Tests stand in a fake check. `reset` goes back to the real import. */
+export function setBucketCheckForTests(fake: ChantBucketCheck | "reset"): void {
   cached = fake === "reset" ? undefined : Promise.resolve(fake);
 }
 

@@ -1,4 +1,5 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,8 +60,7 @@ function fakeChant(code = 0) {
     assertProductWords: (w: unknown) => w,
     productPipelineJobs: () => ({}),
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv: string[]) => {
       calls.push(argv);
       return code;
@@ -142,10 +142,6 @@ describe("plywood export", () => {
     const noOut = io(dir);
     expect(await exportStack(["shop/dev"], false, T, noOut)).toBe(T.failed);
     expect(noOut.stderr.join("\n")).toContain("--out <file>");
-    setChantStackOpsForTests(undefined);
-    const old = io(dir);
-    expect(await exportStack(["shop/dev", "--out", "/tmp/x.json"], false, T, old)).toBe(T.failed);
-    expect(old.stderr.join("\n")).toContain("chant#4578");
   });
 });
 
@@ -163,7 +159,7 @@ describe("plywood cancel", () => {
 
   it("needs --lock", async () => {
     setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
-    setChantStackLockReaderForTests(undefined);
+    setChantStackLockReaderForTests(async () => ({ checked: false, ids: [] }));
     const out = io(repo(YML));
     expect(await cancelStack(["shop/dev"], false, T, out)).toBe(T.failed);
     expect(out.stderr.join("\n")).toContain("--lock <id>");
@@ -254,7 +250,7 @@ describe("plywood rollback", () => {
   it("rolls one stack back to its previous release as its component", async () => {
     const chant = fakeChant(T.waiting);
     setChantProductForTests(chant.api);
-    setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops, true);
+    setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
     const out = io(repo(YML));
     expect(await rollbackStack(["shop/prod", "--dry-run"], false, T, out)).toBe(T.waiting);
     expect(chant.calls).toEqual([["components", "rollback", "prod", "--component", "shop-prod", "--dry-run"]]);
@@ -264,7 +260,7 @@ describe("plywood rollback", () => {
   it("rolls an environment back to a release, and refuses a stack with --release", async () => {
     const chant = fakeChant(0);
     setChantProductForTests(chant.api);
-    setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops, true);
+    setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
     const dir = repo(YML);
     expect(await rollbackStack(["--release", "shop-2026-10-27", "--env", "prod"], true, T, io(dir))).toBe(T.done);
     expect(chant.calls).toEqual([["components", "rollback", "prod", "--release", "shop-2026-10-27", "--json"]]);
@@ -273,11 +269,4 @@ describe("plywood rollback", () => {
     expect(out.stderr.join("\n")).toContain("--env prod");
   });
 
-  it("says so when the installed lexicon cannot roll a stack back", async () => {
-    setChantProductForTests(fakeChant().api);
-    setChantStackOpsForTests(undefined, false);
-    const out = io(repo(YML));
-    expect(await rollbackStack(["shop/prod"], false, T, out)).toBe(T.failed);
-    expect(out.stderr.join("\n")).toContain("chant#4542");
-  });
 });

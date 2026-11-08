@@ -58,7 +58,7 @@ export interface ProductWordsInput {
   /**
    * What chant's notify sends under these words (chant#4610): the event's
    * `source`, the wave label in its summary and the signed webhook's header
-   * prefix. A chant before chant#4610 reads none of it and sends chant's.
+   * prefix.
    */
   notify?: { source: string; wave: string; headers: string };
 }

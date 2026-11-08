@@ -112,15 +112,7 @@ describe("stackOrder", () => {
   it("reads each stack's references from its export, and names one outside the repository", async () => {
     setReferenceReaderForTests(fixtureReader);
     const order = await stackOrder(FIXTURES, [stack("network/prod", "network"), stack("app/prod", "app")]);
-    expect(order.reads).toBe(true);
     expect(order.edges).toEqual([{ reader: "app/prod", upstream: "network/prod", because: "stack-reference" }]);
     expect(order.outside).toEqual([{ stack: "app/prod", reference: "acme/billing/prod", why: "no step in the project applies acme/billing/prod" }]);
-  });
-
-  it("follows waves.after alone when the pulumi lexicon reads no references", async () => {
-    setReferenceReaderForTests(undefined);
-    const order = await stackOrder(FIXTURES, [stack("network/prod", "network"), stack("app/prod", "app")], { "network/prod": ["app/prod"] });
-    expect(order).toEqual({ edges: [{ reader: "network/prod", upstream: "app/prod", because: "waves.after" }], outside: [], reads: false });
-    expect(orderLines(order, [])[0]).toContain("reads no StackReferences");
   });
 });

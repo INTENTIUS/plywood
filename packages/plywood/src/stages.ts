@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { chantProduct, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
@@ -33,7 +33,6 @@ import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
 import { writeWorkflow } from "./init/workflow";
-import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT } from "./review-stacks";
 import { unwrapWavesSpec, wavesEngine, writeWaveJobs } from "./waves-workflow";
 import { writeDriftJobs } from "./drift";
 import { waveMovedLine } from "./refusals";
@@ -83,13 +82,9 @@ export function positionals(args: string[]): string[] {
   return out;
 }
 
-export async function withChant(what: string, table: ExitTable, io: StageIo, run: (chant: ChantProduct) => Promise<number>): Promise<number> {
-  const chant = await chantProduct();
-  if (!chant) {
-    io.err(`${PRODUCT}: ${needsChantMessage(what)}`);
-    return table.failed;
-  }
-  return run(chant);
+/** Runs `run` with chant's product pipeline; `what`, `table` and `io` name the caller. */
+export async function withChant(_what: string, _table: ExitTable, _io: StageIo, run: (chant: ChantProduct) => Promise<number>): Promise<number> {
+  return run(await chantProduct());
 }
 
 /** A chant verb a generated job runs through the bin: passed to chant unchanged, with plywood's words. */
@@ -161,7 +156,7 @@ export async function check(args: string[], json: boolean, table: ExitTable, io:
  * member. --base and --pr default to $BASE_SHA and $PR_NUMBER.
  */
 export async function preview(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
-  // --target <urn> goes to pr-plan as it is (chant#4620), repeatable; a chant before it refuses it below.
+  // --target <urn> goes to pr-plan as it is (chant#4620), repeatable.
   const targeted = args.includes("--target");
   // --refresh and --target-dependents go to pr-plan as they are (chant#4627).
   if (args.includes("--target-dependents") && !targeted) return usage("--target-dependents widens a --target preview to the resources that depend on the targets; give a --target", table, io);
@@ -186,13 +181,9 @@ export async function preview(args: string[], json: boolean, table: ExitTable, i
   const gate = rest.includes("--gate") ? [] : ["--gate", PR_GATE];
   const argv = ["components", "pr-plan", "--base", at, "--pr", number, ...gate, ...(stack ? ["--member", stack] : []), ...rest, ...(json ? ["--json"] : [])];
   return withChant(`${PRODUCT} preview`, table, io, async (chant) => {
-    if (targeted && !hasChant4620(chant)) return usage(PREVIEW_TARGET_NEEDS_CHANT, table, io);
     return chant.runChantInProcess(argv, PRODUCT_WORDS);
   });
 }
-
-/** What `plywood preview --target` says on a chant without chant#4620. */
-export const PREVIEW_TARGET_NEEDS_CHANT = "--target needs a chant whose pr-plan passes it to the pulumi-up step (chant#4620), which this chant lacks";
 
 /** Where `plywood ci` writes the workflow for each forge. */
 export const WORKFLOW_FILE: Readonly<Record<ForgeKind, string>> = {
@@ -253,8 +244,6 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   const output = outFlag.value ?? WORKFLOW_FILE[forge];
 
   return withChant(`${PRODUCT} ci`, table, io, async (chant) => {
-    const reviewStacks = await chantReviewStacks();
-    if (config.doc.review_stacks !== undefined && !reviewStacks) io.err(`${PRODUCT}: ${REVIEW_STACKS_NEED_CHANT}`);
     let waves: unknown;
     try {
       waves = readWavesSpec(io.cwd);
@@ -263,12 +252,12 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     }
     // plywood#29: env, pass, parallelism and environments on the waves, and on the pull request jobs with chant#4625.
     const pipeline = toChantSettings(config).pipeline;
-    const { prJobsFor, hasChant4625, withJobSettings } = await import("./jobs");
+    const { prJobsFor, withJobSettings } = await import("./jobs");
     const prJobs = await prJobsFor(pipeline);
     for (const note of prJobs.notes) io.err(`${PRODUCT}: ${note}`);
     if (waves !== undefined && pipeline.jobs) {
       try {
-        waves = withJobSettings(waves as Record<string, unknown>, pipeline.jobs, forge, { parallelism: await hasChant4625() });
+        waves = withJobSettings(waves as Record<string, unknown>, pipeline.jobs, forge);
       } catch (e) {
         io.err(`${PRODUCT}: ${(e as Error).message}`);
         return table.failed;
@@ -280,16 +269,16 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     let plan: WorkflowPlan;
     try {
       // plywood#48: the image and engine install lines plywood.yml gives, as plywood init passes them.
-      const engine = chantBuildFlags(chantPipelineOptions(pipeline, false));
-      plan = workflowPlan(chant, config.doc, forge, env, waves, engine, { reviewStacks, prJobs, ...(noteControl ? { control: noteControl } : {}) });
+      const engine = chantBuildFlags(chantPipelineOptions(pipeline));
+      plan = workflowPlan(chant, config.doc, forge, env, waves, engine, { prJobs, ...(noteControl ? { control: noteControl } : {}) });
     } catch (e) {
       io.err(`${PRODUCT}: ${(e as Error).message}`);
       return table.failed;
     }
     const { jobs } = plan;
     for (const note of plan.notes) io.err(`${PRODUCT}: ${note}`);
-    // The control repo (plywood#18): with chant#4617 the waves spec takes plywood.yml's control, and chant's
-    // generator adds the job that tells the control repo how the waves ended. Before it, a job of your own does.
+    // The control repo (plywood#18): the waves spec takes plywood.yml's control, and chant's generator adds the job
+    // that tells the control repo how the waves ended (chant#4617).
     const { wavesControl } = await import("./control");
     const control = jobs.waves ? await wavesControl(io.cwd) : ({ none: true } as const);
     if ("error" in control) {
@@ -324,7 +313,6 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       if (jobs.action) io.err(`  action    ${jobs.action.command} (${jobs.action.comment} <stack> <name>, or a dispatch with inputs ${jobs.action.inputs.member} and ${jobs.action.inputs.action})`);
     }
     if (!json && "control" in control) io.err(`  control   after the last wave, tells ${control.repo} how the waves ended`);
-    else if (!json && "missing" in control) io.err(`  control   the waves workflow sends no dispatch: ${control.missing}; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
     if (dryRun) return table.done;
     // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
     const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });
@@ -356,7 +344,7 @@ export interface WorkflowPlan {
   /** The words of the pull request workflow: without `/plywood up` unless it updates before merge. */
   prWords: ProductWordsInput;
   argv: string[];
-  /** What plywood.yml asks that this chant does not give the jobs, one line each. */
+  /** What plywood ci says about the jobs plywood.yml asks for, one line each. */
   notes: string[];
   /** The merge after an update before merge plywood asked chant's generator for (chant#4636). */
   applyMerge?: { tokenEnv: string; method?: string };
@@ -385,7 +373,7 @@ export function workflowPlan(
   env: string,
   waves: unknown,
   extra: string[] = [],
-  opts: { reviewStacks?: boolean; control?: unknown; prJobs?: { options: Record<string, unknown>; flags: string[] } } = {},
+  opts: { control?: unknown; prJobs?: { options: Record<string, unknown>; flags: string[] } } = {},
 ): WorkflowPlan {
   const shape = pipelineShape(doc, forge, waves);
   const notes: string[] = [];
@@ -400,15 +388,14 @@ export function workflowPlan(
   const words = wordsForJobs(jobsWanted);
   // chant#4607: apply.requires reaches pr-apply --before-merge as --requires.
   const requires = shape.applyBeforeMerge ? requiresArgv(chant, doc) : [];
-  // chant#4620: `/plywood preview` previews the pull request again, once the installed chant has the job.
-  const previewComment = hasChant4620(chant);
   const jobs = chant.productPipelineJobs(forge, env, {
     words,
     ...(shape.applyBeforeMerge ? { applyBeforeMerge: true } : {}),
     ...(shape.locks ? { locks: shape.locks } : {}),
     ...(shape.waves ? { waves } : {}),
     ...(requires.length ? { applyRequires: requires[1]!.split(",") } : {}),
-    ...(previewComment ? { previewComment: true } : {}),
+    // chant#4620: `/plywood preview` previews the pull request again.
+    previewComment: true,
     // chant#4619: the note job's read of the control repo comes back as post.control.
     ...(opts.control !== undefined ? { control: { target: opts.control } } : {}),
     // plywood#29: runners, env, pass and parallelism on the pull request jobs, with chant#4625 (src/jobs.ts).
@@ -425,11 +412,11 @@ export function workflowPlan(
     ...(shape.applyBeforeMerge ? ["--apply-before-merge", ...requires] : []),
     ...(applyMerge ? applyMergeArgv(applyMerge) : []),
     ...respond.argv,
-    ...(previewComment ? ["--preview-comment"] : []),
+    "--preview-comment",
     "--stale-notes",
     ...(actionJob ? ["--action-job"] : []),
-    // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
-    ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
+    // Review stacks (plywood#15): chant's pr-env jobs.
+    ...(doc.review_stacks !== undefined ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
     // chant#4772: the control repo, so the note job the build writes reads its records (plywood#28).
     ...(opts.control !== undefined ? controlBuildArgv(doc, (opts.control as { member: string }).member) : []),

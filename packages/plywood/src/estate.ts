@@ -99,9 +99,8 @@ export async function estate(args: string[], json: boolean, table: ExitTable, io
     }
   }
   const { schedules, driftOps } = config ? estateSchedules(config) : { schedules: [], driftOps: [] };
-  // chant's resolved words when it has the product pipeline; the ledger read takes the words' product, stages and noun.
-  const product = await chantProduct();
-  const words = product ? product.assertProductWords(PRODUCT_WORDS) : PRODUCT_WORDS;
+  // chant's resolved words; the ledger read takes the words' product, stages and noun.
+  const words = (await chantProduct()).assertProductWords(PRODUCT_WORDS);
   const root = path ? dirname(path) : io.cwd;
   const load = await chant.readEstateLedger(root);
   const built = chant.buildLedgerEstate({ load, words, schedules, ...(driftOps.length ? { driftOps } : {}) });

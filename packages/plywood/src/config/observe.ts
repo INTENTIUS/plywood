@@ -60,9 +60,8 @@ export interface TelemetrySettings {
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const DEFAULT_SERVICE_NAME = "plywood";
 
-/** The report URL schemes chant reads (`pr-report-url`); gs:// and az:// need chant#4554. */
+/** The report URL schemes chant reads (`pr-report-url`, chant#4554). */
 export const REPORT_SCHEMES = ["s3", "gs", "az", "file"] as const;
-const NEWER_SCHEMES = new Set(["gs", "az"]);
 
 function variable(v: unknown, key: string): ConfigProblem[] {
   if (v === undefined) return [];
@@ -196,7 +195,6 @@ export const observe: ConfigGroup = {
         out.push(...onlyKeys(r, ["url"], "reports"));
         const scheme = typeof r.url === "string" ? /^([a-z0-9]+):\/\/\S+$/.exec(r.url)?.[1] : undefined;
         if (!scheme || !(REPORT_SCHEMES as readonly string[]).includes(scheme)) out.push(error("reports.url", `is a ${REPORT_SCHEMES.map((s) => `${s}://`).join(", ")} URL`));
-        else if (NEWER_SCHEMES.has(scheme)) out.push(warning("reports.url", `${scheme}:// reports need chant >= the release after 0.124.54 (chant#4554); the pinned chant takes s3:// and file://`));
       }
     }
     return out;

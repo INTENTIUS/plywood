@@ -210,7 +210,7 @@ export function approvalStatusTarget(opts: { forge?: string; branch?: string }, 
  * code alone.
  */
 async function refreshApprovalStatus(chant: ChantProduct, spec: Record<string, unknown>, opts: { forge?: string; branch?: string; json: boolean }, io: StageIo): Promise<void> {
-  const posts = chant.opWavesPostsApprovalStatus ? chant.opWavesPostsApprovalStatus(spec) : wavesTakePullRequestApproval(spec);
+  const posts = chant.opWavesPostsApprovalStatus(spec);
   if (!posts) return;
   const path = findConfig(io.cwd);
   const doc = path ? loadConfig(path).doc : undefined;

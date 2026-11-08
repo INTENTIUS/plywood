@@ -6,6 +6,7 @@
  * skips on a chant without them. Nothing reaches a forge, a cloud or Pulumi
  * Cloud.
  */
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -146,8 +147,7 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
       assertProductWords: (w: unknown) => w,
       productPipelineJobs: () => ({}),
       approveLine: () => "",
-      pendingGatesByPlan: async () => [],
-      parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
+      ...CHANT_DEFAULTS,
       runChantInProcess: async (argv: string[], words: unknown) => (calls.push({ argv, words }), 0),
     } as unknown as ChantProduct;
     setChantProductForTests(base);
@@ -194,7 +194,6 @@ describe("plywood estate on chant#4612", () => {
   it("reads the ledger with plywood's words and writes the three files to reports.url", async () => {
     const { fake, calls } = fakeEstate();
     setChantEstateForTests(fake);
-    setChantProductForTests(undefined);
     const t = io(repo({ "plywood.yml": DRIFT_YML }));
     expect(await estate([], false, EXIT, t.stageIo)).toBe(0);
     expect(calls.built).toMatchObject({ words: PRODUCT_WORDS, driftOps: ["plywood-drift-shop-dev", "plywood-drift-shop-prod"] });
@@ -207,7 +206,6 @@ describe("plywood estate on chant#4612", () => {
     const overdue = [{ op: "plywood-drift-shop-dev", member: "shop", message: "plywood drift checks of stack `shop` are overdue" }];
     const { fake } = fakeEstate(overdue);
     setChantEstateForTests(fake);
-    setChantProductForTests(undefined);
     const dir = repo({ "plywood.yml": DRIFT_YML });
     expect(await estate([], false, EXIT, io(dir).stageIo)).toBe(0);
     const t = io(dir);
@@ -218,7 +216,6 @@ describe("plywood estate on chant#4612", () => {
   it("refuses a report URL chant cannot read", async () => {
     const { fake } = fakeEstate();
     setChantEstateForTests(fake);
-    setChantProductForTests(undefined);
     expect(await estate(["--report-url", "ftp://x"], false, EXIT, io(repo({ "plywood.yml": DRIFT_YML })).stageIo)).toBe(EXIT.failed);
   });
 

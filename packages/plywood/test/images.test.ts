@@ -114,11 +114,10 @@ describe("image", () => {
     expect(recipe).toContain("RUN pulumi plugin install resource aws 7.4.0");
   });
 
-  it("hands chant the lines as engineSetup only in chant's default image with a chant that reads it", () => {
+  it("hands chant the lines as beforeScript, in chant's default image or plywood.yml's", () => {
     const lines = ["x"];
-    expect(chantPipelineOptions({ engineSetup: lines }, true)).toEqual({ prLoop: { engineSetup: lines } });
-    expect(chantPipelineOptions({ engineSetup: lines }, false)).toEqual({ beforeScript: lines });
-    expect(chantPipelineOptions({ image: "i", engineSetup: lines }, true)).toEqual({ image: "i", beforeScript: lines });
+    expect(chantPipelineOptions({ engineSetup: lines })).toEqual({ beforeScript: lines });
+    expect(chantPipelineOptions({ image: "i", engineSetup: lines })).toEqual({ image: "i", beforeScript: lines });
   });
 });
 

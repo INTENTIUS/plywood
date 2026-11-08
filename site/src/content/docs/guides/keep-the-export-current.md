@@ -1,8 +1,6 @@
 ---
 title: 'Keep the stack export current'
 description: 'Each update stores the stack export under refs/chant/snapshots for the graph to read.'
-needs: [chant#4519]
-draft: true
 ---
 
 After each `up`, chant's pulumi apply writes the stack's export as the member's snapshot under `refs/chant/snapshots`. The working tree stays clean.

@@ -15,9 +15,8 @@
  *   just e2e render             EVIDENCE.md again from the ledger
  *   just e2e down               stop the stack and remove its volumes
  *
- * Everything but lint, dry-run and image needs chant's harness
- * (`E2E_HARNESS_FLOOR`). On a chant without it they refuse with the floor
- * and point at plywood's own bench, `just tutorial-up`. Every process the
+ * Everything but lint, dry-run and image runs on chant's harness
+ * (`@intentius/chant/e2e-harness`). Every process the
  * bench starts on the host goes through the harness's SafeRun (no cloud
  * credential, a file:// Pulumi backend, no update check) and its log is
  * scanned before a row is recorded.

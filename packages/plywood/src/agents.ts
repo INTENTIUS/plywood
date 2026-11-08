@@ -174,9 +174,6 @@ export async function mcp(args: string[], _json: boolean, table: ExitTable, io: 
   if (report.rest.length) return usage(`mcp does not take ${report.rest.join(" ")}`, table, io);
   return withChant(`${PRODUCT} mcp`, table, io, (chant) => {
     // stdout is the protocol's: every word of plywood's goes to stderr.
-    if (typeof chant.PRODUCT_MCP_HOOK_FLOOR !== "string") {
-      io.err(`${PRODUCT} mcp: this chant has no product tool hook (chant#4555), so the server serves chant's read tools and none of ${PRODUCT}'s`);
-    }
     const argv = ["serve", "mcp", "--read-only", ...(propose ? ["--propose"] : [])];
     return chant.runChantInProcess(argv, PRODUCT_WORDS, { mcp: plywoodMcpHook(report.value, propose) });
   });
@@ -232,7 +229,7 @@ export function reviewOpFile(doc: RawConfig): string {
 export function reviewOpSpec(doc: RawConfig): { ops: unknown[]; options: Record<string, unknown> } {
   const settings = toChantSettings({ doc });
   const p = settings.pipeline;
-  const engine = chantPipelineOptions({ ...(p.image ? { image: p.image } : {}), ...(p.engineSetup ? { engineSetup: p.engineSetup } : {}) }, false);
+  const engine = chantPipelineOptions({ ...(p.image ? { image: p.image } : {}), ...(p.engineSetup ? { engineSetup: p.engineSetup } : {}) });
   return {
     ops: [
       {

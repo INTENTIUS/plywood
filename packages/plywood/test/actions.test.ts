@@ -5,6 +5,7 @@
  * apart from the golden, which renders the workflow with the installed chant
  * when it has the action job.
  */
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -87,8 +88,7 @@ function fakeChant() {
       };
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv) => {
       calls.push(argv);
       const out = argv.indexOf("--output");

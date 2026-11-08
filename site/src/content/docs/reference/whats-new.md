@@ -7,7 +7,7 @@ Each release lists its changes here, newest first.
 
 ## In 0.3.3
 
-`plywood init` sets `approvals.preview` in the waves spec again, so a merged wave applies the plans its pull request previewed, or exits 4. chant 0.124.67 fixed both bugs that made 0.3.1 turn it off. A repository that wants the old behavior sets `preview: false` in `plywood.yml` and runs `plywood init` again.
+`plywood init` writes `approvals.preview` into the waves spec again now that the plan digest no longer refuses disjoint merges or autonamed creates. A repository that wants the 0.3.2 behavior sets `preview: false` in `plywood.yml` before it runs `plywood init`.
 
 ## In 0.3.2
 

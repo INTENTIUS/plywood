@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,7 +9,8 @@ import { initLines, parseInitArgs, runInit, type InitIo, type InitOptions } from
 import { bucketTarget, setBucketCheckForTests, type BucketReport } from "../src/init/backend";
 import { detect, environmentOf, forgeOfRemote, stackNames } from "../src/init/detect";
 import { withRunGroup } from "../src/init/run-group";
-import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "../src/init/own-jobs";
+import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "@intentius/chant/ci-own-jobs";
+import { writeWorkflow } from "../src/init/workflow";
 import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } from "../src/init/render";
 import { template } from "../src/templates";
 import { PRODUCT_WORDS } from "../src/words";
@@ -50,6 +51,15 @@ let fakeRoot = "";
  * --output, its op-waves generator writes one waves workflow naming the
  * spec, and its productWavesSpec and productPipelineJobs fill the names.
  */
+/** Writes `generated` to the build's --output as chant's build does, keeping the old file's own jobs with --keep-own-jobs. */
+function writeAsChant(argv: string[], generated: string): void {
+  const file = argv[argv.indexOf("--output") + 1]!;
+  const previous = existsSync(file) ? readFileSync(file, "utf8") : undefined;
+  const forge = argv.includes("gitlab") || file.endsWith(".gitlab-ci.yml") ? "gitlab" : "github";
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, argv.includes("--keep-own-jobs") ? keepOwnJobs(previous, generated, forge, { bins: [PRODUCT_WORDS.bin] }).text : generated);
+}
+
 function fakeChant(code = 0) {
   const calls: Array<{ argv: string[] }> = [];
   const pipelines: ProductPipelineOptions[] = [];
@@ -80,10 +90,7 @@ function fakeChant(code = 0) {
         writeFileSync(file, `# chant run --generate --spec ${spec}\njobs: {}\n`);
         return code;
       }
-      if (code === 0 && out >= 0) {
-        mkdirSync(dirname(argv[out + 1]!), { recursive: true });
-        writeFileSync(argv[out + 1]!, argv.includes("gitlab") ? GENERATED_GITLAB : GENERATED);
-      }
+      if (code === 0 && out >= 0) writeAsChant(argv, argv.includes("gitlab") ? GENERATED_GITLAB : GENERATED);
       return code;
     },
     productWavesSpec: (spec) => ({ ...spec, gateName: "wave-{k}", approvals: { ...((spec.approvals as object) ?? {}), pullRequest: { gate: "up" } } }),
@@ -362,7 +369,8 @@ describe("a second run", () => {
 });
 
 describe("own jobs", () => {
-  it("keeps a GitLab job and drops a plywood one the new file no longer has", () => {
+  it("asks chant's build to keep them (chant#4769) and names the ones it kept", async () => {
+    const root = mkdtempSync(join(tmpdir(), "plywood-own-"));
     const previous = [
       "stages: [plan, test]",
       "plan:",
@@ -377,15 +385,13 @@ describe("own jobs", () => {
       "    - npm test",
       "",
     ].join("\n");
-    const { text, kept } = keepOwnJobs(previous, GENERATED_GITLAB, "gitlab");
-    expect(kept).toEqual(["unit-tests"]);
-    expect(text).toBe(`${GENERATED_GITLAB}${OWN_JOBS_LINE}\nunit-tests:\n  stage: test\n  script:\n    - npm test\n`);
-  });
-
-  it("puts GitHub jobs back inside jobs:, before a later top-level key", () => {
-    const generated = "jobs:\n  plan:\n    steps: []\nconcurrency: x\n";
-    const { text } = keepOwnJobs("jobs:\n  mine:\n    steps: []\n", generated, "github");
-    expect(text).toBe(`jobs:\n  plan:\n    steps: []\n  ${OWN_JOBS_LINE}\n  mine:\n    steps: []\nconcurrency: x\n`);
+    writeFileSync(join(root, ".gitlab-ci.yml"), previous);
+    const calls: string[][] = [];
+    const chant = { runChantInProcess: async (argv: string[]) => (calls.push(argv), writeAsChant(argv, GENERATED_GITLAB), 0) };
+    const r = await writeWorkflow(chant, { root, forge: "gitlab", output: ".gitlab-ci.yml", argv: ["build", "."], words: PRODUCT_WORDS });
+    expect(calls[0]).toContain("--keep-own-jobs");
+    expect(r.kept).toEqual(["unit-tests"]);
+    expect(readFileSync(join(root, ".gitlab-ci.yml"), "utf8")).toBe(`${GENERATED_GITLAB}${OWN_JOBS_LINE}\nunit-tests:\n  stage: test\n  script:\n    - npm test\n`);
   });
 });
 

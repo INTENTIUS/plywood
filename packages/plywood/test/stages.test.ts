@@ -27,6 +27,8 @@ function fakeChant(code = 0) {
       };
     },
     approveLine: () => "plywood approve up --plan sha256:x --sign",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
       // The generator writes the file it is given, as chant's build does.

@@ -34,6 +34,8 @@ function fakeChant(extra: Partial<ChantProduct> = {}, file = "jobs:\n  plan:\n  
       };
     },
     approveLine: () => "",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv) => {
       calls.push(argv);
       const out = argv.indexOf("--output");

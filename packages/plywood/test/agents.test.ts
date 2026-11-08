@@ -24,6 +24,8 @@ function fakeChant(hookFloor = true) {
       throw new Error("not used");
     },
     approveLine: () => "",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv, _words, options) => {
       calls.push({ argv, ...(options ? { options } : {}) });
       return 0;

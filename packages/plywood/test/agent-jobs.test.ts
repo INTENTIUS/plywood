@@ -30,6 +30,8 @@ function fakeChant(agent = true) {
       };
     },
     approveLine: () => "",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv) => (calls.push({ argv }), 0),
     ...(agent ? { CI_AGENT_FLOOR: "0.124.55", productDriftAgent: (_w, _op, o) => ({ on: "drift", ...(o ?? {}) }) } : {}),
   };

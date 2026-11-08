@@ -38,6 +38,8 @@ describe("plywood CLI", () => {
       assertProductWords: (w) => w as never,
       productPipelineJobs: () => ({}) as never,
       approveLine: () => "",
+      pendingGatesByPlan: async () => [],
+      parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
       runChantInProcess: async (argv) => (calls.push(argv), 0),
     });
     try {

@@ -54,6 +54,8 @@ function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly s
       throw new Error("not used");
     },
     approveLine: () => "",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv) => {
       calls.push(argv);
       if (argv[0] === "workspace" && argv[1] === "drift") {

@@ -37,6 +37,8 @@ function fakeChant(codes: number[] = [], onCall?: (argv: string[]) => void) {
       };
     },
     approveLine: () => "plywood approve up --plan sha256:x --sign",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
       writeBuildOutput(argv);
@@ -388,15 +390,6 @@ describe("plywood approve up without --pr (plywood#26, chant#4607)", () => {
     expect(await upTargetByPlan(chant4607([gate("pr-3", 3), gate("pr-4", 4)]).api, "sha256:abc")).toMatchObject({ error: expect.stringContaining("pull requests 3, 4") });
   });
 
-  it("keeps --pr required on a chant before chant#4607", async () => {
-    const chant = fakeChant();
-    setChantProductForTests(chant.api);
-    const o = io(repo());
-    expect(await approve(["up", "--plan", "sha256:abc"], false, EXIT, o)).toBe(1);
-    expect(o.stderr.join("\n")).toContain("--pr <n>");
-    expect(chant.calls).toEqual([]);
-  });
-
   it("does not read the ledger when --pr or PR_NUMBER names the pull request", async () => {
     const chant = chant4607([gate("pr-99", 99)]);
     setChantProductForTests(chant.api);
@@ -457,17 +450,11 @@ describe("apply.requires on chant#4607 (plywood#26)", () => {
     expect(chant.calls[0]!.argv).toEqual(["components", "pr-apply", "--before-merge", "--base", "abc", "--pr", "4", "--env", "production", "--gate", "up", "--forge", "github", "--requires", "approved,checks"]);
   });
 
-  it("passes nothing for all four, and says a chant before chant#4607 asks all four", async () => {
+  it("passes nothing for all four", async () => {
     const all = chant4607();
     setChantProductForTests(all.api);
     expect(await up(["--pr", "4"], false, EXIT, io(repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n"), { BASE_SHA: "abc" }))).toBe(0);
     expect(all.calls[0]!.argv).not.toContain("--requires");
-    const old = fakeChant();
-    setChantProductForTests(old.api);
-    const o = io(repo(yml), { BASE_SHA: "abc" });
-    expect(await up(["--pr", "4"], false, EXIT, o)).toBe(0);
-    expect(old.calls[0]!.argv).not.toContain("--requires");
-    expect(o.stderr.join("\n")).toContain("asks all four checks");
   });
 });
 

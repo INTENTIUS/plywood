@@ -51,7 +51,7 @@ export interface ProductPipelineOptions {
   locks?: "plan";
   branch?: string;
   waves?: unknown;
-  /** The checks the apply-before-merge job asks (chant#4607); a chant before it ignores the option. */
+  /** The checks the apply-before-merge job asks (chant#4607). */
   applyRequires?: string[];
   /** The agent's settings (chant#4616 `ProductAgentOptions`); a chant before it ignores the option. */
   agent?: boolean | Record<string, unknown>;
@@ -98,9 +98,9 @@ export interface ChantProduct {
   /** The `agent` of a scheduled drift Op (chant#4616). */
   productDriftAgent?(words: ProductWordsInput | ProductWords, op: string, options?: Record<string, unknown>): Record<string, unknown>;
   /** The standing pending gates waiting on a plan digest, with the pull request a `pr-<n>` op names (chant#4607). */
-  pendingGatesByPlan?(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
+  pendingGatesByPlan(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
   /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */
-  parseRequiresList?(values: readonly string[]): { checks: string[] } | { error: string };
+  parseRequiresList(values: readonly string[]): { checks: string[] } | { error: string };
   /** The comment preview's jobs (chant#4620); with {@link PR_PREVIEW_FLOOR} it says `pr-plan` takes `--target`. */
   prCommentPreviewJob?: (...args: unknown[]) => unknown;
   /** Present when chant has the comment preview and `pr-plan --target` (chant#4620). */
@@ -141,17 +141,6 @@ export interface PendingGateByPlan {
   matched: "planDigest" | "changeSet";
   timestamp: string;
   url?: string;
-}
-
-/**
- * Whether the installed chant has chant#4607: the op-wave generators write
- * the product's bin in each wave job, `pr-apply --before-merge` takes
- * `--requires`, and pending gates are read by plan digest. All three landed
- * together, and `pendingGatesByPlan` with `parseRequiresList` on the
- * ci-product entry is the check.
- */
-export function hasChant4607(chant: ChantProduct): boolean {
-  return typeof chant.pendingGatesByPlan === "function" && typeof chant.parseRequiresList === "function";
 }
 
 /** The functions whose presence says the installed chant has the product pipeline. */

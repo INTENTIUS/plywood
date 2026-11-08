@@ -34,9 +34,12 @@ export default {
   // OCI archives from their Dockerfiles and records their digests, the bundle pins them
   // (scripts/build-cli.mjs passes them through chant's releaseImagePins), and chant's publish
   // pushes the images, publishes the package and makes the GitHub release. The label is the
-  // package version `just release-bump` set.
+  // version: the cut and the publish stamp it into the package (release.version below), so no
+  // commit bumps it, and each Dockerfile reads it from the CHANT_RELEASE_LABEL build argument.
   environments: ["release"],
   release: {
+    // The committed packages/plywood/package.json keeps its version; the release build alone carries the label.
+    version: { packages: ["packages/plywood"] },
     // .github/workflows/publish.yml, from `chant release workflow`: one run, started by hand with
     // the version. The gate names the newest green commit at or below the dispatched one, the cut
     // builds the images and the bundle that pins them, and the publish job checks the cut's image

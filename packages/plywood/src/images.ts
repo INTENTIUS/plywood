@@ -258,6 +258,10 @@ export function packName(version = PLYWOOD_VERSION): string {
   return `intentius-plywood-${version}.tgz`;
 }
 
+/** The build argument a Dockerfile reads the release's version from, never from text rendered into it. */
+export const RELEASE_LABEL_ARG = "CHANT_RELEASE_LABEL";
+const LABEL_REF = `\${${RELEASE_LABEL_ARG}}`;
+
 /**
  * One image's Dockerfile. The fetch stage downloads the engine and checks
  * it; the build argument `CHECKSUMS_URL` names another checksums file, which
@@ -273,7 +277,8 @@ export function dockerfile(engine: EngineName): string {
   return [
     `# Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.`,
     `# Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root`,
-    `# after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR} (just images); nothing pushes it.`,
+    `# after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR}, with --build-arg ${RELEASE_LABEL_ARG}=<the packed version>`,
+    `# (just images passes the committed one; a release passes its label); nothing pushes it.`,
     `FROM ${BASE_IMAGES.debian} AS fetch`,
     `ARG TARGETARCH`,
     `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
@@ -294,11 +299,14 @@ export function dockerfile(engine: EngineName): string {
     `RUN ln -s ${AWS_CLI_DIR}/v2/current/bin/aws /usr/local/bin/aws && aws --version`,
     // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm
     // fetches its exact-pinned runtime dependencies. The tarball is made by npm pack (just images).
-    `COPY ${PACK_DIR}/${packName()} /tmp/${packName()}`,
-    `RUN npm install -g --omit=dev --no-audit --no-fund /tmp/${packName()} && rm -f /tmp/${packName()} && npm cache clean --force && plywood --version`,
+    // The release's label, which the release cut stamps as the package version (chant's release.version)
+    // and passes as a build argument; a build outside a release passes the committed version (just images).
+    `ARG ${RELEASE_LABEL_ARG}`,
+    `COPY ${PACK_DIR}/${packName(LABEL_REF)} /tmp/${packName(LABEL_REF)}`,
+    `RUN npm install -g --omit=dev --no-audit --no-fund /tmp/${packName(LABEL_REF)} && rm -f /tmp/${packName(LABEL_REF)} && npm cache clean --force && plywood --version`,
     `LABEL org.opencontainers.image.title="${name}"`,
     `LABEL org.opencontainers.image.description="${engineTitle}, the AWS CLI ${AWS_CLI.version} and the plywood CLI"`,
-    `LABEL org.opencontainers.image.version="${PLYWOOD_VERSION}"`,
+    `LABEL org.opencontainers.image.version="${LABEL_REF}"`,
     `LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"`,
     `LABEL org.opencontainers.image.licenses="Apache-2.0"`,
     `CMD ["bash"]`,

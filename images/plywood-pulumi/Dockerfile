@@ -1,6 +1,7 @@
 # Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.
 # Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root
-# after npm pack -w @intentius/plywood --pack-destination images/pack (just images); nothing pushes it.
+# after npm pack -w @intentius/plywood --pack-destination images/pack, with --build-arg CHANT_RELEASE_LABEL=<the packed version>
+# (just images passes the committed one; a release passes its label); nothing pushes it.
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS fetch
 ARG TARGETARCH
 ARG CHECKSUMS_URL=https://github.com/pulumi/pulumi/releases/download/v3.272.0/pulumi-3.272.0-checksums.txt
@@ -16,11 +17,12 @@ RUN ln -s /opt/plywood/pulumi-3.272.0/pulumi /usr/local/bin/pulumi && pulumi ver
 RUN pulumi plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home
 COPY --from=fetch /opt/plywood/aws-cli/ /opt/plywood/aws-cli/
 RUN ln -s /opt/plywood/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
-COPY images/pack/intentius-plywood-0.3.2.tgz /tmp/intentius-plywood-0.3.2.tgz
-RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-0.3.2.tgz && rm -f /tmp/intentius-plywood-0.3.2.tgz && npm cache clean --force && plywood --version
+ARG CHANT_RELEASE_LABEL
+COPY images/pack/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz
+RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz && rm -f /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz && npm cache clean --force && plywood --version
 LABEL org.opencontainers.image.title="plywood-pulumi"
 LABEL org.opencontainers.image.description="Pulumi 3.272.0, the AWS CLI 2.22.0 and the plywood CLI"
-LABEL org.opencontainers.image.version="0.3.2"
+LABEL org.opencontainers.image.version="${CHANT_RELEASE_LABEL}"
 LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 CMD ["bash"]

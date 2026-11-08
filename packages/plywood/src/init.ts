@@ -520,7 +520,7 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
     ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
   });
   const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
-  // Opt-in since 0.3.1 (`preview: true` in plywood.yml; plywood#55, plywood#56): a merged wave then applies what its pull request previewed, or exits 4 (chant 0.124.59's approvals.preview).
+  // On unless plywood.yml says `preview: false` (plywood#56): a merged wave applies what its pull request previewed, or exits 4 (chant's approvals.preview).
   return previewOf(doc) && (await hasChantWavePreview()) ? withWavePreview(named, forge) : named;
 }
 

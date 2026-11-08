@@ -213,12 +213,12 @@ describe("golden files", () => {
       gateName: "wave-{k}",
       branches: ["main"],
       step: { kind: "pulumi-up" },
-      // Since 0.3.1 approvals.preview is off unless plywood.yml says `preview: true` (plywood#55, plywood#56), so no wave token either.
-      approvals: { pullRequest: { gate: "up" } },
+      // approvals.preview is on unless plywood.yml says `preview: false` (plywood#56), with the wave token it needs.
+      approvals: { pullRequest: { gate: "up" }, preview: true },
       waves: [
-        { name: "dev", gate: "on-destructive", runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }] },
-        { name: "staging", gate: "on-destructive", runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }] },
-        { name: "prod", gate: "on-destructive", runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }] },
+        { name: "dev", gate: "on-destructive", runs: [{ target: "shop/dev", input: { dir: "infra", stack: "dev", member: "shop" } }], variables: TOKEN },
+        { name: "staging", gate: "on-destructive", runs: [{ target: "shop/staging", input: { dir: "infra", stack: "staging", member: "shop" } }], variables: TOKEN },
+        { name: "prod", gate: "on-destructive", runs: [{ target: "shop/prod", input: { dir: "infra", stack: "prod", member: "shop" } }], variables: TOKEN },
       ],
     });
     expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8"))).toEqual({
@@ -240,15 +240,15 @@ describe("golden files", () => {
     expect(op.indexOf('phase("staging"')).toBeLessThan(op.indexOf('phase("prod"'));
   });
 
-  it("preview: true in plywood.yml opts in to approvals.preview and the wave token (plywood#55, plywood#56)", async () => {
+  it("preview: false in plywood.yml leaves approvals.preview and the wave token out (plywood#56)", async () => {
     setChantProductForTests(fakeChant().api);
     setChantWavePreviewForTests(true);
-    const root = repo("git@github.com:acme/shop.git", { ...ONE_PROJECT, "plywood.yml": "preview: true\n" });
+    const root = repo("git@github.com:acme/shop.git", { ...ONE_PROJECT, "plywood.yml": "preview: false\n" });
     const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
     expect(r.ok).toBe(true);
     const spec = unwrapWavesSpec(JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"))) as { approvals: object; waves: Array<{ variables?: object }> };
-    expect(spec.approvals).toEqual({ pullRequest: { gate: "up" }, preview: true });
-    expect(spec.waves.map((w) => w.variables)).toEqual([TOKEN, TOKEN, TOKEN]);
+    expect(spec.approvals).toEqual({ pullRequest: { gate: "up" } });
+    expect(spec.waves.map((w) => w.variables)).toEqual([undefined, undefined, undefined]);
   });
 
   it("two projects: a member each, and their stacks share a wave per environment", async () => {

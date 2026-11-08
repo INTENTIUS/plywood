@@ -25,8 +25,8 @@
  *       in a repository: tell plywood.yml's control repo that this commit
  *       applied (dispatchControl), for a job of the repository's own
  *
- * With a chant that has chant#4617, `plywood ci` puts plywood.yml's
- * `control` into the waves spec ({@link wavesControl}), and chant's op-wave
+ * `plywood ci` puts plywood.yml's `control` into the waves spec (chant#4617,
+ * {@link wavesControl}), and chant's op-wave
  * generator adds the job that tells the control repo how the waves ended,
  * so the repository needs no dispatch job of its own.
  *

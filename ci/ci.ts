@@ -3,8 +3,8 @@
  *
  * `just ci` renders this into .github/workflows/ci.yml, and the `package`
  * job fails when the committed file differs from what this renders. Two jobs
- * run side by side: `package` typechecks, builds and checks the plywood
- * bundle; `site` lints the prose and builds the docs site as pages.yml does,
+ * run side by side: `package` typechecks, builds, runs the unit tests and
+ * checks the plywood bundle; `site` lints the prose and builds the docs site as pages.yml does,
  * without deploying it. Nothing here publishes.
  */
 
@@ -34,7 +34,7 @@ const setup = (lockFile: string): InstanceType<typeof Step>[] => [
   }),
 ];
 
-/** The package: typecheck, the bundle and its shape, and the rendered workflow. */
+/** The package: typecheck, the unit tests, the bundle and its shape, and the rendered workflow. */
 export const pkg = new Job({
   name: "package",
   "runs-on": "ubuntu-latest",
@@ -44,6 +44,7 @@ export const pkg = new Job({
     new Step({ name: "Install", run: "npm ci" }),
     new Step({ name: "Typecheck", run: "npm run typecheck" }),
     new Step({ name: "Build", run: "npm run build" }),
+    new Step({ name: "Unit tests", run: "npm test" }),
     new Step({ name: "Bundle check", run: "npm run bundle-check -w @intentius/plywood" }),
     new Step({
       name: "Workflows match their declarations",

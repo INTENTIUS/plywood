@@ -1,6 +1,6 @@
 /**
  * chant's product pipeline (`@intentius/chant/ci-product`, chant#4550),
- * reached through a feature-detect. plywood pins chant 0.124.59, which
+ * reached through a feature-detect. plywood pins chant 0.124.77, which
  * has the entry; a chant before the release that added it (its
  * `CI_PRODUCT_FLOOR`) does not.
  *

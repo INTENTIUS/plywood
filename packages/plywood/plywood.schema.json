@@ -219,8 +219,8 @@
     },
     "preview": {
       "type": "boolean",
-      "default": false,
-      "description": "true: plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. Known limits: plywood#55 (the second of two disjoint merges is refused) and plywood#56 (a pull request that creates an autonamed resource is refused)."
+      "default": true,
+      "description": "true (the default): plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. false leaves it out."
     },
     "approval_rules": {
       "type": "object",

@@ -40,7 +40,7 @@ A guide whose feature needs a newer chant or plunge than plywood pins carries `d
 
 <DraftList />
 
-`approvals.preview` is off by default since 0.3.1 and `preview: true` in `plywood.yml` turns it on, because of two bugs in the plan digest: [plywood#55](https://github.com/INTENTIUS/plywood/issues/55) (the second of two merges that change different resources of one stack is refused) and [plywood#56](https://github.com/INTENTIUS/plywood/issues/56) (a pull request that creates an autonamed resource is refused at merge). The default goes back to on in `previewOf` (`src/config/approval.ts`) once both are fixed.
+`approvals.preview` is on by default and `preview: false` in `plywood.yml` turns it off (`previewOf` in `src/config/approval.ts`). It was off in 0.3.1 and 0.3.2 because of two bugs in chant's plan digest, [plywood#55](https://github.com/INTENTIUS/plywood/issues/55) and [plywood#56](https://github.com/INTENTIUS/plywood/issues/56), both fixed by chant 0.124.67.
 
 Day-2 actions (plywood#39) ship the `actions` key with its check. The `plywood action` verb refuses on a lexicon without `gatedStackAction`. The `pw-action` scenario (plywood#44) runs on a local command resource `rotate` that the bench's seed adds to prod-us, with the command provider plywood's images carry. Its run is not recorded yet.
 

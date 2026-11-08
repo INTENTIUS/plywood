@@ -19,7 +19,7 @@ export const GATES = ["always", "on-destructive", "never"] as const;
 export const DEFAULT_GATE: ChantGatePolicy = "on-destructive";
 export const APPROVALS = ["ledger", "sealed", "pr-review"] as const;
 export const DEFAULT_APPROVAL: ChantApprovalSource = "ledger";
-export const DEFAULT_PREVIEW = false;
+export const DEFAULT_PREVIEW = true;
 export const APPROVAL_RULE_KEYS = ["role", "roles", "quorum"] as const;
 
 export interface ApprovalRuleSettings {
@@ -37,13 +37,14 @@ export function gateOf(doc: RawConfig): ChantGatePolicy {
 }
 
 /**
- * Whether `plywood init` writes `approvals.preview` into the waves spec.
- * Off by default since 0.3.1: with it on, the second of two disjoint merges
- * on one stack is refused (plywood#55) and so is a pull request that creates
- * an autonamed resource (plywood#56).
+ * Whether `plywood init` writes `approvals.preview` into the waves spec: on
+ * unless plywood.yml says `preview: false`. It was off in 0.3.1 and 0.3.2
+ * while chant refused the second of two disjoint merges (plywood#55, fixed in
+ * chant 0.124.67) and a pull request that creates an autonamed resource
+ * (plywood#56, fixed in chant 0.124.60).
  */
 export function previewOf(doc: RawConfig): boolean {
-  return doc.preview === true;
+  return doc.preview !== false;
 }
 
 /** `approval_rules` as chant's quorum rules, in the order plywood.yml lists them. */
@@ -63,7 +64,7 @@ export const approval: ConfigGroup = {
     preview: {
       type: "boolean",
       default: DEFAULT_PREVIEW,
-      description: "true: plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. Known limits: plywood#55 (the second of two disjoint merges is refused) and plywood#56 (a pull request that creates an autonamed resource is refused).",
+      description: "true (the default): plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. false leaves it out.",
     },
     approval_rules: {
       type: "object",

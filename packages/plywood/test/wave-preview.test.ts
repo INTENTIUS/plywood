@@ -1,7 +1,7 @@
 /**
  * chant 0.124.67's `approvals.preview` (plywood#52): a merged wave applies the
- * plans its pull request previewed, or exits 4. Off by default since 0.3.1
- * (plywood#55, plywood#56); `preview: true` in plywood.yml turns it on. The pull request workflow
+ * plans its pull request previewed, or exits 4. On by default (plywood#56);
+ * `preview: false` in plywood.yml turns it off. The pull request workflow
  * records the plans (`run wave --record-plans`), and the wave job reads the
  * merged pull request from the forge, so it carries a token that can.
  */
@@ -15,7 +15,8 @@ import { runInit } from "../src/init";
 
 afterEach(() => setChantProductForTests("reset"));
 
-const PREVIEW = "preview: true\n";
+const PREVIEW = undefined;
+const NO_PREVIEW = "preview: false\n";
 
 const real = await chantProduct();
 
@@ -48,10 +49,10 @@ function jobBlock(text: string, job: string): string {
   return m?.[1] ?? "";
 }
 
-describe.runIf(real !== undefined)("approvals.preview is off unless plywood.yml says preview: true", () => {
+describe.runIf(real !== undefined)("approvals.preview is off when plywood.yml says preview: false", () => {
   it("writes no approvals.preview and no wave token on GitHub, Forgejo or GitLab", async () => {
     for (const forge of ["github", "forgejo", "gitlab"] as const) {
-      const files = await generated(forge);
+      const files = await generated(forge, NO_PREVIEW);
       expect(files[".chant/op-waves/pulumi-up.spec.json"], forge).not.toContain('"preview"');
       const waves = files[forge === "github" ? ".github/workflows/pulumi-up.yml" : forge === "forgejo" ? ".forgejo/workflows/pulumi-up.yml" : "pulumi-up.gitlab-ci.yml"]!;
       expect(waves, forge).not.toContain("GITHUB_TOKEN");
@@ -59,7 +60,7 @@ describe.runIf(real !== undefined)("approvals.preview is off unless plywood.yml 
   }, 120_000);
 });
 
-describe.runIf(real !== undefined)("with preview: true the waves workflows apply what the pull request previewed", () => {
+describe.runIf(real !== undefined)("by default the waves workflows apply what the pull request previewed", () => {
   it("on GitHub: the waves file can read pull requests and each wave job has a token, and the plans workflow records plans", async () => {
     const files = await generated("github", PREVIEW);
     const waves = files[".github/workflows/pulumi-up.yml"]!;

@@ -24,13 +24,13 @@
  *
  * chant's pulumi lexicon renders the same verified lines
  * (`@intentius/chant-lexicon-pulumi/ci-setup`, chant#4592):
- * `pulumiInstallLine` and `plungeInstallLine` take the version, the root and
- * the recorded sums. The line for each engine's linked release is chant's,
- * given the root /opt/plywood and plywood's sums, so plywood's images still
- * skip the download. A pin that is not linked keeps plywood's line: chant's
- * always links onto PATH, and its Pulumi line skips when the `pulumi` on PATH
- * is that version without checking the versioned directory, which a step
- * pinned with `engineVersion` runs from.
+ * `pulumiInstallLine` and `plungeInstallLine` take the version, the root,
+ * the recorded sums and `link`. Every line is chant's, given the root
+ * /opt/plywood and plywood's sums, so plywood's images still skip the
+ * download. A pin that is not linked passes `link: false`: the line then
+ * checks only the versioned directory, which a step pinned with
+ * `engineVersion` runs from, and leaves PATH alone (chant#4814). The images'
+ * fetch stage runs chant's `ciFetchScript` with the same sums.
  *
  * plywood hands the lines to chant as `beforeScript`
  * ({@link chantPipelineOptions}). A stack pinned to a release that is not
@@ -44,7 +44,7 @@ import { version as PLYWOOD_VERSION } from "../package.json";
 /** The release's image digests by reference, baked in by scripts/build-cli.mjs from CHANT_RELEASE_DIGESTS; empty outside a release build. */
 declare const __PLYWOOD_IMAGE_DIGESTS__: Record<string, string> | undefined;
 const digests: Record<string, string> = typeof __PLYWOOD_IMAGE_DIGESTS__ !== "undefined" ? __PLYWOOD_IMAGE_DIGESTS__ : {};
-import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
+import { CI_DOCKER_ARCH, ciFetchScript, plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
 export type EngineName = "pulumi" | "plunge";
@@ -135,57 +135,15 @@ export function pinnedSums(engine: EngineName, version: string): Partial<Record<
 }
 
 /**
- * Shell that downloads one engine release into `dir` and checks it: the
- * archive's line in the release's checksums file must match the archive
- * (sha256sum -c), and for a pinned release the line must hold plywood's sum.
- * `arch` is a shell expression giving x64 or arm64; `checksumsUrl` a shell
- * word for the checksums file's URL. Both archives unpack a top directory
- * named after the engine, which `--strip-components=1` drops.
- */
-function fetchScript(engine: EngineName, version: string, dir: string, arch: string, checksumsUrl?: string): string {
-  const r = release(engine, version);
-  const sums = pinnedSums(engine, version);
-  const pinCase = Object.keys(sums).length
-    ? `case "$a" in ${ARCHES.filter((x) => sums[x]).map((x) => `${x}) want=${sums[x]} ;;`).join(" ")} *) want= ;; esac`
-    : "want=";
-  const file = `${r.archive("x64").replace("-x64.", "-$a.")}`;
-  return [
-    `a=${arch}`,
-    `f="${file}"`,
-    `t="$(mktemp -d)"`,
-    `curl -fsSLo "$t/$f" "${r.base}/$f"`,
-    `curl -fsSLo "$t/sums" ${checksumsUrl ?? `"${r.base}/${r.checksums}"`}`,
-    // The archive's line, with any ./ or * before the name taken off.
-    `line="$(sed -n "s#^\\([0-9a-f]\\{64\\}\\)  *[*.]*/*$f\\$#\\1#p" "$t/sums")"`,
-    `{ [ -n "$line" ] || { echo "${engine} ${version}: $f is not in ${r.checksums}" >&2; exit 1; }; }`,
-    pinCase,
-    `{ [ -z "$want" ] || [ "$line" = "$want" ] || { echo "${engine} ${version}: ${r.checksums} lists $line for $f; plywood pins $want" >&2; exit 1; }; }`,
-    `echo "$line  $t/$f" | sha256sum -c - >/dev/null`,
-    `mkdir -p "${dir}"`,
-    `tar -xzf "$t/$f" -C "${dir}" --strip-components=1`,
-  ].join(" && ");
-}
-
-/** The machine's architecture as x64 or arm64, in a job. */
-const JOB_ARCH = `"$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"`;
-
-/**
  * The job line that installs `engine` at `version`, checked against the
  * release checksums. It skips when the binary is already in place, as in
  * plywood's image or one built FROM it. With `link`, the binary is also
  * linked into /usr/local/bin, as the stack's default engine.
  */
 export function installLine(engine: EngineName, version: string, link = true): string {
-  if (!link) return unlinkedInstallLine(engine, version);
   const sums = pinnedSums(engine, version);
-  const options = { root: ENGINE_ROOT, ...(Object.keys(sums).length ? { sha256: sums } : {}) };
+  const options = { root: ENGINE_ROOT, ...(Object.keys(sums).length ? { sha256: sums } : {}), link };
   return engine === "pulumi" ? pulumiInstallLine(version, options) : plungeInstallLine(version, options);
-}
-
-/** plywood's line for a pin that is not linked: chant's ci-setup lines always link onto PATH. */
-export function unlinkedInstallLine(engine: EngineName, version: string): string {
-  const dir = engineDir(engine, version);
-  return `[ -x "${dir}/${engine}" ] || (set -e; ${fetchScript(engine, version, dir, JOB_ARCH)})`;
 }
 
 /** One engine at one version a job needs, and whether it is the one on PATH. */
@@ -320,8 +278,7 @@ export function dockerfile(engine: EngineName): string {
     `ARG TARGETARCH`,
     `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
     `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*`,
-    // Each case pattern opens with "(": bash 3.2 (macOS sh) cannot parse a bare "arm64)" inside $(...).
-    `RUN set -e; ${fetchScript(engine, version, `/out${dir}`, `"$(case "$TARGETARCH" in (arm64) echo arm64 ;; (*) echo x64 ;; esac)"`, `"$CHECKSUMS_URL"`)}`,
+    `RUN set -e; ${ciFetchScript(engine, version, { dir: `/out${dir}`, arch: CI_DOCKER_ARCH, checksumsUrl: '"$CHECKSUMS_URL"', sha256: pinnedSums(engine, version) })}`,
     // The AWS CLI chant uploads an s3:// reports.url with, checked against plywood's sums (AWS_CLI).
     `RUN set -e; ${awsCliFetchLine()}`,
     `FROM ${BASE_IMAGES.node}`,

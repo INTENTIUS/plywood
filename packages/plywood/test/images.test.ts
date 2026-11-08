@@ -190,7 +190,7 @@ describe("Dockerfiles", () => {
       execFileSync("sh", ["-c", run], { env: { ...process.env, TARGETARCH: "amd64" }, stdio: "pipe" });
     } catch (e) {
       failed = true;
-      expect(String((e as { stderr: Buffer }).stderr)).toContain("plywood pins");
+      expect(String((e as { stderr: Buffer }).stderr)).toContain("chant records");
     }
     expect(failed).toBe(true);
   });

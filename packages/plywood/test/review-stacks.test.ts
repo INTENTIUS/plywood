@@ -21,6 +21,8 @@ const chant = {
     comments: {},
   }),
   approveLine: () => "",
+  pendingGatesByPlan: async () => [],
+  parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
   runChantInProcess: async () => 0,
 } as unknown as ChantProduct;
 

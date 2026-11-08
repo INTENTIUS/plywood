@@ -37,9 +37,9 @@ import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
-import { hasChant4607, type ChantProduct, type PendingGateByPlan } from "./chant-product";
+import type { ChantProduct, PendingGateByPlan } from "./chant-product";
 import { REVIEW_GATE, REVIEW_GATE_WORD, reviewOp } from "./review-stacks";
-import { applyMergeArgv, positionals, requiresArgv, requiresNotHonoured, takeFlag, usage, withChant, type StageIo } from "./stages";
+import { applyMergeArgv, positionals, requiresArgv, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS } from "./words";
 import { unwrapWavesSpec } from "./waves-workflow";
 
@@ -121,7 +121,7 @@ export async function approve(args: string[], json: boolean, table: ExitTable, i
   const prNumber = pr.value ?? io.env.PR_NUMBER;
   const gate = named[0]!;
   const plan = passed.argv[passed.argv.indexOf("--plan") + 1];
-  // chant#4607: `approve up --plan <digest>` finds its pull request from the digest, when chant reads pending gates by plan.
+  // chant#4607: `approve up --plan <digest>` finds its pull request from the digest.
   const byPlan = gate === PR_GATE && !prNumber && !op.value && passed.argv.includes("--plan");
   const target = byPlan ? undefined : approveTarget(gate, { pr: prNumber, stack: stack.value, op: op.value });
   if (target && "error" in target) return usage(target.error, table, io);
@@ -228,14 +228,13 @@ async function refreshApprovalStatus(chant: ChantProduct, spec: Record<string, u
 /**
  * The pull request op whose `up` gate waits on `digest` (chant#4607's
  * `pendingGatesByPlan`). With `stack`, the op of that stack's gate
- * (`pr-<n>-<stack>`). Without chant#4607, `--pr` or PR_NUMBER stays required.
+ * (`pr-<n>-<stack>`).
  */
 export async function upTargetByPlan(chant: ChantProduct, digest: string, opts: { stack?: string; cwd?: string } = {}): Promise<{ op: string; pr: number } | { error: string }> {
   const needsPr = `the ${PR_GATE} gate is a pull request's: name it with --pr <n> (or PR_NUMBER), or approve pr-<n>`;
-  if (!hasChant4607(chant)) return { error: `${needsPr}. The installed chant cannot find a pull request from a plan digest (chant#4607)` };
   let gates: PendingGateByPlan[];
   try {
-    gates = await chant.pendingGatesByPlan!(digest, { pullRequestsOnly: true, ...(opts.cwd ? { cwd: opts.cwd } : {}) });
+    gates = await chant.pendingGatesByPlan(digest, { pullRequestsOnly: true, ...(opts.cwd ? { cwd: opts.cwd } : {}) });
   } catch (e) {
     return { error: `${needsPr}. Reading the pending gates for ${digest} failed: ${(e as Error).message}` };
   }
@@ -386,9 +385,7 @@ async function upBeforeMerge(number: string, args: string[], json: boolean, tabl
   const forge = forgeFlag.value ?? configured ?? "github";
   if (!(FORGES as readonly string[]).includes(forge)) return usage(`--forge ${forge} is not one of ${FORGES.join(", ")}`, table, io);
   return withChant(`/${PRODUCT} up`, table, io, async (chant) => {
-    // chant#4607: apply.requires as --requires; a chant before it asks all four, and plywood says so.
-    const note = requiresNotHonoured(chant, config.doc);
-    if (note) io.err(`${PRODUCT}: ${note}`);
+    // chant#4607: apply.requires as --requires.
     const argv = [
       "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
       "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,

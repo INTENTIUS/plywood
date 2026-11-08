@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import { chantProduct, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
@@ -253,10 +253,6 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   return withChant(`${PRODUCT} ci`, table, io, async (chant) => {
     const reviewStacks = await chantReviewStacks();
     if (config.doc.review_stacks !== undefined && !reviewStacks) io.err(`${PRODUCT}: ${REVIEW_STACKS_NEED_CHANT}`);
-    if (applyWhenOf(config.doc) === "pull-request") {
-      const note = requiresNotHonoured(chant, config.doc);
-      if (note) io.err(`${PRODUCT}: ${note}`);
-    }
     let waves: unknown;
     try {
       waves = readWavesSpec(io.cwd);
@@ -398,7 +394,7 @@ export function workflowPlan(
   const actionJob = actionJobFor(doc, forge, notes);
   const jobsWanted: ChantCommand[] = actionJob ? [...shape.jobs, "action"] : shape.jobs;
   const words = wordsForJobs(jobsWanted);
-  // chant#4607: apply.requires reaches pr-apply --before-merge as --requires; before it, all four checks are asked.
+  // chant#4607: apply.requires reaches pr-apply --before-merge as --requires.
   const requires = shape.applyBeforeMerge ? requiresArgv(chant, doc) : [];
   // chant#4620: `/plywood preview` previews the pull request again, once the installed chant has the job.
   const previewComment = hasChant4620(chant);
@@ -504,22 +500,13 @@ export function respondArgv(responses: Readonly<Record<string, string>>, decide:
 /**
  * `--requires <list>` for `pr-apply --before-merge` and the build that writes
  * its job (chant#4607), when plywood.yml's apply.requires names fewer than
- * the four checks and the installed chant takes the flag. Empty otherwise:
- * all four are chant's default, and a chant before chant#4607 asks all four
- * whatever plywood.yml lists ({@link requiresNotHonoured} says so).
+ * the four checks. Empty otherwise: all four are chant's default.
  */
 export function requiresArgv(chant: ChantProduct, doc: RawConfig): string[] {
   const listed = applyRequiresOf(doc);
-  if (listed.length === APPLY_REQUIRES.length || !hasChant4607(chant)) return [];
-  const parsed = chant.parseRequiresList!(listed);
+  if (listed.length === APPLY_REQUIRES.length) return [];
+  const parsed = chant.parseRequiresList(listed);
   return "checks" in parsed ? ["--requires", parsed.checks.join(",")] : [];
-}
-
-/** The line a chant without `--requires` gets when plywood.yml lists fewer checks, or undefined. */
-export function requiresNotHonoured(chant: ChantProduct, doc: RawConfig): string | undefined {
-  const listed = applyRequiresOf(doc);
-  if (listed.length === APPLY_REQUIRES.length || hasChant4607(chant)) return undefined;
-  return `apply.requires lists ${listed.join(", ")}, and the installed chant has no pr-apply --requires (chant#4607), so the update before merge asks all four checks: ${APPLY_REQUIRES.join(", ")}`;
 }
 
 export function usage(message: string, table: ExitTable, io: StageIo): number {

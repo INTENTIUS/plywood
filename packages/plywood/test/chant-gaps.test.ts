@@ -146,6 +146,8 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
       assertProductWords: (w: unknown) => w,
       productPipelineJobs: () => ({}),
       approveLine: () => "",
+      pendingGatesByPlan: async () => [],
+      parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
       runChantInProcess: async (argv: string[], words: unknown) => (calls.push({ argv, words }), 0),
     } as unknown as ChantProduct;
     setChantProductForTests(base);

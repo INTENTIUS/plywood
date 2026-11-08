@@ -59,6 +59,8 @@ function fakeChant(code = 0) {
     assertProductWords: (w: unknown) => w,
     productPipelineJobs: () => ({}),
     approveLine: () => "",
+    pendingGatesByPlan: async () => [],
+    parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v: string) => v.split(",")) }),
     runChantInProcess: async (argv: string[]) => {
       calls.push(argv);
       return code;

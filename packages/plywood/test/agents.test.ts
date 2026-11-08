@@ -2,19 +2,14 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { mcp, plywoodMcpHook, plywoodProposeTools, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { EXIT } from "../src/exit-codes";
-import { guard, guardVerdict, withGuardHook } from "../src/guard";
+import { guard } from "../src/guard";
 import type { StageIo } from "../src/stages";
 import { PRODUCT_WORDS, TEMPLATE_REQUEST_WORDS } from "../src/words";
-// @ts-ignore: the hook template is plain JS, shipped as it is.
-import { verdict } from "../templates/agent-guard/plywood-guard.mjs";
-
-const TEMPLATE_HOOK = fileURLToPath(new URL("../templates/agent-guard/plywood-guard.mjs", import.meta.url));
 
 function fakeChant(hookFloor = true) {
   const calls: Array<{ argv: string[]; options?: { mcp?: unknown } }> = [];
@@ -171,37 +166,35 @@ describe("the review agent", () => {
   });
 });
 
-describe("the agent guard", () => {
-  const refused = ["pulumi up", "pulumi up --yes --stack dev", "cd shop && pulumi -C infra up", "npx plunge up", "FOO=1 pulumi destroy -y", "/usr/local/bin/pulumi update", "env -i pulumi up"];
-  const allowed = ["pulumi preview", "pulumi stack ls", "plunge drift --resource urn:x", "git commit -m 'pulumi up later'", "plywood preview", "echo pulumi"];
+describe("the agent guard (chant's, chant#4770)", () => {
+  const refused = ["pulumi up", "pulumi up --yes --stack dev", "cd shop && pulumi -C infra up", "npx plunge up", "FOO=1 pulumi destroy -y", "/usr/local/bin/pulumi update", "env -i pulumi up", "bash -c 'pulumi up'", "plywood up --pr 3", "plywood approve up --plan sha256:x", "plywood drift --respond up"];
+  const allowed = ["pulumi preview", "pulumi stack ls", "plunge drift --resource urn:x", "git commit -m 'pulumi up later'", "plywood preview", "plywood drift", "echo pulumi"];
 
-  it("refuses an update or destroy, and lets every read through", () => {
-    for (const line of refused) expect(guardVerdict(line), line).toBeDefined();
-    for (const line of allowed) expect(guardVerdict(line), line).toBeUndefined();
+  it("refuses an update, destroy or plywood's own applying verbs, and lets every read through", async () => {
+    const dir = repo("{}\n");
+    for (const line of refused) expect(await guard(["check", line], false, EXIT, io(dir)), line).toBe(EXIT.denied);
+    for (const line of allowed) expect(await guard(["check", line], false, EXIT, io(dir)), line).toBe(EXIT.done);
+    const o = io(dir);
+    await guard(["check", "pulumi", "up"], true, EXIT, o);
+    expect(JSON.parse(o.stdout[0]!).refused).toMatchObject({ engine: "pulumi", subcommand: "up", message: expect.stringContaining("plywood guard: ") });
   });
 
-  it("gives the same answers in the hook template", () => {
-    for (const line of [...refused, ...allowed]) expect(Boolean(verdict(line)), line).toBe(Boolean(guardVerdict(line)));
-  });
-
-  it("blocks pulumi up in a fixture Claude Code session (exit 2)", () => {
-    const call = (command: string) => spawnSync(process.execPath, [TEMPLATE_HOOK], { input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }) });
-    const blocked = call("pulumi up --yes");
-    expect(blocked.status).toBe(2);
-    expect(blocked.stderr.toString()).toContain("pull request");
-    expect(call("pulumi preview").status).toBe(0);
-  });
-
-  it("installs the hook once into .claude/settings.json and keeps the rest", async () => {
+  it("installs the hook once into .claude/settings.json, keeps the rest, and the hook blocks pulumi up (exit 2)", async () => {
     const dir = repo("{}\n");
     mkdirSync(join(dir, ".claude"));
     writeFileSync(join(dir, ".claude/settings.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] } }));
-    expect(await guard(["install"], false, EXIT, io(dir))).toBe(0);
+    const o = io(dir);
+    expect(await guard(["install"], true, EXIT, o)).toBe(0);
+    expect(JSON.parse(o.stdout[0]!).written).toEqual(expect.arrayContaining([".claude/hooks/plywood-guard.mjs", ".claude/settings.json", ".plywood/agent-bin/pulumi", ".plywood/agent-bin/plunge"]));
     await guard(["install"], false, EXIT, io(dir));
     const settings = JSON.parse(readFileSync(join(dir, ".claude/settings.json"), "utf8"));
     expect(settings.permissions).toEqual({ allow: ["Bash(ls)"] });
     expect(settings.hooks.PreToolUse).toHaveLength(1);
-    expect(withGuardHook(settings)).toEqual(settings);
-    expect(await guard(["check", "pulumi", "up"], false, EXIT, io(dir))).toBe(EXIT.denied);
+    const hook = join(dir, ".claude/hooks/plywood-guard.mjs");
+    const call = (command: string) => spawnSync(process.execPath, [hook, "hook"], { cwd: dir, input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: dir }) });
+    const blocked = call("pulumi up --yes");
+    expect(blocked.status).toBe(2);
+    expect(blocked.stderr.toString()).toContain("pull request");
+    expect(call("pulumi preview").status).toBe(0);
   });
 });

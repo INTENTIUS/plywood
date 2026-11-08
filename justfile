@@ -122,11 +122,6 @@ release-bump version:
     npm version {{version}} --no-git-tag-version -w @intentius/plywood
     npm run images -w @intentius/plywood
 
-# One image as the OCI archive the release cut records, into dist/images
-# (PLYWOOD_IMAGE_PLATFORMS=linux/amd64 builds one platform). Nothing is pushed.
-release-image engine:
-    scripts/release-image.sh {{engine}}
-
 # Install the site's dependencies from its lock file.
 site-install:
     cd site && npm ci

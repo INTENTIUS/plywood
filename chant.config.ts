@@ -8,6 +8,9 @@ const ENGINES: readonly EngineName[] = ["pulumi", "plunge"];
 const NPM_TRUSTED_PUBLISHING_MIN = "11.5.1";
 const NPM_VERSION = "11.19.0";
 
+/** What every image copies in: the bundle, built without the release's digests, packed into images/pack. */
+const PREPARE_IMAGES = "npm run build && mkdir -p images/pack && npm pack -w @intentius/plywood --pack-destination images/pack";
+
 /** The Changes page a GitHub release takes its notes from: its `## In <version>` section. */
 const CHANGES = "site/src/content/docs/reference/whats-new.md";
 
@@ -28,9 +31,10 @@ export default {
   sourceDir: "ci",
 
   // The release (AGENTS.md, Releasing), as terragucci's: chant's cut builds both images as
-  // OCI archives and records their digests, the bundle pins them (scripts/build-cli.mjs reads
-  // CHANT_RELEASE_DIGESTS), and chant's publish pushes the images, publishes the package and
-  // makes the GitHub release. The label is the package version `just release-bump` set.
+  // OCI archives from their Dockerfiles and records their digests, the bundle pins them
+  // (scripts/build-cli.mjs passes them through chant's releaseImagePins), and chant's publish
+  // pushes the images, publishes the package and makes the GitHub release. The label is the
+  // package version `just release-bump` set.
   environments: ["release"],
   release: {
     // .github/workflows/publish.yml, from `chant release workflow`: one run, started by hand with
@@ -55,7 +59,8 @@ export default {
       ],
       file: ".github/workflows/publish.yml",
     },
-    images: ENGINES.map((name) => ({ name, build: `scripts/release-image.sh ${name}`, archive: `dist/images/${name}.tar` })),
+    // Each image installs the packed package, built once before the images with no digest table.
+    images: ENGINES.map((name) => ({ name, dockerfile: `images/${imageName(name)}/Dockerfile`, prepare: PREPARE_IMAGES })),
     publish: [
       ...ENGINES.map((name) => ({
         type: "oci" as const,

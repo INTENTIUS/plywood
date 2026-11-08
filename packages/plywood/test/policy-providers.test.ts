@@ -16,7 +16,7 @@ import { pulumiPreviewPart } from "@intentius/chant-lexicon-pulumi/change-set";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { policyProvidersOf } from "../src/config/policy";
 import { runInit, type InitIo, type InitOptions } from "../src/init";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import {
   providerDenials,
   providerPackageOf,
@@ -118,7 +118,7 @@ describe("policy.providers", () => {
     writeFileSync(join(root, "plywood.yml"), "stacks: { shop/dev: { dir: infra } }\npolicy: { rego: policy, providers: [aws] }\n");
     const io: InitIo = { out: () => {}, err: () => {}, cwd: root, env: {} };
     const opts: InitOptions = { env: "production", bucketCheck: false, dryRun: false, yes: true };
-    const result = await runInit(opts, FALLBACK_EXIT, io);
+    const result = await runInit(opts, EXIT, io);
     expect(readFileSync(join(root, "policy/plywood_providers.rego"), "utf8")).toContain('allowed := {"aws"}');
     expect(existsSync(join(root, PROVIDERS_PACK_DIR, "index.ts"))).toBe(true);
     expect(JSON.parse(readFileSync(join(root, PROVIDERS_PACK_CONFIG), "utf8"))).toEqual({ [PROVIDERS_POLICY]: { allowed: ["aws"] } });

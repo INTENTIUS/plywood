@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { packsForStack, policyPacksOf } from "../src/config/policy";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { componentsFile, stepInput } from "../src/init/render";
 import { refusalLine, refusalOf } from "../src/refusals";
 import { crossGuardRuleId } from "../src/words";
@@ -66,7 +66,7 @@ describe("packs in each stack's pulumi-up step", () => {
 describe("policy words", () => {
   it("names a CrossGuard rule as chant's gate does, and the denial line says both rule forms", () => {
     expect(crossGuardRuleId("aws-guard", "no-public-bucket")).toBe("crossguard.aws-guard.no-public-bucket");
-    expect(refusalOf(FALLBACK_EXIT.denied, FALLBACK_EXIT)).toBe("denied");
+    expect(refusalOf(EXIT.denied, EXIT)).toBe("denied");
     expect(refusalLine("denied")).toContain("crossguard.<pack>.<policy>");
   });
 });

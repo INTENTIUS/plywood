@@ -22,7 +22,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, hasChant4607, hasChant4620, needsChantMessage, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
 import { toChantSettings } from "./chant-config";
-import { hasChantApprovalStatus, hasChantPullRequestApprovalStatus, hasChantPrLoopFlags, hasChantRespond } from "./chant-next";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -392,12 +391,9 @@ export function workflowPlan(
   const notes: string[] = [];
   const pipeline = toChantSettings({ doc }).pipeline;
   // chant#4629: the responses to a refused wave, a failed update and the description.
-  const respond = respondOptions(chant, pipeline, shape.applyBeforeMerge, notes);
+  const respond = respondOptions(pipeline, notes);
   // chant#4636: apply.merge: auto merges after the update before merge.
   const applyMerge = shape.applyBeforeMerge ? pipeline.applyMerge : undefined;
-  // chant#4630: a chant that posts plywood/approval only for pr-review waves gets the note, since plywood's waves approve
-  // through the pull request (ruling B). From APPROVAL_STATUS_PULL_REQUEST_FLOOR chant posts it for those waves too.
-  if (approvalOf(doc) === "pr-review" && shape.waves && hasChantApprovalStatus(chant) && !hasChantPullRequestApprovalStatus(chant)) notes.push(APPROVAL_STATUS_NOTE);
   // plywood#39: with actions declared, chant's action job answers /plywood action and a dispatch with stack and action inputs (chant#4654).
   const actionJob = actionJobFor(doc, forge, notes);
   const jobsWanted: ChantCommand[] = actionJob ? [...shape.jobs, "action"] : shape.jobs;
@@ -451,10 +447,6 @@ export function actionJobFor(doc: RawConfig, forge: ForgeKind, notes: string[]):
   return true;
 }
 
-/** What plywood ci says under approval: pr-review on a chant with chant#4630 and without its pull-request floor. */
-export const APPROVAL_STATUS_NOTE =
-  `approval is pr-review, and chant posts its approval status only for waves that wait on pr-review; plywood's waves wait on the pull request's own approval, so no ${PRODUCT}/approval status is posted before merge`;
-
 /** `pr-apply --merge auto` and its token variable and method (chant#4636). */
 export function applyMergeArgv(m: { tokenEnv: string; method?: string }): string[] {
   return ["--merge", "auto", "--merge-token-env", m.tokenEnv, ...(m.method ? ["--merge-method", m.method] : [])];
@@ -468,29 +460,21 @@ export const DECIDE_LEFT_OFF = "decide is set and respond.description is not che
 
 /**
  * chant's `respond` and `decide` for plywood.yml's respond keys (chant#4629),
- * on a chant that has them, and the `build --pr-loop` flags that carry them
- * into the pull request jobs. chant puts the waves' part on the waves spec,
- * which plywood writes. With `PR_LOOP_BUILD_FLAGS_FLOOR` the build takes
- * `--respond <list>` and, only with `description=check`, `--decide-backend`
- * and `--decide-model`; chant refuses the decide flags without the check, so
- * plywood leaves them off then and says so, as its config check warns.
- * Before the floor the pull request jobs keep chant's defaults, and `notes`
- * says which keys that leaves out.
+ * and the `build --pr-loop` flags that carry them into the pull request jobs.
+ * chant puts the waves' part on the waves spec, which plywood writes. The
+ * build takes `--respond <list>` and, only with `description=check`,
+ * `--decide-backend` and `--decide-model`; chant refuses the decide flags
+ * without the check, so plywood leaves them off then and says so, as its
+ * config check warns.
  */
 export function respondOptions(
-  chant: ChantProduct,
   pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string } },
-  applyBeforeMerge: boolean,
   notes: string[],
 ): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string } }; argv: string[] } {
   const r = pipeline.respond;
   if (pipeline.decide && r?.description !== "check") notes.push(DECIDE_LEFT_OFF);
   if (!r || Object.keys(r).length === 0) return { options: {}, argv: [] };
   const keys = Object.keys(r).map((e) => e.replace("-", "_"));
-  if (!hasChantRespond(chant)) {
-    notes.push(`respond.${keys.join(", respond.")} ${keys.length === 1 ? "needs" : "need"} chant's responses to pipeline events (chant#4629), which this chant lacks; chant's defaults hold`);
-    return { options: {}, argv: [] };
-  }
   const responses = { ...r };
   const check = responses.description === "check";
   const decide = check ? pipeline.decide : undefined;
@@ -500,14 +484,7 @@ export function respondOptions(
     notes.push("respond.description is check and decide names no backend and model, so the description check is left off");
   }
   const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}) };
-  if (hasChantPrLoopFlags(chant)) return { options, argv: respondArgv(responses, decide) };
-  const prSide = [
-    ...(responses.description === "check" ? ["respond.description"] : []),
-    ...(applyBeforeMerge && responses["apply-failed"] === "off" ? ["respond.apply_failed"] : []),
-    ...(applyBeforeMerge && responses["wave-refused"] === "off" ? ["respond.wave_refused"] : []),
-  ];
-  if (prSide.length) notes.push(`${prSide.join(", ")} ${prSide.length === 1 ? "reaches" : "reach"} no pull request job yet: chant's build --pr-loop writes no responses into them, so the note and the update before merge keep chant's defaults; the waves workflow takes wave_refused and apply_failed`);
-  return { options, argv: [] };
+  return { options, argv: respondArgv(responses, decide) };
 }
 
 /**

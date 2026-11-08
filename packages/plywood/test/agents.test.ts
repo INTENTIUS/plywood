@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mcp, plywoodMcpHook, plywoodProposeTools, plywoodMcpTools, REVIEW_OP, REVIEW_SPEC_FILE, reviewOpFile, reviewOpSpec, writeReviewJobs } from "../src/agents";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { guard, guardVerdict, withGuardHook } from "../src/guard";
 import type { StageIo } from "../src/stages";
 import { PRODUCT_WORDS, TEMPLATE_REQUEST_WORDS } from "../src/words";
@@ -54,7 +54,7 @@ describe("plywood mcp", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const out = io(repo("stacks:\n  shop/dev: {}\n"));
-    expect(await mcp([], false, FALLBACK_EXIT, out)).toBe(0);
+    expect(await mcp([], false, EXIT, out)).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["serve", "mcp", "--read-only"]);
     const hook = chant.calls[0]!.options!.mcp as ReturnType<typeof plywoodMcpHook>;
     expect(hook.product).toBe("plywood");
@@ -75,7 +75,7 @@ describe("plywood mcp", () => {
   it("says so when the installed chant has no product tool hook", async () => {
     setChantProductForTests(fakeChant(false).api);
     const out = io(repo("{}\n"));
-    await mcp([], false, FALLBACK_EXIT, out);
+    await mcp([], false, EXIT, out);
     expect(out.stderr.join("\n")).toContain("chant#4555");
   });
 });
@@ -97,7 +97,7 @@ describe("plywood mcp --propose", () => {
     setChantProductForTests(chant.api);
     const dir = repo("stacks:\n  shop/dev: {}\n");
     const out = io(dir);
-    expect(await mcp(["--propose"], false, FALLBACK_EXIT, out)).toBe(0);
+    expect(await mcp(["--propose"], false, EXIT, out)).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["serve", "mcp", "--read-only", "--propose"]);
     const hook = chant.calls[0]!.options!.mcp as ReturnType<typeof plywoodMcpHook>;
     expect(hook.readOnly).toBe(true);
@@ -111,7 +111,7 @@ describe("plywood mcp --propose", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const dir = repo("{}\n");
-    await mcp([], false, FALLBACK_EXIT, io(dir));
+    await mcp([], false, EXIT, io(dir));
     const hook = chant.calls[0]!.options!.mcp as ReturnType<typeof plywoodMcpHook>;
     expect(hook.propose).toBeUndefined();
     expect(listed(hook, dir, false)).not.toContain("plywood:request_from_template");
@@ -141,8 +141,8 @@ describe("plywood mcp --propose", () => {
   it("takes --propose with --report-url in either order", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await mcp(["--propose", "--report-url", "file:///r"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);
-    expect(await mcp(["--report-url", "file:///r", "--propose"], false, FALLBACK_EXIT, io(repo("{}\n")))).toBe(0);
+    expect(await mcp(["--propose", "--report-url", "file:///r"], false, EXIT, io(repo("{}\n")))).toBe(0);
+    expect(await mcp(["--report-url", "file:///r", "--propose"], false, EXIT, io(repo("{}\n")))).toBe(0);
     for (const c of chant.calls) expect((c.options!.mcp as ReturnType<typeof plywoodMcpHook>).reportUrl).toBe("file:///r");
   });
 });
@@ -164,7 +164,7 @@ describe("the review agent", () => {
 
     const chant = fakeChant();
     const dir = repo("review: true\n");
-    await writeReviewJobs(chant.api, "forgejo", parseConfig("review: true\n").doc, PRODUCT_WORDS, FALLBACK_EXIT, io(dir));
+    await writeReviewJobs(chant.api, "forgejo", parseConfig("review: true\n").doc, PRODUCT_WORDS, EXIT, io(dir));
     expect(chant.calls[0]!.argv).toEqual(["run", "--generate", "forgejo", "--spec", REVIEW_SPEC_FILE, "--output", ".forgejo/workflows"]);
   });
 });
@@ -194,12 +194,12 @@ describe("the agent guard", () => {
     const dir = repo("{}\n");
     mkdirSync(join(dir, ".claude"));
     writeFileSync(join(dir, ".claude/settings.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] } }));
-    expect(await guard(["install"], false, FALLBACK_EXIT, io(dir))).toBe(0);
-    await guard(["install"], false, FALLBACK_EXIT, io(dir));
+    expect(await guard(["install"], false, EXIT, io(dir))).toBe(0);
+    await guard(["install"], false, EXIT, io(dir));
     const settings = JSON.parse(readFileSync(join(dir, ".claude/settings.json"), "utf8"));
     expect(settings.permissions).toEqual({ allow: ["Bash(ls)"] });
     expect(settings.hooks.PreToolUse).toHaveLength(1);
     expect(withGuardHook(settings)).toEqual(settings);
-    expect(await guard(["check", "pulumi", "up"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.denied);
+    expect(await guard(["check", "pulumi", "up"], false, EXIT, io(dir))).toBe(EXIT.denied);
   });
 });

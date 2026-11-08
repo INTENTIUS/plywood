@@ -3,8 +3,7 @@
 // at an exact pin (chant#4591). An @intentius/chant* import stays external when
 // Node resolves it, from this package, to compiled JS: the bin then runs the
 // pinned chant, and the chant a generated job runs is the same one. A subpath
-// the installed chant serves only as TypeScript (chant before 0.124.58 has no
-// `import` condition) is bundled, as before.
+// the installed chant serves only as TypeScript is bundled.
 //   node scripts/build-cli.mjs     (npm run build, just build)
 // The metafile goes to the root's node_modules/.cache/plywood for
 // scripts/bundle-check.mjs, so it does not ship in the tarball.

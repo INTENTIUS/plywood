@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { check, ci, passthrough, pipelineShape, preview, type StageIo } from "../src/stages";
 import { TIPS } from "../src/tips";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
@@ -82,7 +82,7 @@ describe("feature-detect", () => {
   it("names the chant it needs when chant has no product pipeline", async () => {
     setChantProductForTests(undefined);
     const o = io(repo());
-    expect(await preview(["--base", "main", "--pr", "3"], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.failed);
+    expect(await preview(["--base", "main", "--pr", "3"], false, EXIT, o)).toBe(EXIT.failed);
     expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood preview"));
     expect(o.stderr.join("\n")).toContain("chant >= the release after 0.124.54");
   });
@@ -92,7 +92,7 @@ describe("plywood preview", () => {
   it("runs chant's pr-plan with plywood's words and gate", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await preview(["--base", "abc", "--pr", "7", "--forge", "forgejo"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await preview(["--base", "abc", "--pr", "7", "--forge", "forgejo"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls).toEqual([
       { argv: ["components", "pr-plan", "--base", "abc", "--pr", "7", "--gate", "up", "--forge", "forgejo"], words: PRODUCT_WORDS },
     ]);
@@ -101,28 +101,28 @@ describe("plywood preview", () => {
   it("narrows to one stack, positional or --stack", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    await preview(["dev", "--base", "abc", "--pr", "7"], false, FALLBACK_EXIT, io(repo()));
-    await preview(["--stack", "dev", "--base", "abc", "--pr", "7"], false, FALLBACK_EXIT, io(repo()));
+    await preview(["dev", "--base", "abc", "--pr", "7"], false, EXIT, io(repo()));
+    await preview(["--stack", "dev", "--base", "abc", "--pr", "7"], false, EXIT, io(repo()));
     for (const c of chant.calls) expect(c.argv.slice(c.argv.indexOf("--member"), c.argv.indexOf("--member") + 2)).toEqual(["--member", "dev"]);
   });
 
   it("reads BASE_SHA and PR_NUMBER as a generated job sets them", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    await preview([], false, FALLBACK_EXIT, io(repo(), { BASE_SHA: "b", PR_NUMBER: "9" }));
+    await preview([], false, EXIT, io(repo(), { BASE_SHA: "b", PR_NUMBER: "9" }));
     expect(chant.calls[0]!.argv).toEqual(["components", "pr-plan", "--base", "b", "--pr", "9", "--gate", "up"]);
   });
 
   it("passes chant's exit code through: a CrossGuard denial is 7", async () => {
     setChantProductForTests(fakeChant(7).api);
-    expect(await preview(["--base", "a", "--pr", "1"], false, FALLBACK_EXIT, io(repo()))).toBe(7);
+    expect(await preview(["--base", "a", "--pr", "1"], false, EXIT, io(repo()))).toBe(7);
   });
 
   it("refuses --target until chant's pr-plan passes it on", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await preview(["--base", "a", "--pr", "1", "--target", "urn:x"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await preview(["--base", "a", "--pr", "1", "--target", "urn:x"], false, EXIT, o)).toBe(1);
     expect(chant.calls).toEqual([]);
     expect(o.stderr.join("\n")).toContain("chant#4620");
   });
@@ -131,7 +131,7 @@ describe("plywood preview", () => {
     const chant = fakeChant();
     setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
     const urn = "urn:pulumi:prod::shop::aws:sqs/queue:Queue::events";
-    expect(await preview(["shop/prod", "--base", "a", "--pr", "1", "--target", urn, "--target", "urn:y"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await preview(["shop/prod", "--base", "a", "--pr", "1", "--target", urn, "--target", "urn:y"], false, EXIT, io(repo()))).toBe(0);
     const argv = chant.calls[0]!.argv;
     expect(argv).toEqual(expect.arrayContaining(["--member", "shop/prod", "--target", urn, "--target", "urn:y"]));
     expect(argv.filter((a) => a === "shop/prod")).toHaveLength(1);
@@ -139,13 +139,13 @@ describe("plywood preview", () => {
 
   it("refuses a --target with no value", async () => {
     setChantProductForTests({ ...fakeChant().api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
-    expect(await preview(["--base", "a", "--pr", "1", "--target"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await preview(["--base", "a", "--pr", "1", "--target"], false, EXIT, io(repo()))).toBe(1);
   });
 
   it("needs a base and a pull request", async () => {
     setChantProductForTests(fakeChant().api);
-    expect(await preview(["--pr", "1"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
-    expect(await preview(["--base", "a"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await preview(["--pr", "1"], false, EXIT, io(repo()))).toBe(1);
+    expect(await preview(["--base", "a"], false, EXIT, io(repo()))).toBe(1);
   });
 });
 
@@ -153,19 +153,19 @@ describe("plywood check", () => {
   it("checks plywood.yml, then runs chant's check stage at base", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await check(["--base", "abc", "shop/dev"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await check(["--base", "abc", "shop/dev"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls).toEqual([{ argv: ["ci", "check", "--base", "abc", "shop/dev"], words: PRODUCT_WORDS }]);
   });
 
   it("fails with chant's code when a user hook fails", async () => {
     setChantProductForTests(fakeChant(1).api);
-    expect(await check(["--base", "abc"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await check(["--base", "abc"], false, EXIT, io(repo()))).toBe(1);
   });
 
   it("stops at a bad plywood.yml before any hook runs", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await check(["--base", "abc"], false, FALLBACK_EXIT, io(repo("ci:\n  workflow: x\n")))).toBe(1);
+    expect(await check(["--base", "abc"], false, EXIT, io(repo("ci:\n  workflow: x\n")))).toBe(1);
     expect(chant.calls).toEqual([]);
   });
 });
@@ -182,7 +182,7 @@ describe("plywood ci", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const dir = repo();
-    expect(await ci(["--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(await ci(["--forge", "forgejo"], false, EXIT, io(dir))).toBe(0);
     expect(chant.pipelines).toHaveLength(1);
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
@@ -195,12 +195,12 @@ describe("plywood ci", () => {
     const chant = fakeChant();
     setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
     const dir = repo();
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(await ci(["--forge", "github"], false, EXIT, io(dir))).toBe(0);
     expect(chant.pipelines[0]!.options.previewComment).toBe(true);
     expect(chant.calls[0]!.argv).toContain("--preview-comment");
     const old = fakeChant();
     setChantProductForTests(old.api);
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await ci(["--forge", "github"], false, EXIT, io(repo()))).toBe(0);
     expect(old.pipelines[0]!.options.previewComment).toBeUndefined();
     expect(old.calls[0]!.argv).not.toContain("--preview-comment");
   });
@@ -209,7 +209,7 @@ describe("plywood ci", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await ci(["--dry-run"], true, FALLBACK_EXIT, o)).toBe(0);
+    expect(await ci(["--dry-run"], true, EXIT, o)).toBe(0);
     expect(chant.calls).toEqual([]);
     expect(JSON.parse(o.stdout[0]!)).toMatchObject({ command: "ci", forge: "github", comments: { plan: "/plywood preview" } });
   });
@@ -254,18 +254,18 @@ describe("plywood run wave", () => {
   }
 
   it("explains exit 4 with the approve line chant printed, and leaves the code as it is", async () => {
-    setChantProductForTests(waveChant(FALLBACK_EXIT.moved, [REFUSAL]));
+    setChantProductForTests(waveChant(EXIT.moved, [REFUSAL]));
     const out = io(repo());
     const was = process.stderr.write;
     const quiet = (() => true) as typeof process.stderr.write;
     process.stderr.write = quiet;
     let code: number;
     try {
-      code = await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, out);
+      code = await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], EXIT, out);
     } finally {
       process.stderr.write = was;
     }
-    expect(code).toBe(FALLBACK_EXIT.moved);
+    expect(code).toBe(EXIT.moved);
     const said = out.stderr.join("\n");
     expect(said).toContain("exit 4");
     expect(said).toContain("nothing in it was applied");
@@ -274,13 +274,13 @@ describe("plywood run wave", () => {
   });
 
   it("says nothing more on other codes", async () => {
-    for (const code of [0, FALLBACK_EXIT.waiting, FALLBACK_EXIT.failed]) {
+    for (const code of [0, EXIT.waiting, EXIT.failed]) {
       setChantProductForTests(waveChant(code, ["wave 1 (dev): ran"]));
       const out = io(repo());
       const was = process.stderr.write;
       process.stderr.write = (() => true) as typeof process.stderr.write;
       try {
-        expect(await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, out)).toBe(code);
+        expect(await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], EXIT, out)).toBe(code);
       } finally {
         process.stderr.write = was;
       }
@@ -291,7 +291,7 @@ describe("plywood run wave", () => {
   it("restores stderr after the run", async () => {
     setChantProductForTests(waveChant(0, []));
     const before = process.stderr.write;
-    await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], FALLBACK_EXIT, io(repo()));
+    await passthrough(["run", "wave", "--spec", "s.json", "--wave", "1"], EXIT, io(repo()));
     expect(process.stderr.write).toBe(before);
   });
 });

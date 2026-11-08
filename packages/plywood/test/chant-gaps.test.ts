@@ -16,7 +16,7 @@ import { chantNotifyOf } from "../src/config/observe";
 import { chantPolicyOf, stepPolicyPacksOf } from "../src/config/policy";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { estate, estateSchedules, setChantEstateForTests, type ChantEstate } from "../src/estate";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { contractPipelines, forgeCheck, setChantForgeCheckForTests, upRunner, type ChantForgeCheck } from "../src/identities";
 import { notify } from "../src/notify";
 import type { StageIo } from "../src/stages";
@@ -83,7 +83,7 @@ describe("plywood forge check on chant#4608", () => {
     const { fc, calls } = fakeForgeCheck();
     setChantForgeCheckForTests(fc);
     const t = io(dir);
-    expect(await forgeCheck(["check", "--forge", "github", "--repo", "acme/infra", "--env", "production"], false, FALLBACK_EXIT, t.stageIo)).toBe(1);
+    expect(await forgeCheck(["check", "--forge", "github", "--repo", "acme/infra", "--env", "production"], false, EXIT, t.stageIo)).toBe(1);
     expect(calls.words).toBe(PRODUCT_WORDS);
     expect(calls.resolved).toEqual([[toChantSettings(parseConfig(IDENTITY_YML)).ci.identity!.cloud, "production", "shop"]]);
     const contract = (calls.contract as { contract: Record<string, unknown> }).contract;
@@ -101,7 +101,7 @@ describe("plywood forge check on chant#4608", () => {
     const { fc, calls } = fakeForgeCheck();
     setChantForgeCheckForTests(fc);
     const t = io(dir);
-    await forgeCheck(["check", "--forge", "github", "--branch", "main"], true, FALLBACK_EXIT, t.stageIo);
+    await forgeCheck(["check", "--forge", "github", "--branch", "main"], true, EXIT, t.stageIo);
     const contract = (calls.contract as { contract: { repository: { defaultBranch: string }; pipelines: Array<{ name: string }> } }).contract;
     expect(contract.repository.defaultBranch).toBe("main");
     // No chant.workspace.json: one pipeline for the environment, as chant names a single project's.
@@ -113,8 +113,8 @@ describe("plywood forge check on chant#4608", () => {
     const { fc, calls } = fakeForgeCheck();
     setChantForgeCheckForTests(fc);
     const dir = repo({ "plywood.yml": IDENTITY_YML });
-    expect(await forgeCheck(["check", "--forge", "bitbucket"], false, FALLBACK_EXIT, io(dir).stageIo)).toBe(FALLBACK_EXIT.failed);
-    expect(await forgeCheck(["check", "--wide"], false, FALLBACK_EXIT, io(dir).stageIo)).toBe(FALLBACK_EXIT.failed);
+    expect(await forgeCheck(["check", "--forge", "bitbucket"], false, EXIT, io(dir).stageIo)).toBe(EXIT.failed);
+    expect(await forgeCheck(["check", "--wide"], false, EXIT, io(dir).stageIo)).toBe(EXIT.failed);
     expect(calls.contract).toBeUndefined();
   });
 
@@ -149,9 +149,9 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
       runChantInProcess: async (argv: string[], words: unknown) => (calls.push({ argv, words }), 0),
     } as unknown as ChantProduct;
     setChantProductForTests(base);
-    expect(await notify(["relay"], false, FALLBACK_EXIT, io(tmpdir()).stageIo)).toBe(0);
+    expect(await notify(["relay"], false, EXIT, io(tmpdir()).stageIo)).toBe(0);
     expect(calls).toEqual([{ argv: ["notify", "relay"], words: PRODUCT_WORDS }]);
-    expect(await notify(["send"], false, FALLBACK_EXIT, io(tmpdir()).stageIo)).toBe(FALLBACK_EXIT.failed);
+    expect(await notify(["send"], false, EXIT, io(tmpdir()).stageIo)).toBe(EXIT.failed);
   });
 });
 
@@ -194,7 +194,7 @@ describe("plywood estate on chant#4612", () => {
     setChantEstateForTests(fake);
     setChantProductForTests(undefined);
     const t = io(repo({ "plywood.yml": DRIFT_YML }));
-    expect(await estate([], false, FALLBACK_EXIT, t.stageIo)).toBe(0);
+    expect(await estate([], false, EXIT, t.stageIo)).toBe(0);
     expect(calls.built).toMatchObject({ words: PRODUCT_WORDS, driftOps: ["plywood-drift-shop-dev", "plywood-drift-shop-prod"] });
     expect(calls.url).toBe("file:///tmp/plywood-reports");
     expect(calls.written).toMatchObject({ words: PRODUCT_WORDS });
@@ -207,9 +207,9 @@ describe("plywood estate on chant#4612", () => {
     setChantEstateForTests(fake);
     setChantProductForTests(undefined);
     const dir = repo({ "plywood.yml": DRIFT_YML });
-    expect(await estate([], false, FALLBACK_EXIT, io(dir).stageIo)).toBe(0);
+    expect(await estate([], false, EXIT, io(dir).stageIo)).toBe(0);
     const t = io(dir);
-    expect(await estate(["--fail-overdue"], true, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
+    expect(await estate(["--fail-overdue"], true, EXIT, t.stageIo)).toBe(EXIT.failed);
     expect(JSON.parse(t.out[0]!).overdue).toEqual(overdue);
   });
 
@@ -217,7 +217,7 @@ describe("plywood estate on chant#4612", () => {
     const { fake } = fakeEstate();
     setChantEstateForTests(fake);
     setChantProductForTests(undefined);
-    expect(await estate(["--report-url", "ftp://x"], false, FALLBACK_EXIT, io(repo({ "plywood.yml": DRIFT_YML })).stageIo)).toBe(FALLBACK_EXIT.failed);
+    expect(await estate(["--report-url", "ftp://x"], false, EXIT, io(repo({ "plywood.yml": DRIFT_YML })).stageIo)).toBe(EXIT.failed);
   });
 
   it("imports chant's estate from the pinned chant, with no feature-detect", async () => {

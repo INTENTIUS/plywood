@@ -15,7 +15,7 @@ import {
   wavesControl,
   type ChantControl,
 } from "../src/control";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 
 const FIXTURES = join(import.meta.dirname, "fixtures/control");
 const errors = (text: string) => checkConfig(parseConfig(text)).filter((p) => p.severity === "error");
@@ -104,8 +104,8 @@ describe("control entries", () => {
     setChantControlForTests(chant);
     const dir = mkdtempSync(join(tmpdir(), "plywood-control-"));
     const out: string[] = [];
-    expect(await control(["put", "github.com/acme/shop", "--approver", "shop/prod-*=sre:2"], false, FALLBACK_EXIT, io(dir, out))).toBe(FALLBACK_EXIT.done);
-    expect(await control(["put", "github.com/acme/shop", "--pin", "pulumi=3.272.0"], false, FALLBACK_EXIT, io(dir, out))).toBe(FALLBACK_EXIT.done);
+    expect(await control(["put", "github.com/acme/shop", "--approver", "shop/prod-*=sre:2"], false, EXIT, io(dir, out))).toBe(EXIT.done);
+    expect(await control(["put", "github.com/acme/shop", "--pin", "pulumi=3.272.0"], false, EXIT, io(dir, out))).toBe(EXIT.done);
     expect(chant.lines.length).toBe(2);
     expect(JSON.parse(chant.lines[1]!).settings).toEqual({ approval_rules: { "shop/prod-*": { role: "sre", quorum: 2 } }, pulumi: "3.272.0" });
     expect(out.join("\n")).toContain("git push origin chant/lifecycle");
@@ -114,7 +114,7 @@ describe("control entries", () => {
   it("imports the reviewed control file", async () => {
     setChantControlForTests(fakeChant());
     const out: string[] = [];
-    expect(await control(["import", "control.yml", "--dry-run"], false, FALLBACK_EXIT, io(FIXTURES, out))).toBe(FALLBACK_EXIT.done);
+    expect(await control(["import", "control.yml", "--dry-run"], false, EXIT, io(FIXTURES, out))).toBe(EXIT.done);
     expect(out).toEqual(["plywood control import: defaults created (ctl-001)", "plywood control import: github.com/acme/shop created (ctl-002)", "plywood control import: github.com/acme/billing created (ctl-003)"]);
   });
 
@@ -133,7 +133,7 @@ describe("plywood control without chant#4568", () => {
   it("says which chant it needs and exits failed", async () => {
     setChantControlForTests(undefined);
     const err: string[] = [];
-    expect(await control(["list"], false, FALLBACK_EXIT, io(tmpdir(), [], err))).toBe(FALLBACK_EXIT.failed);
+    expect(await control(["list"], false, EXIT, io(tmpdir(), [], err))).toBe(EXIT.failed);
     expect(err[0]).toContain("@intentius/chant/ci-control");
   });
 
@@ -142,7 +142,7 @@ describe("plywood control without chant#4568", () => {
     setChantControlForTests(chant);
     const dir = mkdtempSync(join(tmpdir(), "plywood-dispatch-"));
     writeFileSync(join(dir, "plywood.yml"), "control: github.com/acme/infra-control\n");
-    expect(await control(["dispatch", "--sha", "0123abcd"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.done);
+    expect(await control(["dispatch", "--sha", "0123abcd"], false, EXIT, io(dir))).toBe(EXIT.done);
     expect(chant.dispatched).toEqual([expect.objectContaining({ op: "pulumi-up", sha: "0123abcd" })]);
   });
 });

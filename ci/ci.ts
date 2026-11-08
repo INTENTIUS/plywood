@@ -8,11 +8,12 @@
  * without deploying it. Nothing here publishes.
  */
 
+import { ACTION_PINS, usesRef } from "@intentius/chant/action-pins";
 import { Workflow, Job, Step } from "@intentius/chant-lexicon-github";
 
-// Actions by commit SHA, the same pins pages.yml uses.
-const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"; // v7.0.1
-const SETUP_NODE = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"; // v7.0.0
+// Actions by commit SHA, from chant's pin table.
+const CHECKOUT = usesRef(ACTION_PINS.checkout7);
+const SETUP_NODE = usesRef(ACTION_PINS.setupNode7);
 const NODE_VERSION = "24";
 
 export const workflow = new Workflow({

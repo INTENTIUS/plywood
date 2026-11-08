@@ -7,7 +7,7 @@ import { agentOf } from "../src/config/agents";
 import type { ChantProduct, ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { driftOpSpec } from "../src/drift";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import type { StageIo } from "../src/stages";
 import { PRODUCT_WORDS } from "../src/words";
 
@@ -53,8 +53,8 @@ describe("the comment agent on chant's agent job", () => {
   it("passes plywood's agent keys to productPipelineJobs and generates the spec it returns", async () => {
     const chant = fakeChant();
     const dir = repo();
-    const code = await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, FALLBACK_EXIT, io(dir));
-    expect(code).toBe(FALLBACK_EXIT.done);
+    const code = await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, io(dir));
+    expect(code).toBe(EXIT.done);
     expect(chant.options[0]!.agent).toEqual({ name: AGENT_OP, keyEnv: "FAKE_KEY", timeout: 20, maxRuns: 3, guarded: ["plywood.yml", "plywood.yaml"] });
     const spec = JSON.parse(readFileSync(join(dir, AGENT_SPEC_FILE), "utf8"));
     expect(spec.ops[0]).toMatchObject({ name: AGENT_OP, agent: { on: "comment", comment: "/plywood agent", maxRuns: 3 }, runner: "self-hosted" });
@@ -64,7 +64,7 @@ describe("the comment agent on chant's agent job", () => {
   it("writes nothing on a chant without the agent job, and says so", async () => {
     const chant = fakeChant(false);
     const out = io(repo());
-    await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, FALLBACK_EXIT, out);
+    await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, out);
     expect(chant.calls).toEqual([]);
     expect(out.stderr.join("\n")).toContain(AGENT_NEEDS_CHANT);
   });

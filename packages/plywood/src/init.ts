@@ -61,7 +61,7 @@ import { stacksOf as configuredStacks } from "./config/stacks";
 import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
-import { GITLAB_READ_TOKEN, hasChantWavePreview, withWavePreview } from "./chant-next";
+import { GITLAB_READ_TOKEN, withWavePreview } from "./chant-next";
 import { hasChant4625, prJobsFor, withJobSettings } from "./jobs";
 import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, needsBucketCheckMessage, type BucketReport } from "./init/backend";
 import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
@@ -426,7 +426,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
 
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
   // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
-  if (forge.kind === "gitlab" && chant && stacks.length > 0 && previewOf(doc) && (await hasChantWavePreview())) {
+  if (forge.kind === "gitlab" && chant && stacks.length > 0 && previewOf(doc)) {
     todo.push(`Add a ${GITLAB_READ_TOKEN} CI/CD variable (a project access token with the read_api scope, masked and protected) so a wave can read the merge request it applies; without it the wave refuses`);
   }
   const failed = files.find((f) => f.status === "failed");
@@ -521,7 +521,7 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
   });
   const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
   // On unless plywood.yml says `preview: false` (plywood#56): a merged wave applies what its pull request previewed, or exits 4 (chant's approvals.preview).
-  return previewOf(doc) && (await hasChantWavePreview()) ? withWavePreview(named, forge) : named;
+  return previewOf(doc) ? withWavePreview(named, forge) : named;
 }
 
 /**

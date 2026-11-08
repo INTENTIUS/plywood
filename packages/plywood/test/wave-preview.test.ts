@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { chantProduct, setChantProductForTests } from "../src/chant-product";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { runInit } from "../src/init";
 
 afterEach(() => setChantProductForTests("reset"));
@@ -32,7 +32,7 @@ async function generated(forge: "github" | "forgejo" | "gitlab", yml?: string): 
   if (yml !== undefined) writeFileSync(join(dir, "plywood.yml"), yml);
   const was = process.cwd();
   process.chdir(dir);
-  const r = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge }, FALLBACK_EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} }).finally(() => process.chdir(was));
+  const r = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge }, EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} }).finally(() => process.chdir(was));
   expect(r.ok, JSON.stringify([r.notes, r.files])).toBe(true);
   const out: Record<string, string> = {};
   for (const sub of [".github/workflows", ".forgejo/workflows", ".chant/op-waves", "."]) {

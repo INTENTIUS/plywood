@@ -23,40 +23,21 @@ export function chantRuntimeTarget(specifier) {
 
 const CHANT = /^@intentius\/chant(?:-[a-z0-9-]+)?(?:\/.*)?$/;
 
-// chant subpaths a released chant may lack (src/exit-codes.ts,
-// src/chant-product.ts, src/control.ts, src/init/backend.ts, src/init.ts, src/identities.ts's forge-check,
-// src/estate.ts's ci-estate, src/config/policy.ts's policy-source, src/jobs.ts's parallelism), and the pulumi
-// lexicon's ci-setup (src/images.ts, chant#4592) and release-copy (src/stack-ops.ts, chant#4542). One the installed chant lacks resolves to a module
-// that throws when imported, so the bundle builds on the pin and the caller's
-// fallback takes over.
-const CHANT_NEXT = /^@intentius\/(?:chant\/(?:exit-codes|op|ci-product|parallelism|ci-control|bucket-check|components\/check-hooks|forge-check|ci-estate|policy-source)|chant-lexicon-pulumi\/(?:ci-setup|release-copy))$/;
-
 /**
  * An esbuild plugin that leaves an @intentius/chant* import external when the
  * installed chant serves it as compiled JS ({@link chantRuntimeTarget}), so
  * the code runs the installed, pinned chant. A subpath it serves only as
- * TypeScript (chant before 0.124.58 has no `import` condition) is bundled, and a
- * missing CHANT_NEXT subpath becomes a module that throws. `external`
- * collects the specifiers left external.
+ * TypeScript is bundled. `external` collects the specifiers left external.
  */
 export function chantPlugin(external = new Set()) {
   return {
     name: "chant",
     setup(b) {
-      b.onResolve({ filter: CHANT }, async (args) => {
-        if (args.pluginData?.chantNext) return undefined;
-        if (chantRuntimeTarget(args.path)) {
-          external.add(args.path);
-          return { path: args.path, external: true };
-        }
-        if (!CHANT_NEXT.test(args.path)) return undefined;
-        const r = await b.resolve(args.path, { kind: args.kind, importer: args.importer, resolveDir: args.resolveDir, pluginData: { chantNext: true } });
-        return r.errors.length === 0 ? undefined : { path: args.path, namespace: "chant-next-missing" };
+      b.onResolve({ filter: CHANT }, (args) => {
+        if (!chantRuntimeTarget(args.path)) return undefined;
+        external.add(args.path);
+        return { path: args.path, external: true };
       });
-      b.onLoad({ filter: /.*/, namespace: "chant-next-missing" }, (args) => ({
-        loader: "js",
-        contents: `throw new Error(${JSON.stringify(`the installed chant has no ${args.path}`)});\n`,
-      }));
     },
   };
 }

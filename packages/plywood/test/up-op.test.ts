@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ChantProduct } from "../src/chant-product";
 import { CHANT_SPECIFIER, chantResolveHook } from "../src/chant-resolve";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { UP_OP_FILE, unwrapWavesSpec, upOpFile, wavesEngine, wavesSpecText, writeUpOp, writeWaveJobs } from "../src/waves-workflow";
 import { parseOpWavesSpec } from "@intentius/chant/op";
 import { readUpSpec } from "../src/up";
@@ -64,8 +64,8 @@ describe("the pulumi-up Op file", () => {
     } as unknown as ChantProduct;
     const err: string[] = [];
     const waves = { spec: SPEC, specFile: ".chant/op-waves/pulumi-up.spec.json", jobs: [] };
-    const code = await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, FALLBACK_EXIT, { cwd: root, env: {}, out: () => {}, err: (s) => err.push(s) });
-    expect(code).toBe(FALLBACK_EXIT.done);
+    const code = await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, EXIT, { cwd: root, env: {}, out: () => {}, err: (s) => err.push(s) });
+    expect(code).toBe(EXIT.done);
     expect(seen).toBe(upOpFile(SPEC));
     expect(err.join("\n")).toContain(`wrote ${UP_OP_FILE}`);
   });
@@ -106,13 +106,13 @@ describe("the waves jobs' image and install lines (plywood#22)", () => {
     } as unknown as ChantProduct;
     const waves = { spec: SPEC, specFile: ".chant/op-waves/pulumi-up.spec.json", jobs: [] };
     const io = { cwd: root, env: {}, out: () => {}, err: () => {} };
-    expect(await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, FALLBACK_EXIT, io, engine)).toBe(FALLBACK_EXIT.done);
+    expect(await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, EXIT, io, engine)).toBe(EXIT.done);
     expect(JSON.parse(atGenerate!)).toEqual({ waves: SPEC, options: engine });
     expect(readWavesSpec(root)).toEqual(SPEC);
     expect(readUpSpec(root)).toMatchObject({ name: "pulumi-up", step: { kind: "pulumi-up" } });
     // The same spec and engine a second time writes nothing new.
     const before = readFileSync(join(root, waves.specFile), "utf8");
-    await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, FALLBACK_EXIT, io, engine);
+    await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, EXIT, io, engine);
     expect(readFileSync(join(root, waves.specFile), "utf8")).toBe(before);
   });
 });

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { chantProduct, setChantProductForTests } from "../src/chant-product";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { withRunGroup } from "../src/init/run-group";
 import { runInit } from "../src/init";
 
@@ -129,7 +129,7 @@ async function generated(forge: "github" | "forgejo" | "gitlab"): Promise<Record
   // chant's in-process generator resolves its relative paths against the process's directory.
   const was = process.cwd();
   process.chdir(dir);
-  const r = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge }, FALLBACK_EXIT, { cwd: dir, env: {}, out: () => {}, err: (s) => err.push(s) }).finally(() => process.chdir(was));
+  const r = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge }, EXIT, { cwd: dir, env: {}, out: () => {}, err: (s) => err.push(s) }).finally(() => process.chdir(was));
   expect(r.ok, JSON.stringify([r.notes, r.files, err])).toBe(true);
   const out: Record<string, string> = {};
   for (const sub of [".github/workflows", ".forgejo/workflows", "."]) {

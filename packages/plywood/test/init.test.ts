@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { initLines, parseInitArgs, runInit, type InitIo, type InitOptions } from "../src/init";
 import { bucketTarget, setBucketCheckForTests, type BucketReport } from "../src/init/backend";
 import { detect, environmentOf, forgeOfRemote, stackNames } from "../src/init/detect";
@@ -13,7 +13,6 @@ import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "../src/init/own-jobs";
 import { componentsFile, plywoodYml, wavesOf, wavesSpec, workspaceDeclaration } from "../src/init/render";
 import { template } from "../src/templates";
 import { PRODUCT_WORDS } from "../src/words";
-import { setChantWavePreviewForTests } from "../src/chant-next";
 import { setupPrompt } from "../../../site/src/prompts";
 import { unwrapWavesSpec } from "../src/waves-workflow";
 import { imageFor, imageReference } from "../src/images";
@@ -138,7 +137,6 @@ const TWO_PROJECTS = {
 afterEach(() => {
   setChantProductForTests("reset");
   setBucketCheckForTests("reset");
-  setChantWavePreviewForTests("reset");
 });
 
 describe("detection", () => {
@@ -192,7 +190,7 @@ describe("golden files", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.ok).toBe(true);
     expect(r.waves).toEqual([
       { name: "dev", stacks: ["shop/dev"] },
@@ -242,9 +240,8 @@ describe("golden files", () => {
 
   it("preview: false in plywood.yml leaves approvals.preview and the wave token out (plywood#56)", async () => {
     setChantProductForTests(fakeChant().api);
-    setChantWavePreviewForTests(true);
     const root = repo("git@github.com:acme/shop.git", { ...ONE_PROJECT, "plywood.yml": "preview: false\n" });
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.ok).toBe(true);
     const spec = unwrapWavesSpec(JSON.parse(readFileSync(join(root, ".chant/op-waves/pulumi-up.spec.json"), "utf8"))) as { approvals: object; waves: Array<{ variables?: object }> };
     expect(spec.approvals).toEqual({ pullRequest: { gate: "up" } });
@@ -254,7 +251,7 @@ describe("golden files", () => {
   it("two projects: a member each, and their stacks share a wave per environment", async () => {
     setChantProductForTests(fakeChant().api);
     const root = repo("git@github.com:acme/estate.git", TWO_PROJECTS);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.waves).toEqual([
       { name: "dev", stacks: ["app/dev", "network/dev"] },
       { name: "prod", stacks: ["app/prod", "network/prod"] },
@@ -275,7 +272,7 @@ describe("golden files", () => {
       const chant = fakeChant();
       setChantProductForTests(chant.api);
       const root = repo(remote, ONE_PROJECT);
-      const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+      const r = await runInit(OPTS, EXIT, io(root));
       expect(r.forge.kind).toBe(forge);
       expect(r.files.find((f) => f.file === file)?.status).toBe("written");
       // The pipeline is chant's generator output: plywood holds no job YAML. On Forgejo it adds the concurrency group (plywood#51).
@@ -289,10 +286,10 @@ describe("golden files", () => {
   it("writes the forge and a self-hosted URL only when the remote does not settle them", async () => {
     setChantProductForTests(fakeChant().api);
     const hosted = repo("ssh://git@gitlab.acme.internal/acme/shop.git", ONE_PROJECT);
-    await runInit(OPTS, FALLBACK_EXIT, io(hosted));
+    await runInit(OPTS, EXIT, io(hosted));
     expect(readFileSync(join(hosted, "plywood.yml"), "utf8")).toContain("forge:\n  kind: gitlab\n  url: https://gitlab.acme.internal");
     const unknown = repo("https://git.example.com/acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(unknown));
+    const r = await runInit(OPTS, EXIT, io(unknown));
     expect(r.forge.kind).toBe("github");
     expect(readFileSync(join(unknown, "plywood.yml"), "utf8")).toContain("forge:\n  kind: github");
   });
@@ -300,7 +297,7 @@ describe("golden files", () => {
   it("writes a preset's keys, the gate flag and a backend only the environment names", async () => {
     setChantProductForTests(fakeChant().api);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    await runInit({ ...OPTS, preset: "before-merge", gate: "always", bucketCheck: false }, FALLBACK_EXIT, io(root, { PULUMI_BACKEND_URL: "file:///tmp/state" }));
+    await runInit({ ...OPTS, preset: "before-merge", gate: "always", bucketCheck: false }, EXIT, io(root, { PULUMI_BACKEND_URL: "file:///tmp/state" }));
     const yml = readFileSync(join(root, "plywood.yml"), "utf8");
     expect(yml).toContain("apply:\n  when: pull-request");
     expect(yml).toContain("gate: always");
@@ -314,13 +311,13 @@ describe("a second run", () => {
   it("is a no-op and keeps the team's own job", async () => {
     setChantProductForTests(fakeChant().api);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    await runInit(OPTS, FALLBACK_EXIT, io(root));
+    await runInit(OPTS, EXIT, io(root));
     const wf = join(root, ".github/workflows/plywood.yml");
     const own = "  smoke:\n    runs-on: ubuntu-latest\n    # our own check\n    steps:\n      - run: ./scripts/smoke.sh\n";
     writeFileSync(wf, readFileSync(wf, "utf8") + own);
     const before = Object.fromEntries(["plywood.yml", "chant.workspace.json", "plywood.component.ts", ".chant/op-waves/pulumi-up.spec.json", "ops/pulumi-up.op.ts"].map((f) => [f, readFileSync(join(root, f), "utf8")]));
 
-    const r = await runInit({ ...OPTS, gate: "never" }, FALLBACK_EXIT, io(root));
+    const r = await runInit({ ...OPTS, gate: "never" }, EXIT, io(root));
     for (const [f, text] of Object.entries(before)) expect(readFileSync(join(root, f), "utf8")).toBe(text);
     expect(r.files.find((f) => f.file === "plywood.yml")?.status).toBe("kept");
     // Only the workflow changes: the own job moves under the line that says it is kept.
@@ -332,7 +329,7 @@ describe("a second run", () => {
     expect(r.notes.join("\n")).toContain("--gate changed nothing");
 
     // A third run changes nothing at all.
-    const third = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const third = await runInit(OPTS, EXIT, io(root));
     expect(third.files.filter((f) => f.status === "written")).toEqual([]);
     expect(readFileSync(wf, "utf8")).toBe(after);
   });
@@ -355,7 +352,7 @@ describe("a second run", () => {
   it("puts the old workflow back when chant's generator fails", async () => {
     setChantProductForTests(fakeChant(1).api);
     const root = repo("git@github.com:acme/shop.git", { ...ONE_PROJECT, ".github/workflows/plywood.yml": "old: true\n" });
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.ok).toBe(false);
     expect(r.exitCode).toBe(1);
     expect(readFileSync(join(root, ".github/workflows/plywood.yml"), "utf8")).toBe("old: true\n");
@@ -426,7 +423,7 @@ describe("the bucket check", () => {
       ...ONE_PROJECT,
       "infra/Pulumi.yaml": "name: shop\nruntime: nodejs\nbackend:\n  url: s3://state/shop?region=us-east-1&endpoint=http://localhost:4566\n",
     });
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root, { AWS_ACCESS_KEY_ID: "test", AWS_SECRET_ACCESS_KEY: "test" }));
+    const r = await runInit(OPTS, EXIT, io(root, { AWS_ACCESS_KEY_ID: "test", AWS_SECRET_ACCESS_KEY: "test" }));
     expect(asked).toHaveLength(1);
     expect(asked[0]!.target).toMatchObject({ store: "s3", bucket: "state", endpoint: "http://localhost:4566" });
     const text = initLines(r).join("\n");
@@ -439,7 +436,7 @@ describe("the bucket check", () => {
     setChantProductForTests(fakeChant().api);
     setBucketCheckForTests(undefined);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root, { PULUMI_BACKEND_URL: "s3://state" }));
+    const r = await runInit(OPTS, EXIT, io(root, { PULUMI_BACKEND_URL: "s3://state" }));
     expect(r.notes.join("\n")).toContain("@intentius/chant/bucket-check (chant#4558)");
   });
 });
@@ -448,7 +445,7 @@ describe("on a chant without the product pipeline", () => {
   it("writes the config files and says the spec and workflow need a newer chant", async () => {
     setChantProductForTests(undefined);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.ok).toBe(true);
     expect(r.files.find((f) => f.file === ".chant/op-waves/pulumi-up.spec.json")).toMatchObject({ status: "skipped" });
     expect(r.files.find((f) => f.file === ".github/workflows/plywood.yml")).toMatchObject({ status: "skipped" });
@@ -469,13 +466,13 @@ describe("flags, templates and pure parts", () => {
   it("writes nothing with --dry-run", async () => {
     setChantProductForTests(fakeChant().api);
     const root = repo("git@github.com:acme/shop.git", ONE_PROJECT);
-    const r = await runInit({ ...OPTS, dryRun: true }, FALLBACK_EXIT, io(root));
+    const r = await runInit({ ...OPTS, dryRun: true }, EXIT, io(root));
     expect(r.files.find((f) => f.file === "plywood.yml")?.status).toBe("written");
     expect(() => readFileSync(join(root, "plywood.yml"))).toThrow();
   });
 
   it("refuses a repository with no Pulumi program", async () => {
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(repo(undefined, { "README.md": "" })));
+    const r = await runInit(OPTS, EXIT, io(repo(undefined, { "README.md": "" })));
     expect(r).toMatchObject({ ok: false, exitCode: 1 });
   });
 

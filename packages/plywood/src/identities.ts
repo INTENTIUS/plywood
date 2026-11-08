@@ -17,10 +17,6 @@
  * `pipelineContract` turns them into the jobs plywood's pipeline runs, named
  * in plywood's words (`plywood/preview/<member>` is the required status).
  * Every request is a read. plywood keeps no copy of the check.
- *
- * The subpath is imported on first use. A chant without it (one older than the
- * pinned 0.124.77) gets the message the command printed before chant#4608 and chant's
- * `failed` code.
  */
 import type { JobSettings } from "./config/jobs";
 import { environmentFor } from "./jobs";
@@ -110,11 +106,6 @@ export function configIdentities(args: string[], json: boolean, table: ExitTable
   return table.done;
 }
 
-/** The message `plywood forge check` prints when the installed chant has no forge check. */
-export const FORGE_CHECK_MESSAGE =
-  `${PRODUCT} forge check holds the identities next to the forge's environments, protected branches and each cloud's trust policy. ` +
-  `The read is chant's (@intentius/chant/forge-check, chant#4608), and the installed chant lacks it; it comes with the chant release after 0.124.54. Run '${PRODUCT} config identities' for what the jobs will hold.`;
-
 /** The forge plywood's jobs run on. */
 type Forge = "github" | "gitlab" | "forgejo";
 const FORGES: readonly Forge[] = ["github", "gitlab", "forgejo"];
@@ -168,28 +159,20 @@ export interface ChantForgeCheck {
   resolveCloudIdentity(decl: unknown, env: string, member?: string): unknown;
 }
 
-const FORGE_CHECK_FUNCTIONS = ["forgeCheck", "forgeCheckExit", "describeForgeCheck", "forgeCheckTarget", "pipelineContract"] as const;
+let forgeCheckModule: Promise<ChantForgeCheck> | undefined;
 
-let forgeCheckModule: Promise<ChantForgeCheck | undefined> | undefined;
-
-/** chant's forge check, or undefined when the installed chant lacks it. */
-export function chantForgeCheck(): Promise<ChantForgeCheck | undefined> {
+/** chant's forge check (`@intentius/chant/forge-check`) with ci-identity's `resolveCloudIdentity`, loaded on first use. */
+export function chantForgeCheck(): Promise<ChantForgeCheck> {
   forgeCheckModule ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4608).
-      const fc: Record<string, unknown> = await import("@intentius/chant/forge-check");
-      const id: Record<string, unknown> = await import("@intentius/chant/ci-identity");
-      if (!FORGE_CHECK_FUNCTIONS.every((f) => typeof fc[f] === "function") || typeof id.resolveCloudIdentity !== "function") return undefined;
-      return { ...fc, resolveCloudIdentity: id.resolveCloudIdentity } as unknown as ChantForgeCheck;
-    } catch {
-      return undefined;
-    }
+    const fc = await import("@intentius/chant/forge-check");
+    const { resolveCloudIdentity } = await import("@intentius/chant/ci-identity");
+    return { ...fc, resolveCloudIdentity } as unknown as ChantForgeCheck;
   })();
   return forgeCheckModule;
 }
 
-/** Tests stand in a fake chant forge check (or none, for the fallback). `reset` goes back to the real import. */
-export function setChantForgeCheckForTests(fake: ChantForgeCheck | undefined | "reset"): void {
+/** Tests stand in a fake chant forge check. `reset` goes back to the real import. */
+export function setChantForgeCheckForTests(fake: ChantForgeCheck | "reset"): void {
   forgeCheckModule = fake === "reset" ? undefined : Promise.resolve(fake);
 }
 
@@ -247,11 +230,6 @@ export function contractPipelines(
 export async function forgeCheck(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
   if (args[0] !== "check") return usage(`unknown forge command '${args[0] ?? ""}'. Run '${PRODUCT} forge check'.`, table, io);
   const fc = await chantForgeCheck();
-  if (!fc) {
-    if (json) io.out(JSON.stringify({ command: "forge check", ok: false, exitCode: table.failed, error: FORGE_CHECK_MESSAGE }));
-    else io.err(`${PRODUCT}: ${FORGE_CHECK_MESSAGE}`);
-    return table.failed;
-  }
   const requireClouds = args.includes("--require-clouds");
   let rest = args.slice(1).filter((a) => a !== "--require-clouds");
   const flags: Record<string, string | undefined> = {};

@@ -14,12 +14,12 @@ import { main, type Io } from "../src/cli";
 import { chantProduct, setChantProductForTests, type ChantProduct, type ProductActionRequest, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { plywoodMcpTools } from "../src/agents";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { setChantStackOpsForTests, type StackOpOutcome } from "../src/stack-ops";
 import { ACTIONS_NOT_ON_GITLAB, ci, workflowPlan, type StageIo } from "../src/stages";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
 
-const T = FALLBACK_EXIT;
+const T = EXIT;
 const ROTATE = "urn:pulumi:prod-us::shop::command:local:Command::rotate";
 const AFTER = "urn:pulumi:prod-us::shop::aws:ssm/parameter:Parameter::reads-rotate";
 const YML = `stacks:\n  shop/prod-us:\n    dir: .\n    actions:\n      - name: rotate\n        urn: ${ROTATE}\n        description: rotate the signing key\n  shop/dev: {}\n`;

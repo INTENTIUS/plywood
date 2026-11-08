@@ -26,15 +26,13 @@
  *      plywood's own readers unwrap it ({@link unwrapWavesSpec}).
  *   2c. A workflow-level concurrency group per commit is added (plywood#51),
  *      so Forgejo does not cancel a merge's wave jobs when the next merge lands.
- *   3. On a chant before chant#4607, each job line chant wrote as
- *      `chant run wave ...` becomes the line productPipelineJobs gave, with
- *      plywood's bin. From chant#4607 the generator writes the words' bin in
- *      the wave, resume and plans jobs itself (`OpWavesPipelineOptions.bin`),
- *      so the file is left as chant wrote it.
+ *   3. chant's generator writes the words' bin in the wave, resume and
+ *      plans jobs itself (chant#4607, `OpWavesPipelineOptions.bin`), so the
+ *      job lines are left as chant wrote them.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { hasChant4607, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
+import type { ChantProduct, ForgeKind, ProductPipelineJobs } from "./chant-product";
 import { chantPipelineOptions } from "./images";
 import { withRunGroup } from "./init/run-group";
 import type { ExitTable } from "./exit-codes";
@@ -149,26 +147,6 @@ export function writeUpOp(cwd: string, spec: unknown): boolean {
   return true;
 }
 
-/** Each wave job's line as chant's generator writes it, and the line with plywood's bin. */
-export function binLines(waves: Pick<WaveJobs, "jobs">, bin: string): Array<{ chant: string; product: string }> {
-  const binArgs = bin.split(/\s+/).filter(Boolean);
-  return waves.jobs.map((job) => {
-    const own = job.command.slice(0, binArgs.length).join(" ") === binArgs.join(" ");
-    const rest = own ? job.command.slice(binArgs.length) : job.command.slice(1);
-    return { chant: ["chant", ...rest].join(" "), product: [...binArgs, ...rest].join(" ") };
-  });
-}
-
-/** `text` with every chant wave line in place of plywood's. */
-export function withBinLines(text: string, lines: ReadonlyArray<{ chant: string; product: string }>): string {
-  // Longest first, so `... --wave 1` does not eat into `... --wave 1 --share 2`.
-  const sorted = [...lines].sort((a, b) => b.chant.length - a.chant.length);
-  return text.replace(/chant run wave [^\n"']*/g, (found) => {
-    const hit = sorted.find((l) => found.trimEnd() === l.chant);
-    return hit ? hit.product : found;
-  });
-}
-
 /** The files chant's generator wrote for `specFile`: those whose header names `--spec <specFile>`. */
 function generatedFor(dir: string, specFile: string): string[] {
   if (!existsSync(dir)) return [];
@@ -179,8 +157,8 @@ function generatedFor(dir: string, specFile: string): string[] {
 }
 
 /**
- * Write the spec with plywood's names, have chant generate the waves
- * workflow, and put plywood's bin in its job lines. Returns chant's exit
+ * Write the spec with plywood's names and have chant generate the waves
+ * workflow. Returns chant's exit
  * code, or `failed` when no file came out.
  */
 export async function writeWaveJobs(
@@ -210,12 +188,10 @@ export async function writeWaveJobs(
     io.err(`${PRODUCT} ci: chant wrote no waves workflow for ${waves.specFile} under ${outDir}`);
     return table.failed;
   }
-  // chant#4607: the generator writes plywood's bin itself; before it, plywood swaps the lines.
-  const lines = hasChant4607(chant) ? undefined : binLines(waves, words.bin);
   for (const file of files) {
     // plywood#51: Forgejo cancels a merge's wave jobs when the next merge lands, unless the workflow sets a group.
     const text = readFileSync(file, "utf8");
-    const next = withRunGroup(lines ? withBinLines(text, lines) : text, forge, "commit");
+    const next = withRunGroup(text, forge, "commit");
     if (next !== text) writeFileSync(file, next);
     io.err(`${PRODUCT} ci: waves workflow at ${file.slice(io.cwd.length + 1)}`);
   }

@@ -4,12 +4,11 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { needsChantMessage, setChantProductForTests, type ChantProduct, type PendingGateByPlan } from "../src/chant-product";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { refusalLine, refusalOf, REFUSALS } from "../src/refusals";
 import { ci, type StageIo } from "../src/stages";
 import { approvalStatusTarget, approve, approveTarget, carryArgv, override, readUpSpec, resume, up, upTargetByPlan, WAVES_SPEC_FILE } from "../src/up";
 import { parseConfig } from "../src/config/index";
-import { binLines, withBinLines } from "../src/waves-workflow";
 import { PRODUCT_WORDS } from "../src/words";
 import { unwrapWavesSpec } from "../src/waves-workflow";
 
@@ -88,7 +87,7 @@ describe("plywood approve", () => {
   it("records the pull request's up gate under op pr-<n>", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--sign"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--sign"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["approve", "pr-12", "up", "--plan", "sha256:abc", "--sign"]);
     expect(chant.calls[0]!.words).toBe(PRODUCT_WORDS);
   });
@@ -103,15 +102,15 @@ describe("plywood approve", () => {
   it("records a wave gate under op pulumi-up", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await approve(["wave-2", "--plan", "sha256:def"], false, FALLBACK_EXIT, io(repo(), { PR_NUMBER: "3" }))).toBe(0);
+    expect(await approve(["wave-2", "--plan", "sha256:def"], false, EXIT, io(repo(), { PR_NUMBER: "3" }))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["approve", "pulumi-up", "wave-2", "--plan", "sha256:def"]);
   });
 
   it("passes --yes and --json, so chant's terminal confirmation (chant#4575) is skipped only when asked", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    await approve(["wave-1", "--plan", "sha256:x"], false, FALLBACK_EXIT, io(repo()));
-    await approve(["wave-1", "--plan", "sha256:x", "--yes"], true, FALLBACK_EXIT, io(repo()));
+    await approve(["wave-1", "--plan", "sha256:x"], false, EXIT, io(repo()));
+    await approve(["wave-1", "--plan", "sha256:x", "--yes"], true, EXIT, io(repo()));
     expect(chant.calls[0]!.argv).not.toContain("--yes");
     expect(chant.calls[1]!.argv).toEqual(["approve", "pulumi-up", "wave-1", "--plan", "sha256:x", "--yes", "--json"]);
   });
@@ -120,7 +119,7 @@ describe("plywood approve", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await approve(["wave-1"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await approve(["wave-1"], false, EXIT, o)).toBe(1);
     expect(o.stderr.join("\n")).toContain("--plan <digest>");
     expect(chant.calls).toEqual([]);
   });
@@ -128,7 +127,7 @@ describe("plywood approve", () => {
   it("names the chant it needs on the published pin", async () => {
     setChantProductForTests(undefined);
     const o = io(repo());
-    expect(await approve(["wave-1", "--plan", "sha256:x"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await approve(["wave-1", "--plan", "sha256:x"], false, EXIT, o)).toBe(1);
     expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood approve"));
   });
 });
@@ -143,7 +142,7 @@ describe("plywood approve up on waves that take the pull request's approval (cha
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo(undefined, PR_SPEC));
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--sign"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--sign"], false, EXIT, o)).toBe(0);
     expect(chant.calls.map((c) => c.argv)).toEqual([
       ["approve", "pr-12", "up", "--plan", "sha256:abc", "--sign"],
       ["approve", "pulumi-up", "up", "--plan", "sha256:abc", "--sign", "--yes"],
@@ -154,27 +153,27 @@ describe("plywood approve up on waves that take the pull request's approval (cha
   it("carries one stack's approval too, and never a wave gate, an expiry or a spec without pull-request waves", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    await approve(["up", "--pr", "12", "--stack", "shop-dev", "--plan", "sha256:abc", "--yes", "--resume"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC)));
+    await approve(["up", "--pr", "12", "--stack", "shop-dev", "--plan", "sha256:abc", "--yes", "--resume"], false, EXIT, io(repo(undefined, PR_SPEC)));
     expect(chant.calls.map((c) => c.argv)).toEqual([
       ["approve", "pr-12-shop-dev", "up", "--plan", "sha256:abc", "--yes", "--resume"],
       ["approve", "pulumi-up", "up", "--plan", "sha256:abc", "--yes"],
     ]);
     chant.calls.length = 0;
-    await approve(["wave-1", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC)));
-    await approve(["up", "--pr", "12", "--expire"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC)));
-    await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo()));
+    await approve(["wave-1", "--plan", "sha256:abc"], false, EXIT, io(repo(undefined, PR_SPEC)));
+    await approve(["up", "--pr", "12", "--expire"], false, EXIT, io(repo(undefined, PR_SPEC)));
+    await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, io(repo()));
     expect(chant.calls.map((c) => c.argv[1])).toEqual(["pulumi-up", "pr-12", "pr-12"]);
   });
 
   it("carries nothing when chant refused the approval, and says so when the carry fails", async () => {
     const refused = fakeChant([3]);
     setChantProductForTests(refused.api);
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC)))).toBe(3);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, io(repo(undefined, PR_SPEC)))).toBe(3);
     expect(refused.calls).toHaveLength(1);
     const failing = fakeChant([0, 1]);
     setChantProductForTests(failing.api);
     const o = io(repo(undefined, PR_SPEC));
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, o)).toBe(1);
     expect(o.stderr.join("\n")).toContain("plywood approve up --op pulumi-up --plan sha256:abc --yes");
   });
 
@@ -195,7 +194,7 @@ describe("plywood approve posts plywood/approval again (chant#4630 ruling)", () 
   it("runs run wave --approval-status --open after it records, with the CI job's forge and target branch", async () => {
     const chant = withFloor();
     const o = io(repo(undefined, PR_SPEC), { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" });
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, o)).toBe(0);
     expect(chant.calls.map((c) => c.argv)[2]).toEqual(refresh("main", "github"));
     expect(o.stderr.join("\n")).toContain("posted plywood/approval again");
   });
@@ -203,7 +202,7 @@ describe("plywood approve posts plywood/approval again (chant#4630 ruling)", () 
   it("takes --forge and --branch over plywood.yml and the job", async () => {
     const chant = withFloor();
     const dir = repo("stacks:\n  shop/dev: {}\nforge:\n  kind: gitlab\n", PR_SPEC);
-    await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--forge", "forgejo", "--branch", "trunk"], false, FALLBACK_EXIT, io(dir, { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" }));
+    await approve(["up", "--pr", "12", "--plan", "sha256:abc", "--forge", "forgejo", "--branch", "trunk"], false, EXIT, io(dir, { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" }));
     expect(chant.calls.at(-1)!.argv).toEqual(refresh("trunk", "forgejo"));
     expect(approvalStatusTarget({}, parseConfig("forge:\n  kind: gitlab\n").doc, { CI_DEFAULT_BRANCH: "main" })).toEqual({ forge: "gitlab", branch: "main" });
     expect(approvalStatusTarget({}, undefined, {})).toEqual({});
@@ -212,23 +211,19 @@ describe("plywood approve posts plywood/approval again (chant#4630 ruling)", () 
   it("prints the line to run when the forge or branch is unknown, and a failed post keeps the approval's exit", async () => {
     const chant = withFloor();
     const o = io(repo(undefined, PR_SPEC));
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, o)).toBe(0);
     expect(chant.calls).toHaveLength(2);
     expect(o.stderr.join("\n")).toContain("--approval-status --open --branch <target branch> --forge <forge>");
     const failing = withFloor([0, 0, 1]);
     const f = io(repo(undefined, PR_SPEC), { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" });
-    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, f)).toBe(0);
+    expect(await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, EXIT, f)).toBe(0);
     expect(failing.calls).toHaveLength(3);
     expect(f.stderr.join("\n")).toContain("was not posted again (exit 1)");
   });
 
-  it("posts nothing on a chant without the pull-request floor, or for a wave gate", async () => {
-    const chant = fakeChant();
-    setChantProductForTests({ ...chant.api, APPROVAL_STATUS_FLOOR: "0.124.56" });
-    await approve(["up", "--pr", "12", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC), { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" }));
-    expect(chant.calls.map((c) => c.argv[0])).toEqual(["approve", "approve"]);
+  it("posts nothing for a wave gate", async () => {
     const floored = withFloor();
-    await approve(["wave-1", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(undefined, PR_SPEC), { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" }));
+    await approve(["wave-1", "--plan", "sha256:abc"], false, EXIT, io(repo(undefined, PR_SPEC), { GITHUB_ACTIONS: "true", GITHUB_BASE_REF: "main" }));
     expect(floored.calls).toHaveLength(1);
   });
 });
@@ -238,15 +233,15 @@ describe("plywood override", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const args = ["shop/prod", "--rule", "no-public-bucket", "--rule", "tags", "--reason", "launch day", "--sign"];
-    expect(await override(args, false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await override(args, false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["approve", "policy-override", "shop/prod", "--rule", "no-public-bucket", "--rule", "tags", "--reason", "launch day", "--sign"]);
   });
 
   it("needs a rule and a reason", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await override(["shop/prod", "--reason", "x"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
-    expect(await override(["shop/prod", "--rule", "tags"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await override(["shop/prod", "--reason", "x"], false, EXIT, io(repo()))).toBe(1);
+    expect(await override(["shop/prod", "--rule", "tags"], false, EXIT, io(repo()))).toBe(1);
     expect(chant.calls).toEqual([]);
   });
 });
@@ -255,7 +250,7 @@ describe("plywood up", () => {
   it("runs each wave's chant run wave in order", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await up([], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await up([], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls.map((c) => c.argv)).toEqual([
       ["run", "wave", "--spec", WAVES_SPEC_FILE, "--wave", "1"],
       ["run", "wave", "--spec", WAVES_SPEC_FILE, "--wave", "2"],
@@ -263,10 +258,10 @@ describe("plywood up", () => {
   });
 
   it("stops at a wave that waits, and names the approve that clears it", async () => {
-    const chant = fakeChant([FALLBACK_EXIT.waiting]);
+    const chant = fakeChant([EXIT.waiting]);
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await up([], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.waiting);
+    expect(await up([], false, EXIT, o)).toBe(EXIT.waiting);
     expect(chant.calls).toHaveLength(1);
     expect(o.stderr.join("\n")).toContain("plywood approve wave-1 --plan <digest>");
   });
@@ -274,7 +269,7 @@ describe("plywood up", () => {
   it("runs one wave's job as a generated job does", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await up(["--wave", "2", "--share", "1", "--base", "HEAD^1"], true, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await up(["--wave", "2", "--share", "1", "--base", "HEAD^1"], true, EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["run", "wave", "--spec", WAVES_SPEC_FILE, "--wave", "2", "--base", "HEAD^1", "--share", "1", "--json"]);
   });
 
@@ -286,10 +281,10 @@ describe("plywood up", () => {
   });
 
   it("passes chant's code through: a held lock is 5", async () => {
-    const chant = fakeChant([FALLBACK_EXIT.held]);
+    const chant = fakeChant([EXIT.held]);
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await up(["--wave", "1"], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.held);
+    expect(await up(["--wave", "1"], false, EXIT, o)).toBe(EXIT.held);
     expect(o.stderr.join("\n")).toContain("/plywood unlock");
   });
 });
@@ -299,7 +294,7 @@ describe("/plywood up before merge", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo(), { BASE_SHA: "abc" });
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await up(["--pr", "4"], false, EXIT, o)).toBe(1);
     expect(o.stderr.join("\n")).toContain("apply.when: pull-request");
     expect(chant.calls).toEqual([]);
   });
@@ -308,18 +303,18 @@ describe("/plywood up before merge", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const dir = repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\nforge:\n  kind: forgejo\n");
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(dir, { BASE_SHA: "abc" }))).toBe(0);
+    expect(await up(["--pr", "4"], false, EXIT, io(dir, { BASE_SHA: "abc" }))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["components", "pr-apply", "--before-merge", "--base", "abc", "--pr", "4", "--env", "production", "--gate", "up", "--forge", "forgejo"]);
   });
 });
 
 describe("refusals", () => {
   it("has a line for each refused exit code with the command that clears it", () => {
-    for (const r of REFUSALS) expect(refusalOf(FALLBACK_EXIT[r], FALLBACK_EXIT)).toBe(r);
-    expect(refusalOf(FALLBACK_EXIT.done, FALLBACK_EXIT)).toBeUndefined();
+    for (const r of REFUSALS) expect(refusalOf(EXIT[r], EXIT)).toBe(r);
+    expect(refusalOf(EXIT.done, EXIT)).toBeUndefined();
     expect(refusalLine("moved")).toContain("plywood approve up --plan <digest>");
     expect(refusalLine("denied")).toContain("plywood override <stack> --rule <id> --reason <text>");
-    expect(refusalOf(9, FALLBACK_EXIT)).toBe("misplaced");
+    expect(refusalOf(9, EXIT)).toBe("misplaced");
     expect(refusalLine("misplaced")).toContain("plywood ci");
   });
 
@@ -327,18 +322,12 @@ describe("refusals", () => {
     const chant = fakeChant([9]);
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await up(["--wave", "1"], false, FALLBACK_EXIT, o)).toBe(9);
+    expect(await up(["--wave", "1"], false, EXIT, o)).toBe(9);
     expect(o.stderr.join("\n")).toContain("chant's job guard");
   });
 });
 
 describe("wave jobs in the generated workflow", () => {
-  it("puts plywood's bin in each chant run wave line", () => {
-    const lines = binLines({ jobs: [{ command: ["npx", "--no-install", "plywood", "run", "wave", "--spec", "s.json", "--wave", "1"] }] }, PRODUCT_WORDS.bin);
-    expect(lines).toEqual([{ chant: "chant run wave --spec s.json --wave 1", product: "npx --no-install plywood run wave --spec s.json --wave 1" }]);
-    expect(withBinLines("      - run: chant run wave --spec s.json --wave 1\n", lines)).toBe("      - run: npx --no-install plywood run wave --spec s.json --wave 1\n");
-  });
-
   it("writes the spec with plywood's names and has chant generate one job per wave", async () => {
     const dir = repo();
     const chant = fakeChant([], (argv) => {
@@ -346,11 +335,11 @@ describe("wave jobs in the generated workflow", () => {
       mkdirSync(join(dir, ".github/workflows"), { recursive: true });
       writeFileSync(
         join(dir, ".github/workflows/pulumi-up.yml"),
-        `# generated. Regenerate with: chant run --generate github --spec ${WAVES_SPEC_FILE}\njobs:\n  a:\n    steps:\n      - run: chant run wave --spec ${WAVES_SPEC_FILE} --wave 1\n  b:\n    steps:\n      - run: chant run wave --spec ${WAVES_SPEC_FILE} --wave 2\n`,
+        `# generated. Regenerate with: chant run --generate github --spec ${WAVES_SPEC_FILE}\njobs:\n  a:\n    steps:\n      - run: npx --no-install plywood run wave --spec ${WAVES_SPEC_FILE} --wave 1\n  b:\n    steps:\n      - run: npx --no-install plywood run wave --spec ${WAVES_SPEC_FILE} --wave 2\n`,
       );
     });
     setChantProductForTests(chant.api);
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(await ci(["--forge", "github"], false, EXIT, io(dir))).toBe(0);
     expect(chant.calls.map((c) => c.argv[0])).toEqual(["build", "run"]);
     expect(chant.calls[1]!.argv).toEqual(["run", "--generate", "github", "--spec", WAVES_SPEC_FILE, "--output", ".github/workflows"]);
     // The pull request workflow has no /plywood up job when the waves update on merge.
@@ -382,7 +371,7 @@ describe("plywood approve up without --pr (plywood#26, chant#4607)", () => {
     const chant = chant4607([gate("pr-12", 12)]);
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(await approve(["up", "--plan", "sha256:abc"], false, EXIT, o)).toBe(0);
     expect(chant.reads[0]).toMatchObject({ digest: "sha256:abc", options: { pullRequestsOnly: true } });
     expect(chant.calls[0]!.argv).toEqual(["approve", "pr-12", "up", "--plan", "sha256:abc"]);
     expect(o.stderr.join("\n")).toContain("pull request 12");
@@ -403,7 +392,7 @@ describe("plywood approve up without --pr (plywood#26, chant#4607)", () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, o)).toBe(1);
+    expect(await approve(["up", "--plan", "sha256:abc"], false, EXIT, o)).toBe(1);
     expect(o.stderr.join("\n")).toContain("--pr <n>");
     expect(chant.calls).toEqual([]);
   });
@@ -411,7 +400,7 @@ describe("plywood approve up without --pr (plywood#26, chant#4607)", () => {
   it("does not read the ledger when --pr or PR_NUMBER names the pull request", async () => {
     const chant = chant4607([gate("pr-99", 99)]);
     setChantProductForTests(chant.api);
-    expect(await approve(["up", "--plan", "sha256:abc"], false, FALLBACK_EXIT, io(repo(), { PR_NUMBER: "7" }))).toBe(0);
+    expect(await approve(["up", "--plan", "sha256:abc"], false, EXIT, io(repo(), { PR_NUMBER: "7" }))).toBe(0);
     expect(chant.reads).toEqual([]);
     expect(chant.calls[0]!.argv.slice(0, 3)).toEqual(["approve", "pr-7", "up"]);
   });
@@ -421,7 +410,7 @@ describe("plywood resume (plywood#26)", () => {
   it("runs chant run resume --op pulumi-up in process with plywood's words", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await resume([], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await resume([], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["run", "resume", "--op", "pulumi-up"]);
     expect(chant.calls[0]!.words).toBe(PRODUCT_WORDS);
   });
@@ -429,8 +418,8 @@ describe("plywood resume (plywood#26)", () => {
   it("names a wave's gate with --wave, takes another --op, and passes --dry-run and --json", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await resume(["--wave", "2", "--dry-run"], true, FALLBACK_EXIT, io(repo()))).toBe(0);
-    expect(await resume(["--op", "plywood-adopt"], false, FALLBACK_EXIT, io(repo()))).toBe(0);
+    expect(await resume(["--wave", "2", "--dry-run"], true, EXIT, io(repo()))).toBe(0);
+    expect(await resume(["--op", "plywood-adopt"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.calls.map((c) => c.argv)).toEqual([
       ["run", "resume", "--op", "pulumi-up", "--gate", "wave-2", "--dry-run", "--json"],
       ["run", "resume", "--op", "plywood-adopt"],
@@ -438,22 +427,22 @@ describe("plywood resume (plywood#26)", () => {
   });
 
   it("adds the line plywood up adds to a refusal, and keeps chant's code", async () => {
-    const chant = fakeChant([FALLBACK_EXIT.waiting]);
+    const chant = fakeChant([EXIT.waiting]);
     setChantProductForTests(chant.api);
     const o = io(repo());
-    expect(await resume(["--wave", "1"], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.waiting);
+    expect(await resume(["--wave", "1"], false, EXIT, o)).toBe(EXIT.waiting);
     expect(o.stderr.join("\n")).toContain(refusalLine("waiting", { wave: 1 }));
   });
 
   it("refuses a bad wave and unknown flags, and names the chant it needs on the pin", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
-    expect(await resume(["--wave", "0"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
-    expect(await resume(["--force"], false, FALLBACK_EXIT, io(repo()))).toBe(1);
+    expect(await resume(["--wave", "0"], false, EXIT, io(repo()))).toBe(1);
+    expect(await resume(["--force"], false, EXIT, io(repo()))).toBe(1);
     expect(chant.calls).toEqual([]);
     setChantProductForTests(undefined);
     const o = io(repo());
-    expect(await resume([], false, FALLBACK_EXIT, o)).toBe(FALLBACK_EXIT.failed);
+    expect(await resume([], false, EXIT, o)).toBe(EXIT.failed);
     expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood resume"));
   });
 });
@@ -464,19 +453,19 @@ describe("apply.requires on chant#4607 (plywood#26)", () => {
   it("passes a subset to pr-apply --before-merge as --requires", async () => {
     const chant = chant4607();
     setChantProductForTests(chant.api);
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(repo(yml), { BASE_SHA: "abc" }))).toBe(0);
+    expect(await up(["--pr", "4"], false, EXIT, io(repo(yml), { BASE_SHA: "abc" }))).toBe(0);
     expect(chant.calls[0]!.argv).toEqual(["components", "pr-apply", "--before-merge", "--base", "abc", "--pr", "4", "--env", "production", "--gate", "up", "--forge", "github", "--requires", "approved,checks"]);
   });
 
   it("passes nothing for all four, and says a chant before chant#4607 asks all four", async () => {
     const all = chant4607();
     setChantProductForTests(all.api);
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, io(repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n"), { BASE_SHA: "abc" }))).toBe(0);
+    expect(await up(["--pr", "4"], false, EXIT, io(repo("stacks:\n  shop/dev: {}\napply:\n  when: pull-request\n"), { BASE_SHA: "abc" }))).toBe(0);
     expect(all.calls[0]!.argv).not.toContain("--requires");
     const old = fakeChant();
     setChantProductForTests(old.api);
     const o = io(repo(yml), { BASE_SHA: "abc" });
-    expect(await up(["--pr", "4"], false, FALLBACK_EXIT, o)).toBe(0);
+    expect(await up(["--pr", "4"], false, EXIT, o)).toBe(0);
     expect(old.calls[0]!.argv).not.toContain("--requires");
     expect(o.stderr.join("\n")).toContain("asks all four checks");
   });
@@ -492,7 +481,7 @@ describe("wave jobs on chant#4607 (plywood#26)", () => {
       writeFileSync(join(dir, ".github/workflows/pulumi-up.yml"), text);
     });
     setChantProductForTests(chant.api);
-    expect(await ci(["--forge", "github"], false, FALLBACK_EXIT, io(dir))).toBe(0);
+    expect(await ci(["--forge", "github"], false, EXIT, io(dir))).toBe(0);
     expect(readFileSync(join(dir, ".github/workflows/pulumi-up.yml"), "utf8")).toBe(text);
   });
 });

@@ -13,7 +13,7 @@
  * chant#4558): versioning, a lifecycle rule that expires noncurrent
  * versions, and the public access block. The check only reads. It is
  * reached through a feature-detect, since a chant older than the pinned 0.124.77
- * may lack it; scripts/build-cli.mjs stands in a throwing module there.
+ * may lack it.
  */
 import type { DetectedProject } from "./detect";
 

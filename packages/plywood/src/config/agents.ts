@@ -28,7 +28,7 @@
  *                          or app pushes it
  *     -> pipeline.agent, and chant's agent job (chant#4616, src/agent-jobs.ts):
  *        `plywood ci` writes the comment agent's jobs and puts the drift
- *        agent on each scheduled drift Op, on a chant that has the job
+ *        agent on each scheduled drift Op
  */
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 

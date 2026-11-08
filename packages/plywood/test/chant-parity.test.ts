@@ -210,19 +210,15 @@ describe("the drift jobs' identities (chant#4631)", () => {
     expect(driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", STUB_CHANT, { cloud: true, env: "production" }).ops[0]).toHaveProperty("update");
   });
 
-  it("raises the update job's contents to write on GitHub and Forgejo once chant takes it (chant#4631 ruling)", () => {
+  it("raises the update job's contents to write on GitHub and Forgejo (chant#4631 ruling)", () => {
     const doc = parseConfig(yml).doc;
-    const perms = (forge: "github" | "forgejo" | "gitlab", contentsWrite?: boolean) =>
-      (driftCloudFields(doc, forge, "shop/prod", "up", "production", contentsWrite === undefined ? {} : { contentsWrite }) as { update: { permissions?: unknown } }).update.permissions;
-    expect(perms("github", true)).toEqual({ contents: "write" });
-    expect(perms("forgejo", true)).toEqual({ contents: "write" });
-    expect(perms("gitlab", true)).toBeUndefined();
-    expect(perms("github", false)).toBeUndefined();
-    expect(perms("github")).toBeUndefined();
-    expect(driftCloudFields(doc, "github", "shop/dev", "issue", "production", { contentsWrite: true })).not.toHaveProperty("update");
-    const op = (contentsWrite: boolean) => driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", STUB_CHANT, { cloud: true, contentsWrite, env: "production" }).ops[0] as { update: { permissions?: unknown } };
-    expect(op(true).update.permissions).toEqual({ contents: "write" });
-    expect(op(false).update.permissions).toBeUndefined();
+    const perms = (forge: "github" | "forgejo" | "gitlab") =>
+      (driftCloudFields(doc, forge, "shop/prod", "up", "production") as { update: { permissions?: unknown } }).update.permissions;
+    expect(perms("github")).toEqual({ contents: "write" });
+    expect(perms("forgejo")).toEqual({ contents: "write" });
+    expect(perms("gitlab")).toBeUndefined();
+    const op = driftOpSpec(doc, "github", ["shop/prod"], "0 6 * * *", STUB_CHANT, { cloud: true, env: "production" }).ops[0] as { update: { permissions?: unknown } };
+    expect(op.update.permissions).toEqual({ contents: "write" });
   });
 
   it("leaves the update to the update job when the spec has one", () => {

@@ -1,8 +1,8 @@
 /**
  * The plywood bench on chant's e2e harness (plywood#25, plywood#22's claims).
  *
- *   just e2e lint               lint every scenario: plywood's rules, and the
- *                               harness's lintScenario when chant has it
+ *   just e2e lint               lint every scenario: plywood's rules and the
+ *                               harness's lintScenario
  *   just e2e dry-run <id>       print a scenario's plain and BREAK arms step
  *                               by step; starts and changes nothing
  *   just e2e image [<plunge>]   build the job image (bench.ts JOB_IMAGE) from

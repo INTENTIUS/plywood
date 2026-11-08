@@ -25,6 +25,8 @@ Both images and the package now come from a single release run, which also write
 
 The install line for a stack pinned to a Pulumi or plunge release other than the image's is chant's now, as the images' download and checksum check are. When a checksums file lists a different sum, the error ends in `chant records <sum>` where it used to end in `plywood pins <sum>`.
 
+The release cut now builds both images from their Dockerfiles itself and writes the digest table the package pins. `scripts/release-image.sh` and `just release-image` are gone; `just images` still builds an image locally.
+
 ## In 0.3.2
 
 plywood now pins chant 0.124.67, which fixes the refusal 0.3.1 worked around for disjoint merges: with `approvals.preview` on, a wave compares the plans it makes against the recorded ones without plunge's refresh steps, which had made unchanged plans look moved. chant also refuses a change that Rego or CrossGuard denies as policy-denied before it can merge.

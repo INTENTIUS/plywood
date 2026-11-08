@@ -64,6 +64,20 @@ export function controlOf(doc: RawConfig): ChantControlSettings | undefined {
   return out as unknown as ChantControlSettings;
 }
 
+/**
+ * `chant build --pr-loop`'s control flags (chant#4772): `--control <repo>`
+ * and a `--control-setting <key>=<value>` for each other setting plywood.yml
+ * gives, with `member` from the resolved target when plywood.yml names none.
+ * The note job the build writes then reads the control repo's records for
+ * the cross-stack edges (plywood#28).
+ */
+export function controlBuildArgv(doc: RawConfig, member: string): string[] {
+  const settings = controlOf(doc) as unknown as Record<string, string> | undefined;
+  if (!settings) return [];
+  const { repo, ...rest }: Record<string, string> = { member, ...settings };
+  return ["--control", repo!, ...Object.entries(rest).flatMap(([k, v]) => ["--control-setting", `${k}=${v}`])];
+}
+
 export const control: ConfigGroup = {
   name: "control",
   keys: ["control"],

@@ -554,7 +554,7 @@ async function workflowStep(
   }
   if (opts.dryRun) return [{ file: output, status: "skipped", note: "--dry-run: chant's generator was not run" }];
   const argv = plan.argv.map((a, i) => (i === 1 && a === "." ? root : a));
-  const written = await writeWorkflow(chant, { root, forge, output, argv, words: plan.prWords, noteControl: plan.jobs.post.control });
+  const written = await writeWorkflow(chant, { root, forge, output, argv, words: plan.prWords });
   if (written.status === "failed") return [{ file: output, status: "failed", note: `chant's generator exited ${written.code}; the old file is back as it was` }];
   const notes = [
     ...(written.kept.length ? [`kept your own jobs: ${written.kept.join(", ")}`] : []),

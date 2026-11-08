@@ -1,79 +1,55 @@
 /**
- * The note job's read of the control repo (plywood#28, chant#4619): chant's
- * `post.control` step goes into the generated note job just before the post,
- * once, and a file without the job or a chant without the step is left as
- * chant wrote it.
+ * The note job's read of the control repo (plywood#28): with a control repo
+ * in plywood.yml, plywood hands it to chant's build as `--control` and
+ * `--control-setting` (chant#4772), and the note job chant writes reads the
+ * control repo's records before the post.
  */
-import { describe, expect, it } from "vitest";
-import { parseYAML } from "@intentius/chant/yaml";
-import { withNoteControl } from "../src/init/note-control";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { chantProduct, setChantProductForTests } from "../src/chant-product";
+import { controlBuildArgv } from "../src/config/control";
+import { parseConfig } from "../src/config/index";
+import { EXIT } from "../src/exit-codes";
+import { runInit } from "../src/init";
 
-const STEP = {
-  stepName: "Read the control repo acme/control's records, read-only, for the cross-stack edges",
-  env: { CHANT_CONTROL_READ_TOKEN: "${{ secrets.CONTROL_READ_TOKEN || github.token }}" },
-  script: 'chant_control_dir="$(mktemp -d)"\necho "CHANT_CONTROL_DIR=$chant_control_dir" >>"$GITHUB_ENV"',
-};
+afterEach(() => setChantProductForTests("reset"));
 
-const GITHUB = [
-  "jobs:",
-  "  plan:",
-  "    steps:",
-  "      - run: npx --no-install plywood components pr-plan",
-  "  plan-note:",
-  "    needs:",
-  "      - plan",
-  "    steps:",
-  "      - name: Check out the target branch's commit",
-  "        uses: actions/checkout@v4",
-  "      - name: Post the plan note and plywood/preview",
-  "        if: always()",
-  "        run: npx --no-install plywood components pr-post",
-  "  record:",
-  "    steps:",
-  "      - run: npx --no-install plywood components pr-record",
-  "",
-].join("\n");
-
-const GITLAB = [
-  "stages:",
-  "  - plan",
-  "  - plan-note",
-  "plan-note:",
-  "  stage: plan-note",
-  "  script:",
-  "    - npx --no-install plywood components pr-post --open --env production --output .chant/pr --forge gitlab",
-  "record:",
-  "  script:",
-  "    - npx --no-install plywood components pr-record",
-  "",
-].join("\n");
-
-type Steps = { jobs: Record<string, { steps: Array<{ name?: string; env?: Record<string, string>; run?: string }> }> };
-
-describe("withNoteControl", () => {
-  it("GitHub and Forgejo: the step goes before the post, with chant's env and script", () => {
-    const out = withNoteControl(GITHUB, "github", STEP);
-    const steps = (parseYAML(out) as Steps).jobs["plan-note"]!.steps;
-    expect(steps.map((s) => s.name)).toEqual(["Check out the target branch's commit", STEP.stepName, "Post the plan note and plywood/preview"]);
-    expect(steps[1]!.env).toEqual(STEP.env);
-    expect(steps[1]!.run).toContain("CHANT_CONTROL_DIR=");
-    expect((parseYAML(out) as Steps).jobs.record!.steps).toHaveLength(1);
-    expect(withNoteControl(out, "github", STEP)).toBe(out);
+describe("controlBuildArgv", () => {
+  it("names the repo and each setting, with the member from the target unless plywood.yml names one", () => {
+    expect(controlBuildArgv(parseConfig("control: github.com/acme/control\n").doc, "shop")).toEqual([
+      "--control", "github.com/acme/control", "--control-setting", "member=shop", "--control-setting", "op=pulumi-up",
+    ]);
+    const doc = parseConfig("control:\n  repo: github.com/acme/control\n  member: web\n  read_token_secret: CONTROL_READ\n").doc;
+    expect(controlBuildArgv(doc, "shop")).toEqual([
+      "--control", "github.com/acme/control", "--control-setting", "member=web", "--control-setting", "op=pulumi-up", "--control-setting", "readTokenSecret=CONTROL_READ",
+    ]);
+    expect(controlBuildArgv(parseConfig("stacks: {}\n").doc, "shop")).toEqual([]);
   });
+});
 
-  it("GitLab: the script goes in as an item before pr-post", () => {
-    const out = withNoteControl(GITLAB, "gitlab", { ...STEP, env: {} });
-    const script = (parseYAML(out) as Record<string, { script: string[] }>)["plan-note"]!.script;
-    expect(script).toHaveLength(2);
-    expect(script[0]).toContain("CHANT_CONTROL_DIR=");
-    expect(script[1]).toContain("components pr-post");
-  });
+const real = await chantProduct();
 
-  it("leaves the file alone without a step, without a note job, or when chant already wrote the read", () => {
-    expect(withNoteControl(GITHUB, "github", undefined)).toBe(GITHUB);
-    const noNote = "jobs:\n  plan:\n    steps:\n      - run: x\n";
-    expect(withNoteControl(noNote, "github", STEP)).toBe(noNote);
-    const already = withNoteControl(GITHUB, "github", STEP);
-    expect(withNoteControl(already, "forgejo", { ...STEP, stepName: "another name" })).toBe(already);
-  });
+describe.runIf(real !== undefined)("the note job chant writes with plywood.yml's control repo", () => {
+  it("reads the control repo's records before the post, on GitHub", async () => {
+    setChantProductForTests("reset");
+    const dir = mkdtempSync(join(tmpdir(), "plywood-note-control-"));
+    mkdirSync(join(dir, ".git"));
+    writeFileSync(join(dir, "Pulumi.yaml"), "name: shop\nruntime: nodejs\n");
+    writeFileSync(join(dir, "Pulumi.dev.yaml"), "config: {}\n");
+    writeFileSync(join(dir, "package.json"), '{"name":"shop","private":true}\n');
+    writeFileSync(join(dir, "plywood.yml"), "control: github.com/acme/control\n");
+    const err: string[] = [];
+    const was = process.cwd();
+    process.chdir(dir);
+    const r = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge: "github" }, EXIT, { cwd: dir, env: {}, out: () => {}, err: (s) => err.push(s) }).finally(() => process.chdir(was));
+    expect(r.ok, JSON.stringify([r.notes, r.files, err])).toBe(true);
+    const file = join(dir, ".github/workflows/plywood.yml");
+    expect(existsSync(file)).toBe(true);
+    const text = readFileSync(file, "utf8");
+    const note = text.slice(text.indexOf("\n  plan-note:"));
+    expect(note).toContain("CHANT_CONTROL_DIR=");
+    expect(note.indexOf("CHANT_CONTROL_DIR=")).toBeLessThan(note.indexOf("components pr-post"));
+  }, 60_000);
 });

@@ -9,7 +9,7 @@ Each release lists its changes here, newest first.
 
 `plywood init` writes `approvals.preview` into the waves spec again now that the plan digest no longer refuses disjoint merges or autonamed creates. A repository that wants the 0.3.2 behavior sets `preview: false` in `plywood.yml` before it runs `plywood init`.
 
-With chant 0.124.78 as its pin, plywood leaves several pieces of its workflows to chant that it used to write itself. When `plywood init` or `plywood ci` next writes a workflow, it differs from the old file in three places only:
+With chant 0.124.79 as its pin, plywood leaves several pieces of its workflows to chant that it used to write itself. When `plywood init` or `plywood ci` next writes a workflow, it differs from the old file in three places only:
 
 - The comment line above the jobs you added by hand uses chant's wording.
 - A Forgejo workflow's concurrency block has no comment lines.

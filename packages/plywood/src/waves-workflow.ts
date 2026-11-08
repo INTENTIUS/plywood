@@ -24,8 +24,9 @@
  *      with its install lines, as the pull request workflow does. chant's
  *      generator and its wave jobs read both forms (`parseOpWavesSpec`), and
  *      plywood's own readers unwrap it ({@link unwrapWavesSpec}).
- *   2c. A workflow-level concurrency group per commit is added (plywood#51),
- *      so Forgejo does not cancel a merge's wave jobs when the next merge lands.
+ *   2c. The generator gives the Forgejo workflow a concurrency group per
+ *      commit (`--run-group commit`, chant#4771; plywood#51), so Forgejo does
+ *      not cancel a merge's wave jobs when the next merge lands.
  *   3. chant's generator writes the words' bin in the wave, resume and
  *      plans jobs itself (chant#4607, `OpWavesPipelineOptions.bin`), so the
  *      job lines are left as chant wrote them.
@@ -34,7 +35,6 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 
 import { dirname, join } from "node:path";
 import type { ChantProduct, ForgeKind, ProductPipelineJobs } from "./chant-product";
 import { chantPipelineOptions } from "./images";
-import { withRunGroup } from "./init/run-group";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
 import { OP_NAME, PRODUCT, type ProductWordsInput } from "./words";
@@ -181,7 +181,7 @@ export async function writeWaveJobs(
   // plywood#22: chant's generator discovers the Op the spec names from a *.op.ts file, so it is written first.
   if (writeUpOp(io.cwd, waves.spec)) io.err(`${PRODUCT} ci: wrote ${UP_OP_FILE}, the Op the waves spec names; commit it with the workflow`);
   const outDir = WAVES_OUTPUT_DIR[forge];
-  const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", waves.specFile, "--output", outDir], words);
+  const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", waves.specFile, "--run-group", "commit", "--output", outDir], words);
   if (code !== table.done) return code;
   const files = generatedFor(join(io.cwd, outDir), waves.specFile);
   if (files.length === 0) {
@@ -189,10 +189,6 @@ export async function writeWaveJobs(
     return table.failed;
   }
   for (const file of files) {
-    // plywood#51: Forgejo cancels a merge's wave jobs when the next merge lands, unless the workflow sets a group.
-    const text = readFileSync(file, "utf8");
-    const next = withRunGroup(text, forge, "commit");
-    if (next !== text) writeFileSync(file, next);
     io.err(`${PRODUCT} ci: waves workflow at ${file.slice(io.cwd.length + 1)}`);
   }
   if (forge === "gitlab") {

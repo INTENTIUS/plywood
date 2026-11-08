@@ -343,7 +343,7 @@ describe("wave jobs in the generated workflow", () => {
     setChantProductForTests(chant.api);
     expect(await ci(["--forge", "github"], false, EXIT, io(dir))).toBe(0);
     expect(chant.calls.map((c) => c.argv[0])).toEqual(["build", "run"]);
-    expect(chant.calls[1]!.argv).toEqual(["run", "--generate", "github", "--spec", WAVES_SPEC_FILE, "--output", ".github/workflows"]);
+    expect(chant.calls[1]!.argv).toEqual(["run", "--generate", "github", "--spec", WAVES_SPEC_FILE, "--run-group", "commit", "--output", ".github/workflows"]);
     // The pull request workflow has no /plywood up job when the waves update on merge.
     expect((chant.calls[0]!.words as typeof PRODUCT_WORDS).commands).not.toHaveProperty("up");
     const workflow = readFileSync(join(dir, ".github/workflows/pulumi-up.yml"), "utf8");

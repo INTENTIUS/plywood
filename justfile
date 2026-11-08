@@ -101,10 +101,8 @@ tutorial-scan:
 # The bench on chant's e2e harness (e2e/, plywood#25): the harness's floci,
 # Forgejo and runner with plywood's seed, and plywood#22's claims as harness
 # scenarios (e2e/scenarios), each a plain run that must pass and a BREAK run
-# that must be caught. It needs a chant with @intentius/chant/e2e-harness
-# (`just chant-local`); on the pinned chant the commands that start anything
-# refuse and name the tutorial bench above. Same names and ports as the
-# tutorial bench, so run one or the other.
+# that must be caught. It runs on the pinned chant's @intentius/chant/e2e-harness.
+# Same names and ports as the tutorial bench, so run one or the other.
 #   just e2e lint                 the scenarios against plywood's rules and the harness's lint
 #   just e2e dry-run pw-disjoint  a scenario's two arms, step by step; touches nothing
 #   just e2e image [<plunge>]     the job image: plywood's images (released, or `just images` first) and, if named, a linux plunge build

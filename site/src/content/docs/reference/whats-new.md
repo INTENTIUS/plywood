@@ -9,6 +9,20 @@ Each release lists its changes here, newest first.
 
 `plywood init` writes `approvals.preview` into the waves spec again now that the plan digest no longer refuses disjoint merges or autonamed creates. A repository that wants the 0.3.2 behavior sets `preview: false` in `plywood.yml` before it runs `plywood init`.
 
+With chant 0.124.77 as its pin, plywood leaves several pieces of its workflows to chant that it used to write itself. When `plywood init` or `plywood ci` next writes a workflow, it differs from the old file in three places only:
+
+- The comment line above the jobs you added by hand uses chant's wording.
+- A Forgejo workflow's concurrency block has no comment lines.
+- With a control repo in `plywood.yml`, chant writes the note job's read of it.
+
+`plywood ci` keeps the `image:` and the engine install lines from `plywood.yml`, so it writes the same jobs as `plywood init` for that file. Before, each job that `plywood ci` wrote ran in `node:22` without plywood.
+
+`plywood approve up --plan <digest>` finds the pull request from the digest whenever you leave out `--pr`, and `apply.requires` always reaches the update before merge.
+
+The agent guard is chant's now, shared with terragucci. It also refuses the plywood verbs that change a stack or approve a change, `plywood up` and `plywood approve` among them, in an agent session inside the repository. A command inside `sh -c` or `eval` no longer slips past it. The wrappers in `.plywood/agent-bin` refuse with or without `PLYWOOD_AGENT_GUARD`, and they need Node on `PATH`. Run `plywood guard install` again to write the new hook and wrappers; it replaces the old hook line in `.claude/settings.json`.
+
+Both images and the package now come from a single release run, which also writes the GitHub release.
+
 ## In 0.3.2
 
 plywood now pins chant 0.124.67, which fixes the refusal 0.3.1 worked around for disjoint merges: with `approvals.preview` on, a wave compares the plans it makes against the recorded ones without plunge's refresh steps, which had made unchanged plans look moved. chant also refuses a change that Rego or CrossGuard denies as policy-denied before it can merge.

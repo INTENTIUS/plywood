@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_NEEDS_CHANT, AGENT_OP, AGENT_SPEC_FILE, agentGuarded, chantAgentOptions, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
+import { AGENT_OP, AGENT_SPEC_FILE, agentGuarded, chantAgentOptions, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
 import { agentOf } from "../src/config/agents";
 import type { ChantProduct, ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
@@ -11,8 +12,8 @@ import { EXIT } from "../src/exit-codes";
 import type { StageIo } from "../src/stages";
 import { PRODUCT_WORDS } from "../src/words";
 
-/** A fake chant with the agent job (chant#4616), or without it. */
-function fakeChant(agent = true) {
+/** A fake chant with the agent job (chant#4616). */
+function fakeChant() {
   const calls: Array<{ argv: string[] }> = [];
   const options: ProductPipelineOptions[] = [];
   const api: ChantProduct = {
@@ -30,10 +31,8 @@ function fakeChant(agent = true) {
       };
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv) => (calls.push({ argv }), 0),
-    ...(agent ? { CI_AGENT_FLOOR: "0.124.55", productDriftAgent: (_w, _op, o) => ({ on: "drift", ...(o ?? {}) }) } : {}),
   };
   return { api, calls, options };
 }
@@ -63,14 +62,6 @@ describe("the comment agent on chant's agent job", () => {
     expect(chant.calls[0]!.argv).toEqual(["run", "--generate", "github", "--spec", AGENT_SPEC_FILE, "--output", ".github/workflows"]);
   });
 
-  it("writes nothing on a chant without the agent job, and says so", async () => {
-    const chant = fakeChant(false);
-    const out = io(repo());
-    await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, out);
-    expect(chant.calls).toEqual([]);
-    expect(out.stderr.join("\n")).toContain(AGENT_NEEDS_CHANT);
-  });
-
   it("keeps the policy directory out of the agent's reach", () => {
     expect(agentGuarded(parseConfig("policy: { rego: policy/rego }\n").doc)).toEqual(expect.arrayContaining(["plywood.yml"]));
   });
@@ -86,13 +77,6 @@ describe("the drift agent and the drift runner", () => {
     const doc = parseConfig(YML).doc;
     const spec = driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", fakeChant().api);
     expect(spec.ops[0]).toMatchObject({ findingMode: "issue", runner: ["self-hosted", "drift"], agent: { on: "drift", maxRuns: 3, keyEnv: "FAKE_KEY" } });
-  });
-
-  it("leaves the spec as it was on a chant without the agent job", () => {
-    const doc = parseConfig(YML).doc;
-    const spec = driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", fakeChant(false).api);
-    expect(spec.ops[0]).toEqual({ name: expect.any(String), trigger: { kind: "cron", schedule: "0 6 * * *" }, findingMode: "pull-request" });
-    expect(driftOpFields(undefined, doc, "x", "pull-request")).toEqual({});
   });
 
   it("the runner is the stage's, else the default, else the one runner", () => {

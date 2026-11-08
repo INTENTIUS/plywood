@@ -1,9 +1,11 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { opWavesPostsApprovalStatus } from "@intentius/chant/ci-product";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { needsChantMessage, setChantProductForTests, type ChantProduct, type PendingGateByPlan } from "../src/chant-product";
+import { setChantProductForTests, type ChantProduct, type PendingGateByPlan } from "../src/chant-product";
 import { EXIT } from "../src/exit-codes";
 import { refusalLine, refusalOf, REFUSALS } from "../src/refusals";
 import { ci, type StageIo } from "../src/stages";
@@ -37,8 +39,7 @@ function fakeChant(codes: number[] = [], onCall?: (argv: string[]) => void) {
       };
     },
     approveLine: () => "plywood approve up --plan sha256:x --sign",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
       writeBuildOutput(argv);
@@ -125,13 +126,6 @@ describe("plywood approve", () => {
     expect(o.stderr.join("\n")).toContain("--plan <digest>");
     expect(chant.calls).toEqual([]);
   });
-
-  it("names the chant it needs on the published pin", async () => {
-    setChantProductForTests(undefined);
-    const o = io(repo());
-    expect(await approve(["wave-1", "--plan", "sha256:x"], false, EXIT, o)).toBe(1);
-    expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood approve"));
-  });
 });
 
 /** The waves spec productWavesSpec writes for plywood: each wave takes the pull request's approval at up (chant#4550, ruling B). */
@@ -188,7 +182,7 @@ describe("plywood approve up on waves that take the pull request's approval (cha
 describe("plywood approve posts plywood/approval again (chant#4630 ruling)", () => {
   const withFloor = (codes: number[] = []) => {
     const chant = fakeChant(codes);
-    setChantProductForTests({ ...chant.api, APPROVAL_STATUS_FLOOR: "0.124.56", APPROVAL_STATUS_PULL_REQUEST_FLOOR: "0.124.56" });
+    setChantProductForTests({ ...chant.api, opWavesPostsApprovalStatus });
     return chant;
   };
   const refresh = (branch: string, forge: string) => ["run", "wave", "--spec", WAVES_SPEC_FILE, "--approval-status", "--open", "--branch", branch, "--forge", forge];
@@ -427,16 +421,12 @@ describe("plywood resume (plywood#26)", () => {
     expect(o.stderr.join("\n")).toContain(refusalLine("waiting", { wave: 1 }));
   });
 
-  it("refuses a bad wave and unknown flags, and names the chant it needs on the pin", async () => {
+  it("refuses a bad wave and unknown flags", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);
     expect(await resume(["--wave", "0"], false, EXIT, io(repo()))).toBe(1);
     expect(await resume(["--force"], false, EXIT, io(repo()))).toBe(1);
     expect(chant.calls).toEqual([]);
-    setChantProductForTests(undefined);
-    const o = io(repo());
-    expect(await resume([], false, EXIT, o)).toBe(EXIT.failed);
-    expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood resume"));
   });
 });
 

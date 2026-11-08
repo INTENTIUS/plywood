@@ -36,10 +36,6 @@
  * `pull-request` preset of chant#4550 ruling B); a preset picks when updates
  * run and when a wave waits.
  *
- * Everything new in chant is reached through a feature-detect: on a chant
- * without the product pipeline, init writes the config files and says the
- * waves spec and the workflow need a newer chant.
- *
  * The steps are separate functions so `--engine plunge` (src/init/engine.ts)
  * and `--from <workflow>` add a step rather than change one.
  */
@@ -47,7 +43,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { emitYAMLEntry } from "@intentius/chant/yaml";
 import { dirname, join, posix } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
-import { BUILT_CHANT, chantProduct, needsChantMessage, type ChantProduct, type ForgeKind } from "./chant-product";
+import { chantProduct, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
 import { identityClouds, pulumiCloudOf } from "./config/identity";
 import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyPacksOf } from "./config/policy";
@@ -62,8 +58,8 @@ import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
 import { GITLAB_READ_TOKEN, withWavePreview } from "./chant-next";
-import { hasChant4625, prJobsFor, withJobSettings } from "./jobs";
-import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, needsBucketCheckMessage, type BucketReport } from "./init/backend";
+import { prJobsFor, withJobSettings } from "./jobs";
+import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, type BucketReport } from "./init/backend";
 import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
 import { detect, repoName, slug, type Detected } from "./init/detect";
 import { engineStep, INIT_ENGINES, type InitEngine } from "./init/engine";
@@ -82,7 +78,7 @@ import {
   type InitStack,
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
-import { chantReviewStacks, REVIEW_STACKS_NEED_CHANT, reviewSuffixOf } from "./review-stacks";
+import { reviewSuffixOf } from "./review-stacks";
 import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, wavesEngine, wavesSpecText, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
@@ -303,16 +299,6 @@ function forgeFor(doc: RawConfig, detected: Detected, opts: InitOptions): { kind
   return { kind: "github", because: "origin names no forge init knows, so github" };
 }
 
-/** chant's `writeCiHook` (chant#4556), reached through a feature-detect. */
-async function chantWriteCiHook(): Promise<((root: string, moment: "check", hook: { name: string; command: string[] }) => { file: string; replaced: boolean }) | undefined> {
-  try {
-    // @ts-ignore: older chants lack the subpath's writeCiHook (chant#4556).
-    const m: Record<string, unknown> = await import("@intentius/chant/components/check-hooks");
-    return typeof m.writeCiHook === "function" ? (m.writeCiHook as never) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** Runs init. Writes nothing when the config has an error; with dryRun, writes nothing at all. */
 export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): Promise<InitResult> {
@@ -364,15 +350,13 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const doc = config.doc;
   const settings: ChantSettings = toChantSettings(config);
   // Review stacks (plywood#15, chant#4609): ci.prEnvironment's project/stack template and the step's reviewSuffix only on a lexicon that runs them end to end.
-  const reviewStacks = config.doc.review_stacks !== undefined ? await chantReviewStacks() : false;
-  if (settings.ci.prEnvironment && !reviewStacks) delete settings.ci.prEnvironment;
-  const reviewSuffix = reviewStacks ? reviewSuffixOf(settings.pipeline.reviewStackName) : undefined;
+  const reviewSuffix = config.doc.review_stacks !== undefined ? reviewSuffixOf(settings.pipeline.reviewStackName) : undefined;
   const stacks = initStacks(detected, doc, settings.members);
   // The merge's waves: the canary first, each wave cut by StackReferences and waves.after (plywood#18).
   const order = await stackOrder(root, stacks, settings.pipeline.after);
   const ordered = orderWaves(wavesOf(stacks, settings.pipeline.waves), order.edges, settings.pipeline.canary);
   const waves = ordered.waves;
-  if (order.edges.length || order.outside.length || ordered.unmet.length || (!order.reads && stacks.length > 1)) notes.push(...orderLines(order, ordered.unmet));
+  if (order.edges.length || order.outside.length || ordered.unmet.length) notes.push(...orderLines(order, ordered.unmet));
 
   // The member picture and the chant project.
   const declaration = declarationStep(root, detected, settings, opts.dryRun);
@@ -396,15 +380,12 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
 
   // The waves spec and the workflow come from chant's product pipeline.
   const chant = await chantProduct();
-  if (!chant) {
-    const message = needsChantMessage("Writing the waves spec and the workflow");
-    files.push({ file: WAVES_SPEC_FILE, status: "skipped", note: message }, { file: WORKFLOW_FILE[forge.kind], status: "skipped", note: "needs the same chant" });
-  } else {
+  {
     let spec: Record<string, unknown> | undefined = await wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves, forge.kind);
     // plywood#29: env, pass, parallelism and environments on each wave (src/jobs.ts).
     if (settings.pipeline.jobs) {
       try {
-        spec = withJobSettings(spec, settings.pipeline.jobs, forge.kind, { parallelism: await hasChant4625() });
+        spec = withJobSettings(spec, settings.pipeline.jobs, forge.kind);
       } catch (e) {
         files.push({ file: WAVES_SPEC_FILE, status: "failed", note: (e as Error).message });
         spec = undefined;
@@ -426,7 +407,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
 
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
   // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
-  if (forge.kind === "gitlab" && chant && stacks.length > 0 && previewOf(doc)) {
+  if (forge.kind === "gitlab" && stacks.length > 0 && previewOf(doc)) {
     todo.push(`Add a ${GITLAB_READ_TOKEN} CI/CD variable (a project access token with the read_api scope, masked and protected) so a wave can read the merge request it applies; without it the wave refuses`);
   }
   const failed = files.find((f) => f.status === "failed");
@@ -490,10 +471,7 @@ function providersPresetStep(root: string, doc: RawConfig, dryRun: boolean, note
 
 /** `.pre-commit-config.yaml` as a check hook, so plywood check runs the team's hooks at the base commit. */
 async function preCommitStep(root: string, config: string, dryRun: boolean): Promise<InitFile> {
-  const write = await chantWriteCiHook();
-  if (!write) {
-    return { file: DECLARATION_FILE, status: "skipped", note: `${config} found; running it as a check hook needs chant >= the release after 0.124.54 (chant#4556's writeCiHook). This plywood was built with chant ${BUILT_CHANT}` };
-  }
+  const { writeCiHook: write } = await import("@intentius/chant/components/check-hooks");
   if (dryRun || !existsSync(join(root, DECLARATION_FILE))) return { file: DECLARATION_FILE, status: "skipped", note: `${config} would run as the check hook pre-commit` };
   const before = readFileSync(join(root, DECLARATION_FILE), "utf8");
   try {
@@ -505,9 +483,9 @@ async function preCommitStep(root: string, config: string, dryRun: boolean): Pro
   return { file: DECLARATION_FILE, status: after === before ? "unchanged" : "written", note: `${config} runs as the check hook pre-commit; the check job's image needs pre-commit` };
 }
 
-/** The waves spec with chant's names filled (chant `productWavesSpec`), else as plywood builds it. */
+/** The waves spec with chant's names filled (chant `productWavesSpec`). */
 async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>, forge: ForgeKind): Promise<Record<string, unknown>> {
-  const runner = waveRunner(chantPipelineOptions(settings.pipeline, false).runner);
+  const runner = waveRunner(chantPipelineOptions(settings.pipeline).runner);
   const rego = isObject(doc.policy) && (typeof doc.policy.rego === "string" || doc.policy.source !== undefined || doc.policy.command !== undefined);
   const base = wavesSpec({
     ...(rego ? { policy: true } : {}),
@@ -519,7 +497,7 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
     ...(settings.pipeline.quorum?.length ? { quorum: settings.pipeline.quorum } : {}),
     ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
   });
-  const named = chant.productWavesSpec ? chant.productWavesSpec(base, PRODUCT_WORDS) : base;
+  const named = chant.productWavesSpec(base, PRODUCT_WORDS);
   // On unless plywood.yml says `preview: false` (plywood#56): a merged wave applies what its pull request previewed, or exits 4 (chant's approvals.preview).
   return previewOf(doc) ? withWavePreview(named, forge) : named;
 }
@@ -548,7 +526,7 @@ async function workflowStep(
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const control = await noteControlTarget(doc, root);
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline, false)), { reviewStacks: await chantReviewStacks(), prJobs, ...(control ? { control } : {}) });
+    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline)), { prJobs, ...(control ? { control } : {}) });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }
@@ -558,7 +536,6 @@ async function workflowStep(
   if (written.status === "failed") return [{ file: output, status: "failed", note: `chant's generator exited ${written.code}; the old file is back as it was` }];
   const notes = [
     ...(written.kept.length ? [`kept your own jobs: ${written.kept.join(", ")}`] : []),
-    ...(doc.review_stacks !== undefined && !plan.argv.includes("--pr-env") ? [REVIEW_STACKS_NEED_CHANT] : []),
     ...prJobs.notes,
     ...plan.notes,
     ...writtenNotes(plan, written.file),
@@ -583,7 +560,6 @@ async function bucketStep(detected: Detected, doc: RawConfig, env: NodeJS.Proces
   const targets = [...urls].map((u) => bucketTarget(u, env)).filter((t) => t !== undefined);
   if (targets.length === 0) return [];
   const check = await chantBucketCheck();
-  if (!check) return [needsBucketCheckMessage(BUILT_CHANT)];
   const lines: string[] = ["State buckets:"];
   for (const t of targets) {
     if (!t.ok) {
@@ -628,11 +604,7 @@ async function adoptStep(
   if (targets.length === 0) return [];
   const chant = await chantAdopt();
   const previews = await adoptPreviews(targets, chant, root);
-  notes.push(...adoptLines(previews, chant));
-  if (!chant?.hasOp) {
-    files.push({ file: ADOPT_OP_FILE, status: "skipped", note: `the adopt Op needs @intentius/chant-lexicon-pulumi >= the release after 0.124.54 (chant#4562's PulumiAdoptOp). This plywood was built with chant ${BUILT_CHANT}` });
-    return previews;
-  }
+  notes.push(...adoptLines(previews));
   const left = stacksToAdopt(targets, previews);
   if (left.length === 0) {
     if (existsSync(join(root, ADOPT_OP_FILE))) files.push({ file: ADOPT_OP_FILE, status: "kept", note: "every stack is adopted; delete it" });

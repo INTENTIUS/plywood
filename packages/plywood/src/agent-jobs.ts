@@ -16,10 +16,6 @@
  *
  * The agent may not change plywood.yml or the policy directory, beside
  * chant's own guarded paths.
- *
- * Everything here is behind a feature-detect: a chant without
- * `CI_AGENT_FLOOR` on its ci-product entry gets no agent jobs, and plywood
- * says so.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -35,14 +31,6 @@ import { PRODUCT, PRODUCT_WORDS, type ProductWordsInput } from "./words";
 /** The agent's Op name: its workflow, its jobs and its runs on the ledger. */
 export const AGENT_OP = "plywood-agent";
 export const AGENT_SPEC_FILE = ".chant/ops/plywood-agent.spec.json";
-
-/** The message when the installed chant has no agent job. */
-export const AGENT_NEEDS_CHANT = "agent needs a chant with the agent job (chant#4616), and the installed one has none, so no agent job was written";
-
-/** Whether the installed chant has the agent job: `CI_AGENT_FLOOR` on its ci-product entry. */
-export function hasChantAgent(chant: ChantProduct | undefined): boolean {
-  return typeof chant?.CI_AGENT_FLOOR === "string";
-}
 
 /** A stage's runner from plywood's `runners`: one for all, or the stage's over the default. */
 export function stageRunner(runner: ChantRunner | undefined, stage: "preview" | "up" | "drift"): ChantRunnerSpec | undefined {
@@ -72,28 +60,23 @@ export function chantAgentOptions(a: AgentSettings, doc: RawConfig): Record<stri
 }
 
 /**
- * The `agent` and `runner` fields of each scheduled drift Op (chant#4616),
- * or nothing when the installed chant lacks them. The runner is
+ * The `agent` and `runner` fields of each scheduled drift Op (chant#4616).
+ * The runner is
  * `runners.drift`, else `runners.default`, else the one runner; the agent
  * rides on respond.drift: pull-request with agent.drift true.
  */
-export function driftOpFields(chant: ChantProduct | undefined, doc: RawConfig, op: string, respond: string): Record<string, unknown> {
-  if (!hasChantAgent(chant)) return {};
+export function driftOpFields(chant: ChantProduct, doc: RawConfig, op: string, respond: string): Record<string, unknown> {
   const runner = stageRunner(toChantSettings({ doc }).pipeline.runner, "drift");
   const a = agentOf(doc);
   const wantsAgent = respond === "pull-request" && a?.drift === true;
-  const agent = wantsAgent
-    ? chant!.productDriftAgent
-      ? chant!.productDriftAgent(PRODUCT_WORDS, op, chantAgentOptions(a!, doc))
-      : { on: "drift", ...chantAgentOptions(a!, doc) }
-    : undefined;
+  const agent = wantsAgent ? chant.productDriftAgent(PRODUCT_WORDS, op, chantAgentOptions(a!, doc)) : undefined;
   return { ...(runner !== undefined ? { runner } : {}), ...(agent ? { agent } : {}) };
 }
 
 /** The agent's spec file: productPipelineJobs' Op spec, with plywood's image and lines. */
 export function agentOpSpec(spec: Record<string, unknown>, doc: RawConfig): { ops: unknown[]; options: Record<string, unknown> } {
   const p = toChantSettings({ doc }).pipeline;
-  const engine = chantPipelineOptions({ ...(p.image ? { image: p.image } : {}), ...(p.engineSetup ? { engineSetup: p.engineSetup } : {}) }, false);
+  const engine = chantPipelineOptions({ ...(p.image ? { image: p.image } : {}), ...(p.engineSetup ? { engineSetup: p.engineSetup } : {}) });
   const runner = stageRunner(p.runner, "preview");
   return {
     ops: [{ ...spec, ...(runner !== undefined && spec.runner === undefined ? { runner } : {}) }],
@@ -122,10 +105,6 @@ function writeIfChanged(cwd: string, file: string, text: string): boolean {
 export async function writeAgentJobs(chant: ChantProduct, forge: ForgeKind, env: string, doc: RawConfig, words: ProductWordsInput, table: ExitTable, io: StageIo): Promise<number> {
   const a = agentOf(doc);
   if (!a?.comment) return table.done;
-  if (!hasChantAgent(chant)) {
-    io.err(`${PRODUCT} ci: ${AGENT_NEEDS_CHANT}`);
-    return table.done;
-  }
   const agentWords: ProductWordsInput = { ...words, commands: { ...words.commands, agent: "agent" } };
   let spec: Record<string, unknown> | undefined;
   try {

@@ -54,10 +54,6 @@ import type { ForgeKind } from "./chant-product";
 /** The plywood.yml keys a control repo sets for a repository. */
 export const CONTROLLED_KEYS = ["gate", "approval", "approval_rules", "pulumi", "plunge", "image"] as const;
 
-/** The message when the installed chant has no control repo. */
-export const CONTROL_NEEDS_CHANT =
-  "the control repo needs chant >= the release after 0.124.54, which carries @intentius/chant/ci-control (chant#4568)";
-
 type Settings = Record<string, unknown>;
 interface Entry {
   id: string;
@@ -129,19 +125,6 @@ export interface ChantControl {
     options: { mode: "dry-run" | "apply"; project?: string; words?: unknown; generate: (dir: string, target: ReconcileTarget) => Promise<FileChange[]>; env?: Record<string, string | undefined> },
   ): Promise<Outcome[]>;
   describeReconcile(outcomes: readonly Outcome[], mode: "dry-run" | "apply"): string;
-  /** Present when the op-waves spec takes `control` and its dispatch carries the outcome (chant#4617). */
-  recordControlAppliedFromEnv?: (...args: unknown[]) => unknown;
-  CONTROL_APPLIED_FLOOR?: string;
-}
-
-/**
- * Whether the installed chant's op waves take `control` (chant#4617). It
- * landed with the control repo's apply records on `ci-control`, so
- * `recordControlAppliedFromEnv` there is the check, and plywood needs no
- * import of chant's op-waves module.
- */
-export function hasWavesControl(chant: ChantControl): boolean {
-  return typeof chant.recordControlAppliedFromEnv === "function";
 }
 
 /** The `ControlSettingsInput` keys an op waves spec's `control` carries, with `member`. */
@@ -150,15 +133,12 @@ const WAVES_CONTROL_KEYS = ["repo", "op", "forge", "member", "tokenSecret", "rea
 /**
  * plywood.yml's `control` as the waves spec's `control` (chant#4617): its
  * settings with `member` resolved, since a spec has no repository name to
- * default it to. `none` when plywood.yml has no control key, `missing` when
- * the installed chant's op waves take no `control`.
+ * default it to. `none` when plywood.yml has no control key.
  */
-export async function wavesControl(cwd: string): Promise<{ control: Record<string, unknown>; repo: string } | { none: true } | { missing: string } | { error: string }> {
+export async function wavesControl(cwd: string): Promise<{ control: Record<string, unknown>; repo: string } | { none: true } | { error: string }> {
   const file = findConfig(cwd);
   if (!file || controlOf(loadConfig(file).doc) === undefined) return { none: true };
   const chant = await chantControl();
-  if (!chant) return { missing: CONTROL_NEEDS_CHANT };
-  if (!hasWavesControl(chant)) return { missing: "the waves workflow tells the control repo with a chant that has chant#4617" };
   const target = await controlTarget(chant, cwd);
   if ("error" in target) return target;
   const settings: Record<string, unknown> = { ...(controlOf(loadConfig(file).doc) as unknown as Record<string, unknown>), member: target.member };
@@ -170,15 +150,14 @@ export async function wavesControl(cwd: string): Promise<{ control: Record<strin
 /**
  * The control repo the note job reads (plywood#28, chant#4619): plywood.yml's
  * `control` resolved to chant's target, or undefined when plywood.yml has
- * none, the installed chant has no control repo, or the settings do not
- * check. `plywood ci` and `plywood init` pass it to productPipelineJobs,
+ * none or the settings do not check. `plywood ci` and `plywood init` pass it to productPipelineJobs,
  * which hands back the note job's read step as `post.control`.
  */
 export async function noteControlTarget(doc: RawConfig, root: string): Promise<Target | undefined> {
   const settings = controlOf(doc);
   if (!settings) return undefined;
   const chant = await chantControl();
-  if (!chant || chant.controlSettingsProblems(settings).length > 0) return undefined;
+  if (chant.controlSettingsProblems(settings).length > 0) return undefined;
   try {
     return chant.resolveControlTarget(settings, repoName(root));
   } catch {
@@ -186,27 +165,16 @@ export async function noteControlTarget(doc: RawConfig, root: string): Promise<T
   }
 }
 
-/** chant#4568's presence check: these three present means the rest is too. */
-const REQUIRED = ["controlDispatchRequest", "putControlEntry", "reconcileProjects"] as const;
+let cached: Promise<ChantControl> | undefined;
 
-let cached: Promise<ChantControl | undefined> | undefined;
-
-/** chant's control repo, or undefined when the installed chant lacks it. */
-export function chantControl(): Promise<ChantControl | undefined> {
-  cached ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4568).
-      const m: Record<string, unknown> = await import("@intentius/chant/ci-control");
-      return REQUIRED.every((n) => typeof m[n] === "function") ? (m as unknown as ChantControl) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's control repo (`@intentius/chant/ci-control`, chant#4568). */
+export function chantControl(): Promise<ChantControl> {
+  cached ??= import("@intentius/chant/ci-control").then((m) => m as unknown as ChantControl);
   return cached;
 }
 
-/** Tests stand in a fake chant (or none). `reset` goes back to the real import. */
-export function setChantControlForTests(fake: ChantControl | undefined | "reset"): void {
+/** Tests stand in a fake chant. `reset` goes back to the real import. */
+export function setChantControlForTests(fake: ChantControl | "reset"): void {
   cached = fake === "reset" ? undefined : Promise.resolve(fake);
 }
 
@@ -272,7 +240,6 @@ export async function control(args: string[], json: boolean, table: ExitTable, i
   const subs = ["init", "put", "import", "list", "retire", "reconcile", "dispatch"];
   if (!sub || !subs.includes(sub)) return usage(`control takes one of ${subs.join(", ")}`, table, io);
   const chant = await chantControl();
-  if (!chant) return usage(`${CONTROL_NEEDS_CHANT}. Upgrade plywood once that chant is out, or build against a local chant with 'just chant-local'.`, table, io);
   const emit = (envelope: Record<string, unknown>, lines: string[]): void => {
     if (json) io.out(JSON.stringify({ command: `control ${sub}`, ...envelope }));
     else for (const l of lines) io.out(l);

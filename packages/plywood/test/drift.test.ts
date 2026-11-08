@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { CHANT_DEFAULTS, STUB_CHANT } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -54,8 +55,7 @@ function fakeChant(docs: Record<string, DriftDoc | "fail">, declared: readonly s
       throw new Error("not used");
     },
     approveLine: () => "",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv) => {
       calls.push(argv);
       if (argv[0] === "workspace" && argv[1] === "drift") {
@@ -221,12 +221,6 @@ describe("plywood drift", () => {
     expect(wavesHolding({}, ["shop/prod"])).toBe("all");
   });
 
-  it("says the product pipeline is missing on a chant without it", async () => {
-    setChantProductForTests(undefined);
-    const out = io(repo(YML));
-    expect(await drift([], false, EXIT, out)).toBe(EXIT.failed);
-    expect(out.stderr.join("\n")).toContain("chant#4550");
-  });
 });
 
 describe("the member a stack is read under (plywood#50)", () => {
@@ -312,7 +306,7 @@ describe("the scheduled drift jobs", () => {
     const doc = parseConfig(YML).doc;
     const op = driftOpFile(doc, ["shop/dev"], "0 6 * * *");
     expect(op).toContain('PulumiWatchOp({ name: "plywood-drift-shop-dev", member: "shop/dev", dir: "shop", stack: "dev", schedule: "0 6 * * *" })');
-    const spec = driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *");
+    const spec = driftOpSpec(doc, "github", ["shop/dev"], "0 6 * * *", STUB_CHANT);
     expect(spec.ops).toEqual([{ name: "plywood-drift-shop-dev", trigger: { kind: "cron", schedule: "0 6 * * *" }, findingMode: "issue" }]);
     expect(spec.options.runCommand).toEqual(["npx", "--no-install", "plywood", "drift", "--op", "{name}", "--forge", "github"]);
     expect(spec.options.beforeScript).toEqual([SNAPSHOTS_FETCH, installLine("pulumi", TOOL_VERSIONS.pulumi)]);

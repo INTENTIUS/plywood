@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main, type Io } from "../src/cli";
-import { needsChantMessage, setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
+import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { EXIT } from "../src/exit-codes";
 import { toChantSettings } from "../src/chant-config";
 import { parseConfig } from "../src/config/index";
@@ -30,8 +31,7 @@ function fakeChant(code = 0) {
       };
     },
     approveLine: () => "plywood approve up --plan sha256:x --sign",
-    pendingGatesByPlan: async () => [],
-    parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+    ...CHANT_DEFAULTS,
     runChantInProcess: async (argv, words) => {
       calls.push({ argv, words });
       // The generator writes the file it is given, as chant's build does.
@@ -83,16 +83,6 @@ describe("words", () => {
   });
 });
 
-describe("feature-detect", () => {
-  it("names the chant it needs when chant has no product pipeline", async () => {
-    setChantProductForTests(undefined);
-    const o = io(repo());
-    expect(await preview(["--base", "main", "--pr", "3"], false, EXIT, o)).toBe(EXIT.failed);
-    expect(o.stderr.join("\n")).toContain(needsChantMessage("plywood preview"));
-    expect(o.stderr.join("\n")).toContain("chant >= the release after 0.124.54");
-  });
-});
-
 describe("plywood preview", () => {
   it("runs chant's pr-plan with plywood's words and gate", async () => {
     const chant = fakeChant();
@@ -123,18 +113,9 @@ describe("plywood preview", () => {
     expect(await preview(["--base", "a", "--pr", "1"], false, EXIT, io(repo()))).toBe(7);
   });
 
-  it("refuses --target until chant's pr-plan passes it on", async () => {
-    const chant = fakeChant();
-    setChantProductForTests(chant.api);
-    const o = io(repo());
-    expect(await preview(["--base", "a", "--pr", "1", "--target", "urn:x"], false, EXIT, o)).toBe(1);
-    expect(chant.calls).toEqual([]);
-    expect(o.stderr.join("\n")).toContain("chant#4620");
-  });
-
   it("passes each --target to pr-plan on a chant with chant#4620, beside a named stack (plywood#28)", async () => {
     const chant = fakeChant();
-    setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    setChantProductForTests({ ...chant.api });
     const urn = "urn:pulumi:prod::shop::aws:sqs/queue:Queue::events";
     expect(await preview(["shop/prod", "--base", "a", "--pr", "1", "--target", urn, "--target", "urn:y"], false, EXIT, io(repo()))).toBe(0);
     const argv = chant.calls[0]!.argv;
@@ -143,7 +124,7 @@ describe("plywood preview", () => {
   });
 
   it("refuses a --target with no value", async () => {
-    setChantProductForTests({ ...fakeChant().api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
+    setChantProductForTests({ ...fakeChant().api });
     expect(await preview(["--base", "a", "--pr", "1", "--target"], false, EXIT, io(repo()))).toBe(1);
   });
 
@@ -191,7 +172,7 @@ describe("plywood ci", () => {
     expect(chant.pipelines).toHaveLength(1);
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
-      "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up", "--stale-notes",
+      "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up", "--preview-comment", "--stale-notes",
       ...(imageFor("pulumi").digest ? ["--image", imageReference(imageFor("pulumi"))] : []), "--before-script", installLine("pulumi", TOOL_VERSIONS.pulumi),
       "--keep-own-jobs", "--run-group", "pull-request", "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
@@ -203,24 +184,18 @@ describe("plywood ci", () => {
     setChantProductForTests(chant.api);
     expect(await ci(["--forge", "forgejo"], false, EXIT, io(repo(yml)))).toBe(0);
     const argv = chant.calls[0]!.argv;
-    const want = chantBuildFlags(chantPipelineOptions(toChantSettings(parseConfig(yml)).pipeline, false));
+    const want = chantBuildFlags(chantPipelineOptions(toChantSettings(parseConfig(yml)).pipeline));
     expect(want.slice(0, 2)).toEqual(["--image", "plywood-tutorial-job:local"]);
     expect(want).toContain("--before-script");
     expect(argv.slice(argv.indexOf("--image"), argv.indexOf("--image") + want.length)).toEqual(want);
   });
 
-  it("asks for the /plywood preview comment's jobs on a chant with chant#4620 (plywood#28), and not before", async () => {
+  it("asks for the /plywood preview comment's jobs (chant#4620, plywood#28)", async () => {
     const chant = fakeChant();
-    setChantProductForTests({ ...chant.api, prCommentPreviewJob: () => undefined, PR_PREVIEW_FLOOR: "0.124.55" });
-    const dir = repo();
-    expect(await ci(["--forge", "github"], false, EXIT, io(dir))).toBe(0);
+    setChantProductForTests(chant.api);
+    expect(await ci(["--forge", "github"], false, EXIT, io(repo()))).toBe(0);
     expect(chant.pipelines[0]!.options.previewComment).toBe(true);
     expect(chant.calls[0]!.argv).toContain("--preview-comment");
-    const old = fakeChant();
-    setChantProductForTests(old.api);
-    expect(await ci(["--forge", "github"], false, EXIT, io(repo()))).toBe(0);
-    expect(old.pipelines[0]!.options.previewComment).toBeUndefined();
-    expect(old.calls[0]!.argv).not.toContain("--preview-comment");
   });
 
   it("writes nothing with --dry-run", async () => {

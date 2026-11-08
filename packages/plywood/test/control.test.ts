@@ -129,14 +129,7 @@ describe("control entries", () => {
   });
 });
 
-describe("plywood control without chant#4568", () => {
-  it("says which chant it needs and exits failed", async () => {
-    setChantControlForTests(undefined);
-    const err: string[] = [];
-    expect(await control(["list"], false, EXIT, io(tmpdir(), [], err))).toBe(EXIT.failed);
-    expect(err[0]).toContain("@intentius/chant/ci-control");
-  });
-
+describe("plywood control dispatch", () => {
   it("dispatches plywood.yml's control repo with the commit", async () => {
     const chant = fakeChant();
     setChantControlForTests(chant);
@@ -154,16 +147,11 @@ describe("the waves spec's control (chant#4617)", () => {
     return dir;
   };
 
-  it("carries plywood.yml's control with the member resolved, when chant's op waves take it", async () => {
-    setChantControlForTests(Object.assign(fakeChant(), { recordControlAppliedFromEnv: async () => ({}) }));
+  it("carries plywood.yml's control with the member resolved", async () => {
+    setChantControlForTests(fakeChant());
     const dir = repo("control:\n  repo: github.com/acme/infra-control\n  token_secret: PLYWOOD_CONTROL_TOKEN\n");
     const got = await wavesControl(dir);
     expect(got).toEqual({ control: { repo: "github.com/acme/infra-control", op: "pulumi-up", member: expect.any(String), tokenSecret: "PLYWOOD_CONTROL_TOKEN" }, repo: "github.com/acme/infra-control" });
-  });
-
-  it("says chant lacks it on a chant before chant#4617, so plywood ci keeps the dispatch advice", async () => {
-    setChantControlForTests(fakeChant());
-    expect(await wavesControl(repo("control: github.com/acme/infra-control\n"))).toEqual({ missing: expect.stringContaining("chant#4617") });
   });
 
   it("is none without a control key", async () => {

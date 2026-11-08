@@ -16,10 +16,6 @@
  * stack the preview, a gate on the workspace ledger bound to the preview's
  * digest, and `plunge stack adopt --json --yes`. `chant run plywood-adopt`
  * stops at each gate and `chant approve plywood-adopt <gate>` opens it.
- *
- * Both are reached through a feature-detect: a pulumi lexicon older than the pinned
- * 0.124.58 may have no adopt argv, adopt document parser or Op. Then init
- * prints the preview command for each stack and skips the Op file.
  */
 import type { PlungeStack } from "./engine";
 import { slug } from "./detect";
@@ -44,7 +40,7 @@ export interface AdoptPreview {
   /** The command, for the person to run by hand. */
   command: string;
   view?: AdoptView;
-  /** Why there is no document: plunge missing, a failed run, no adopt support in the installed lexicon. */
+  /** Why there is no document: plunge missing, a failed run. */
   error?: string;
 }
 
@@ -52,54 +48,38 @@ export interface AdoptPreview {
 export interface ChantAdopt {
   /** `plunge stack adopt --json --stack <stack>` in `dir` with PULUMI_BACKEND_URL=`backend`, through chant's allowlist. */
   preview(input: { dir: string; stack: string; backend: string }): Promise<AdoptView>;
-  /** True when the lexicon exports `PulumiAdoptOp`. */
-  hasOp: boolean;
 }
 
-type Runner = (args: string[], opts: { cwd: string; env?: Record<string, string> }) => Promise<{ stdout: string }>;
+let cached: Promise<ChantAdopt> | undefined;
 
-let cached: Promise<ChantAdopt | undefined> | undefined;
-
-/** chant's adopt pieces, or undefined when the installed pulumi lexicon lacks them. */
-export function chantAdopt(): Promise<ChantAdopt | undefined> {
+/** chant's adopt pieces (chant#4562): the adopt argv and run, and the adopt document parser. */
+export function chantAdopt(): Promise<ChantAdopt> {
   cached ??= (async () => {
-    try {
-      // @ts-ignore: plungeAdoptArgs and runAllowedPlunge's env are missing from older lexicons (chant#4562).
-      const run: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/run");
-      // @ts-ignore: parsePlungeAdoptView and PulumiAdoptOp are missing from older lexicons (chant#4562).
-      const lexicon: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
-      const args = run.plungeAdoptArgs as ((o: { stack: string }) => string[]) | undefined;
-      const allowed = run.runAllowedPlunge as ((r: Runner, a: string[], cwd: string, env?: Record<string, string>) => Promise<{ stdout: string }>) | undefined;
-      const runner = run.defaultPlungeRunner as Runner | undefined;
-      const parse = lexicon.parsePlungeAdoptView as ((t: string | undefined) => AdoptView | undefined) | undefined;
-      const failure = run.pulumiRunFailure as ((e: unknown) => { stdout?: string; stderr?: string; message: string; missingBinary?: boolean }) | undefined;
-      if (typeof args !== "function" || typeof allowed !== "function" || typeof runner !== "function" || typeof parse !== "function") return undefined;
-      return {
-        hasOp: typeof lexicon.PulumiAdoptOp === "function",
-        async preview({ dir, stack, backend }) {
-          try {
-            const { stdout } = await allowed(runner, args({ stack }), dir, { PULUMI_BACKEND_URL: backend });
-            const view = parse(stdout);
-            if (!view) throw new Error("plunge printed no adopt document");
-            return view;
-          } catch (err) {
-            const f = failure ? failure(err) : { message: (err as Error).message };
-            const view = parse(f.stdout);
-            if (view) return view;
-            if (f.missingBinary) throw new Error("the plunge binary was not found on PATH");
-            throw new Error((f.stderr?.trim() || f.message).split("\n").slice(-3).join("\n"));
-          }
-        },
-      };
-    } catch {
-      return undefined;
-    }
+    const { plungeAdoptArgs, runAllowedPlunge, defaultPlungeRunner, pulumiRunFailure } = await import("@intentius/chant-lexicon-pulumi/run");
+    const { parsePlungeAdoptView } = await import("@intentius/chant-lexicon-pulumi");
+    const parse = (t: string | undefined): AdoptView | undefined => parsePlungeAdoptView(t) as AdoptView | undefined;
+    return {
+      async preview({ dir, stack, backend }) {
+        try {
+          const { stdout } = await runAllowedPlunge(defaultPlungeRunner, plungeAdoptArgs({ stack }), dir, { PULUMI_BACKEND_URL: backend });
+          const view = parse(stdout);
+          if (!view) throw new Error("plunge printed no adopt document");
+          return view;
+        } catch (err) {
+          const f = pulumiRunFailure(err) as { stdout?: string; stderr?: string; message: string; missingBinary?: boolean };
+          const view = parse(f.stdout);
+          if (view) return view;
+          if (f.missingBinary) throw new Error("the plunge binary was not found on PATH");
+          throw new Error((f.stderr?.trim() || f.message).split("\n").slice(-3).join("\n"));
+        }
+      },
+    };
   })();
   return cached;
 }
 
-/** Tests stand in a fake (or none). `reset` goes back to the real import. */
-export function setChantAdoptForTests(fake: ChantAdopt | undefined | "reset"): void {
+/** Tests stand in a fake. `reset` goes back to the real import. */
+export function setChantAdoptForTests(fake: ChantAdopt | "reset"): void {
   cached = fake === "reset" ? undefined : Promise.resolve(fake);
 }
 
@@ -109,23 +89,15 @@ export function adoptCommand(s: Pick<PlungeStack, "dir" | "stack">, backend: str
   return `${cd}PULUMI_BACKEND_URL='${backend}' plunge stack adopt --json --stack ${s.stack}`;
 }
 
-/** The message when the installed pulumi lexicon has no adopt support. */
-export const NEEDS_ADOPT_MESSAGE =
-  "the adopt previews and the adopt Op need @intentius/chant-lexicon-pulumi >= the release after 0.124.54 (chant#4562); run each preview by hand:";
-
-/** Each stack's adopt preview. Runs nothing when `chant` is undefined. */
+/** Each stack's adopt preview. */
 export async function adoptPreviews(
   stacks: ReadonlyArray<Pick<PlungeStack, "key" | "dir" | "stack"> & { url: string }>,
-  chant: ChantAdopt | undefined,
+  chant: ChantAdopt,
   root: string,
 ): Promise<AdoptPreview[]> {
   const out: AdoptPreview[] = [];
   for (const s of stacks) {
     const command = adoptCommand(s, s.url);
-    if (!chant) {
-      out.push({ key: s.key, backend: s.url, command, error: "not run" });
-      continue;
-    }
     try {
       const view = await chant.preview({ dir: s.dir === "." ? root : `${root}/${s.dir}`, stack: s.stack, backend: s.url });
       out.push({ key: s.key, backend: s.url, command, view });
@@ -147,9 +119,8 @@ function fates(view: AdoptView): string {
 }
 
 /** The lines init prints for the previews. */
-export function adoptLines(previews: readonly AdoptPreview[], chant: ChantAdopt | undefined): string[] {
+export function adoptLines(previews: readonly AdoptPreview[]): string[] {
   if (previews.length === 0) return [];
-  if (!chant) return [NEEDS_ADOPT_MESSAGE, ...previews.map((p) => `  ${p.key}: ${p.command}`)];
   const out = ["Adopt previews (plunge stack adopt --json, which writes nothing):"];
   for (const p of previews) {
     const v = p.view;

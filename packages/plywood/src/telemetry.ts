@@ -3,8 +3,7 @@
  * (chant#4555): plywood's bin sets them before its first call into chant,
  * and a variable the job already sets wins. The exporter names every span
  * attribute with plywood's words' prefix (`plywood.stack`,
- * `plywood.up.result`); when the installed chant exports `configureOtlp`,
- * the bin passes the prefix too.
+ * `plywood.up.result`); the bin passes the prefix to chant's `configureOtlp`.
  *
  * A config that cannot be read sets nothing: the command that reads it
  * reports the problem itself.
@@ -41,7 +40,6 @@ export async function applyTelemetry(cwd: string, env: NodeJS.ProcessEnv = proce
     return {};
   }
   Object.assign(env, added);
-  const chant = (await chantProduct()) as unknown as { configureOtlp?: (o: { prefix?: string; env?: NodeJS.ProcessEnv }) => unknown } | undefined;
-  if (chant && typeof chant.configureOtlp === "function") chant.configureOtlp({ prefix: PRODUCT, env });
+  (await chantProduct()).configureOtlp({ prefix: PRODUCT, env });
   return added;
 }

@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { CHANT_DEFAULTS } from "./chant-defaults";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { helpText, main, type Io } from "../src/cli";
@@ -38,8 +39,7 @@ describe("plywood CLI", () => {
       assertProductWords: (w) => w as never,
       productPipelineJobs: () => ({}) as never,
       approveLine: () => "",
-      pendingGatesByPlan: async () => [],
-      parseRequiresList: (values) => ({ checks: values.flatMap((v) => v.split(",")) }),
+      ...CHANT_DEFAULTS,
       runChantInProcess: async (argv) => (calls.push(argv), 0),
     });
     try {

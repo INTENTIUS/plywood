@@ -60,7 +60,7 @@ export interface WavesEngine {
 
 /** The waves jobs' image and lines from plywood's pipeline settings, as the review and drift jobs take them. */
 export function wavesEngine(pipeline: { image?: string; engineSetup?: string[] }): WavesEngine {
-  const o = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) }, false);
+  const o = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) });
   return { ...(o.image ? { image: o.image } : {}), ...(o.beforeScript?.length ? { beforeScript: o.beforeScript } : {}) };
 }
 

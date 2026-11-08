@@ -3,7 +3,7 @@
  * translation onto the waves spec, the drift Ops, the pull request jobs and
  * the forge check. No chant runs; chant#4625 is stood in either way.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { toChantSettings, type ChantRunner } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { driftJobFields } from "../src/drift";
@@ -15,7 +15,6 @@ import {
   prLoopJobFlags,
   prLoopJobOptions,
   secretReference,
-  setChant4625ForTests,
   withJobSettings,
 } from "../src/jobs";
 
@@ -40,7 +39,6 @@ const spec = () => ({
   ],
 });
 
-afterEach(() => setChant4625ForTests("reset"));
 
 describe("the checks", () => {
   it("takes the four keys, which no longer read as later", () => {
@@ -85,7 +83,7 @@ describe("variables and secrets", () => {
 
 describe("the waves spec", () => {
   it("each wave takes the variables; one environment goes on the wave, two split it into groups; parallelism with chant#4625", () => {
-    const out = withJobSettings(spec(), jobsOf(YML), "github", { parallelism: true }) as { parallelism?: number; waves: Array<Record<string, unknown>> };
+    const out = withJobSettings(spec(), jobsOf(YML), "github") as { parallelism?: number; waves: Array<Record<string, unknown>> };
     expect(out.parallelism).toBe(2);
     expect(out.waves[0]).toEqual({ name: "dev", runs: [{ target: "shop/dev" }], variables: { AWS_REGION: "us-east-1", RETRIES: "3", DATADOG_API_KEY: "${{ secrets.DATADOG_API_KEY }}" } });
     expect(out.waves[1]!.environment).toBeUndefined();
@@ -95,10 +93,10 @@ describe("the waves spec", () => {
     ]);
   });
 
-  it("stacks sharing an environment run in it, and a chant without chant#4625 gets no parallelism", () => {
+  it("stacks sharing an environment run in it, and the spec takes parallelism (chant#4625)", () => {
     const s = jobsOf("environments: { 'shop/prod-*': production }\nparallelism: 3\n");
-    const out = withJobSettings(spec(), s, "gitlab", { parallelism: false }) as { parallelism?: number; waves: Array<Record<string, unknown>> };
-    expect(out.parallelism).toBeUndefined();
+    const out = withJobSettings(spec(), s, "gitlab") as { parallelism?: number; waves: Array<Record<string, unknown>> };
+    expect(out.parallelism).toBe(3);
     expect(out.waves[1]).toMatchObject({ environment: { name: "production" } });
     expect(out.waves[1]!.groups).toBeUndefined();
     expect(out.waves[0]!.environment).toBeUndefined();
@@ -107,7 +105,7 @@ describe("the waves spec", () => {
   it("a wave split into shares cannot split by environment too", () => {
     const shared = spec();
     (shared.waves[1] as Record<string, unknown>).shares = 2;
-    expect(() => withJobSettings(shared, jobsOf(YML), "github", { parallelism: true })).toThrow(/wave prod holds stacks in 2 environments and is split into 2 shares/);
+    expect(() => withJobSettings(shared, jobsOf(YML), "github")).toThrow(/wave prod holds stacks in 2 environments and is split into 2 shares/);
   });
 
   it("the first glob that matches wins", () => {
@@ -153,14 +151,9 @@ describe("the pull request jobs (chant#4625)", () => {
     expect(notes).toEqual([expect.stringContaining("runner group deployers is GitHub's")]);
   });
 
-  it("with chant#4625 the options and flags go to chant; without it plywood says which keys wait", async () => {
+  it("the options and flags go to chant (chant#4625)", async () => {
     const pipeline = toChantSettings(parseConfig(YML)).pipeline;
-    setChant4625ForTests(true);
     expect((await prJobsFor(pipeline)).flags).toContain("--parallelism");
-    setChant4625ForTests(false);
-    const without = await prJobsFor(pipeline);
-    expect(without).toMatchObject({ options: {}, flags: [] });
-    expect(without.notes).toEqual([expect.stringContaining("env, pass, parallelism on the pull request jobs needs chant's runners")]);
     expect(await prJobsFor({})).toEqual({ options: {}, flags: [], notes: [] });
   });
 });

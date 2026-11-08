@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { writingChant } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,8 +18,11 @@ function io(cwd: string, env: NodeJS.ProcessEnv = {}): InitIo {
 
 const OPTS: InitOptions = { env: "production", bucketCheck: true, dryRun: false, yes: true, engine: "plunge" };
 
+let lastRoot = "";
+
 function repo(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "plywood-plunge-"));
+  lastRoot = root;
   mkdirSync(join(root, ".git", "refs", "remotes", "origin"), { recursive: true });
   writeFileSync(join(root, ".git", "config"), '[remote "origin"]\n\turl = git@github.com:acme/shop.git\n');
   writeFileSync(join(root, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/main\n");
@@ -44,11 +48,10 @@ const ON_FLOCI = {
 };
 
 /** A fake adopt preview, recording each call. */
-function fakeAdopt(view: (stack: string) => AdoptView | Error, hasOp = true): ChantAdopt & { calls: Array<{ dir: string; stack: string; backend: string }> } {
+function fakeAdopt(view: (stack: string) => AdoptView | Error): ChantAdopt & { calls: Array<{ dir: string; stack: string; backend: string }> } {
   const calls: Array<{ dir: string; stack: string; backend: string }> = [];
   return {
     calls,
-    hasOp,
     async preview(input) {
       calls.push(input);
       const v = view(input.stack);
@@ -101,7 +104,7 @@ describe("plunge URLs", () => {
 
 describe("plywood init --engine plunge", () => {
   it("gives file:// stacks a plunge+ URL in plywood.yml, leaves Pulumi.yaml alone, and chant reads engine plunge", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     const adopt = fakeAdopt(wouldAdopt);
     setChantAdoptForTests(adopt);
     const root = repo(ON_FILE);
@@ -124,7 +127,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("gives a floci S3 stack its plunge+ URL and checks the bucket, printing the lifecycle fix", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(fakeAdopt(wouldAdopt));
     const report: BucketReport = {
       store: "s3",
@@ -144,7 +147,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("writes the adopt Op for the stacks not adopted yet, with each stack's backend", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(fakeAdopt((stack) => (stack === "prod" ? { ...wouldAdopt(stack), status: "already-adopted" } : wouldAdopt(stack))));
     const root = repo(ON_FILE);
     const r = await runInit(OPTS, EXIT, io(root));
@@ -157,7 +160,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("leaves a refused stack out of the adopt Op and names plunge's refusals", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(
       fakeAdopt((stack) =>
         stack === "dev"
@@ -187,7 +190,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("a second run writes nothing", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(fakeAdopt(wouldAdopt));
     const root = repo(ON_FILE);
     await runInit(OPTS, EXIT, io(root));
@@ -196,7 +199,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("prints a refused preview and still exits 0", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(
       fakeAdopt((stack) => ({ ...wouldAdopt(stack), status: "refused", refusals: [{ code: "pending-operations", reason: "the checkpoint has 1 pending operation" }] })),
     );
@@ -207,7 +210,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("names the command when plunge is not on PATH", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(fakeAdopt(() => new Error("the plunge binary was not found on PATH")));
     const root = repo(ON_FILE);
     const r = await runInit(OPTS, EXIT, io(root));
@@ -216,18 +219,8 @@ describe("plywood init --engine plunge", () => {
     expect(text).toContain(adoptCommand({ dir: "infra", stack: "dev" }, "plunge+file:///srv/state"));
   });
 
-  it("on a lexicon without adopt support, prints each preview command and skips the Op", async () => {
-    setChantProductForTests(undefined);
-    setChantAdoptForTests(undefined);
-    const root = repo(ON_FILE);
-    const r = await runInit(OPTS, EXIT, io(root));
-    expect(r.notes.join("\n")).toContain("chant#4562");
-    expect(r.notes.join("\n")).toContain("plunge stack adopt --json --stack dev");
-    expect(r.files.find((f) => f.file === ADOPT_OP_FILE)).toMatchObject({ status: "skipped" });
-  });
-
   it("points a Pulumi Cloud stack at the move guide and writes no engine", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     const adopt = fakeAdopt(wouldAdopt);
     setChantAdoptForTests(adopt);
     const root = repo({ "infra/Pulumi.yaml": "name: shop\nruntime: nodejs\n", "infra/Pulumi.dev.yaml": "" });
@@ -240,7 +233,7 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("with a kept plywood.yml, names the keys to set and changes nothing", async () => {
-    setChantProductForTests(undefined);
+    setChantProductForTests(writingChant(() => lastRoot));
     setChantAdoptForTests(fakeAdopt(wouldAdopt));
     const root = repo({ ...ON_FILE, "plywood.yml": "gate: always\n" });
     const r = await runInit(OPTS, EXIT, io(root));
@@ -249,13 +242,11 @@ describe("plywood init --engine plunge", () => {
   });
 
   it("adopt lines cover each status", () => {
-    const chant = fakeAdopt(wouldAdopt);
     const lines = adoptLines(
       [
         { key: "a/dev", backend: "plunge+file:///a", command: "x", view: { ...wouldAdopt("dev"), status: "already-adopted" } },
         { key: "a/prod", backend: "plunge+file:///a", command: "y", error: "boom" },
       ],
-      chant,
     );
     expect(lines).toEqual([
       "Adopt previews (plunge stack adopt --json, which writes nothing):",

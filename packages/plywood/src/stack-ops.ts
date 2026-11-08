@@ -35,10 +35,7 @@
  * pulumi-stack-ops --plan <digest>`, the line a waiting request prints, and
  * the requester runs the same command again to carry it out. The requester's
  * own approval never counts.
- *
- * Everything chant runs here is reached through a feature-detect: a pulumi
- * lexicon older than the pinned 0.124.77 may have none of it, and then each verb
- * says so and exits with chant's `failed` code.
+
  */
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -51,7 +48,6 @@ import { ADOPT_OP, ADOPT_OP_FILE } from "./init/adopt";
 import { environmentOf, slug } from "./init/detect";
 import { explainRefusal } from "./refusals";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
-import { BUILT_CHANT } from "./chant-product";
 import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./words";
 
 /** chant's op the requests are recorded under (`PULUMI_STACK_OPS_OP`). */
@@ -93,29 +89,19 @@ export interface ChantStackOps {
   gatedStackMove(opts: StackOpCommon & { source: { member: string; dir: string; stack: string }; dest: { member: string; dir: string; stack: string }; urns: string[]; engine?: string }): Promise<StackOpOutcome<MoveResult>>;
 }
 
-const REQUIRED = ["gatedStackExport", "gatedStackCancel", "gatedStackMove"] as const;
-
 /** chant's stack lock reader (`pulumiStackLockIds`, chant#4615): the lock ids a stack holds now, read from a `file://` backend. */
 export type ChantStackLockReader = (opts: { dir: string; stack: string; project?: string; engine?: string; env?: Record<string, string | undefined> }) => Promise<{ checked: boolean; backend?: string; ids: string[] }>;
 
-let cachedLocks: Promise<ChantStackLockReader | undefined> | undefined;
+let cachedLocks: Promise<ChantStackLockReader> | undefined;
 
-/** chant's lock reader, or undefined when the installed pulumi lexicon lacks it; `cancel` then takes the id from `--lock` alone. */
-export function chantStackLockReader(): Promise<ChantStackLockReader | undefined> {
-  cachedLocks ??= (async () => {
-    try {
-      // @ts-ignore: pulumiStackLockIds is missing from older lexicons (chant#4615).
-      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
-      return typeof m.pulumiStackLockIds === "function" ? (m.pulumiStackLockIds as ChantStackLockReader) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's lock reader; `cancel` uses it when no `--lock` is given. */
+export function chantStackLockReader(): Promise<ChantStackLockReader> {
+  cachedLocks ??= import("@intentius/chant-lexicon-pulumi").then((m) => m.pulumiStackLockIds as unknown as ChantStackLockReader);
   return cachedLocks;
 }
 
-/** Tests stand in a lock reader (or none, for the fallback). `reset` goes back to the real import. */
-export function setChantStackLockReaderForTests(fake: ChantStackLockReader | undefined | "reset"): void {
+/** Tests stand in a lock reader. `reset` goes back to the real import. */
+export function setChantStackLockReaderForTests(fake: ChantStackLockReader | "reset"): void {
   cachedLocks = fake === "reset" ? undefined : Promise.resolve(fake);
 }
 
@@ -127,7 +113,6 @@ export function setChantStackLockReaderForTests(fake: ChantStackLockReader | und
 export async function lockToCancel(given: string | undefined, stack: { dir: string; stack: string; project?: string; engine?: string }, env: Record<string, string | undefined>): Promise<{ lockId: string; read: boolean } | { error: string }> {
   if (given) return { lockId: given, read: false };
   const reader = await chantStackLockReader();
-  if (!reader) return { error: STACK_OP_WORDS.needsLock };
   let locks: Awaited<ReturnType<ChantStackLockReader>>;
   try {
     locks = await reader({ dir: stack.dir, stack: stack.stack, ...(stack.project ? { project: stack.project } : {}), ...(stack.engine ? { engine: stack.engine } : {}), env });
@@ -140,57 +125,17 @@ export async function lockToCancel(given: string | undefined, stack: { dir: stri
   return { lockId: locks.ids[0]!, read: true };
 }
 
-let cachedOps: Promise<ChantStackOps | undefined> | undefined;
-let cachedRollback: Promise<boolean> | undefined;
+let cachedOps: Promise<ChantStackOps> | undefined;
 
-/** chant's gated stack operations, or undefined when the installed pulumi lexicon lacks them. */
-export function chantStackOps(): Promise<ChantStackOps | undefined> {
-  cachedOps ??= (async () => {
-    try {
-      // @ts-ignore: the gated stack operations are missing from older lexicons (chant#4578).
-      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
-      return REQUIRED.every((name) => typeof m[name] === "function") ? (m as unknown as ChantStackOps) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+/** chant's gated stack operations (chant#4578). */
+export function chantStackOps(): Promise<ChantStackOps> {
+  cachedOps ??= import("@intentius/chant-lexicon-pulumi").then((m) => m as unknown as ChantStackOps);
   return cachedOps;
 }
 
-/**
- * Whether the installed pulumi lexicon rolls a stack back by release: the
- * `pulumi-up` step answers `releaseInputs` (chant#4541) and a release copy
- * gets its dependencies installed before its preview (chant#4542 item 3).
- */
-export function chantStackRollback(): Promise<boolean> {
-  cachedRollback ??= (async () => {
-    try {
-      // @ts-ignore: pulumiReleaseInputs is missing from older lexicons (the release after 0.124.54).
-      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi");
-      if (typeof m.pulumiReleaseInputs !== "function") return false;
-      // @ts-ignore: older lexicons lack the subpath (chant#4542).
-      const copy: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/release-copy");
-      return typeof copy.prepareReleaseCopy === "function";
-    } catch {
-      return false;
-    }
-  })();
-  return cachedRollback;
-}
-
-/** Tests stand in a fake lexicon (or none, for the fallback). `reset` goes back to the real import. */
-export function setChantStackOpsForTests(fake: ChantStackOps | undefined | "reset", rollback?: boolean): void {
+/** Tests stand in a fake lexicon. `reset` goes back to the real import. */
+export function setChantStackOpsForTests(fake: ChantStackOps | "reset"): void {
   cachedOps = fake === "reset" ? undefined : Promise.resolve(fake);
-  cachedRollback = fake === "reset" ? undefined : Promise.resolve(rollback ?? fake !== undefined);
-}
-
-/** The message a stack operation prints when the installed lexicon lacks it; `after` is the last chant release without the feature. */
-export function needsStackOpsMessage(what: string, feature: string, after = "0.124.54"): string {
-  return (
-    `${what} needs @intentius/chant-lexicon-pulumi >= the release after ${after}, which carries ${feature}. ` +
-    `This plywood was built with chant ${BUILT_CHANT}, which lacks it. ` +
-    "Upgrade plywood once that chant is out, or build against a local chant with 'just chant-local'."
-  );
 }
 
 /** A stack as a request names it: plywood.yml's key, its directory, and the `--stack` the engine takes. */
@@ -322,10 +267,6 @@ export function reportOutcome<T>(
 /** Run one request, turning a refusal chant throws before asking into chant's `failed`. */
 async function runRequest(verb: StackOpVerb, json: boolean, table: ExitTable, io: StageIo, call: (ops: ChantStackOps) => Promise<number>): Promise<number> {
   const ops = await chantStackOps();
-  if (!ops) {
-    io.err(`${PRODUCT}: ${needsStackOpsMessage(`${PRODUCT} ${verb}`, "the gated stack operations (chant#4578)")}`);
-    return table.failed;
-  }
   try {
     return await call(ops);
   } catch (e) {
@@ -510,10 +451,6 @@ export async function rollbackStack(args: string[], json: boolean, table: ExitTa
   }
   argv.push(...(actor.value ? ["--actor", actor.value] : []), ...switches, ...(json ? ["--json"] : []));
 
-  if (!(await chantStackRollback())) {
-    io.err(`${PRODUCT}: ${needsStackOpsMessage(`${PRODUCT} rollback`, "rollback by release for stacks (chant#4542)")}`);
-    return table.failed;
-  }
   return withChant(`${PRODUCT} rollback`, table, io, async (chant) => {
     const code = await chant.runChantInProcess(argv, PRODUCT_WORDS);
     if (code === table.waiting && !json) io.err(STACK_OP_WORDS.rollbackWaiting);

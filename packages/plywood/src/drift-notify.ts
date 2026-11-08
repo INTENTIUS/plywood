@@ -15,7 +15,6 @@
  * nothing; a run without issues (no `--forge`, or `respond.drift: none`)
  * has no last finding and sends on every drift.
  *
- * On a chant without `driftNotifyFields` the run says no event was sent.
  * A failed delivery is a line on stderr and never changes the exit code.
  */
 import { createHash } from "node:crypto";
@@ -50,9 +49,6 @@ export interface DriftNotice {
   deliveries?: Array<{ target: string; ok: boolean; detail: string }>;
 }
 
-/** What a run on a chant without chant#4610's drift fields says. */
-export const DRIFT_NOTIFY_NEEDS_CHANT = "no drift event was sent: the installed chant has no driftNotifyFields (chant#4610)";
-
 /** The run's fingerprint: each drifted stack and its finding's, sorted, hashed. */
 export function runFingerprint(results: readonly DriftNoticeStack[], stackFingerprint: (rows: readonly DriftRow[]) => string): string {
   const parts = results.filter((r) => r.ok && r.drifted > 0).map((r) => `${r.stack}\t${stackFingerprint(r.rows)}`).sort();
@@ -64,15 +60,12 @@ export function notifiesDrift(notify: ChantNotifyConfig | undefined): boolean {
   return notify !== undefined && (notify.events === undefined || notify.events.includes("drift"));
 }
 
-/**
- * Send the run's drift event, or say why not. `chant` is undefined on a
- * chant without the drift fields.
- */
+/** Send the run's drift event, or say why not. */
 export async function sendDriftNotice(input: {
   notify: ChantNotifyConfig | undefined;
   results: readonly DriftNoticeStack[];
   stackFingerprint: (rows: readonly DriftRow[]) => string;
-  chant: ChantDriftNotify | undefined;
+  chant: ChantDriftNotify;
   env: NodeJS.ProcessEnv;
   environment?: string;
   log: (line: string) => void;
@@ -83,7 +76,6 @@ export async function sendDriftNotice(input: {
   const drifted = input.results.filter((r) => r.ok && r.drifted > 0);
   if (drifted.length === 0) return undefined;
   const fingerprint = runFingerprint(input.results, input.stackFingerprint);
-  if (!input.chant) return { sent: false, reason: DRIFT_NOTIFY_NEEDS_CHANT, fingerprint };
   if (drifted.every((r) => r.issue?.action === "unchanged")) {
     return { sent: false, reason: "no drift event was sent: every drifted stack's finding is the one its issue already holds", fingerprint };
   }
@@ -100,31 +92,24 @@ export async function sendDriftNotice(input: {
   return { sent: deliveries.some((d) => d.ok), fingerprint, deliveries, ...(deliveries.some((d) => d.ok) ? {} : { reason: "no drift event was delivered" }) };
 }
 
-let loaded: Promise<Omit<ChantDriftNotify, "words"> | undefined> | undefined;
+let loaded: Promise<Omit<ChantDriftNotify, "words">> | undefined;
 
-/** chant's drift fields and notify, or undefined when the installed chant lacks them. */
-export function chantDriftNotify(): Promise<Omit<ChantDriftNotify, "words"> | undefined> {
+/** chant's drift fields and notify (chant#4610). */
+export function chantDriftNotify(): Promise<Omit<ChantDriftNotify, "words">> {
   loaded ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the subpath (chant#4550, #4610).
-      const product: Record<string, unknown> = await import("@intentius/chant/ci-product");
-      const notify: Record<string, unknown> = await import("@intentius/chant/notify");
-      const fns = [product.driftNotifyFields, product.productSendOptions, notify.makeNotifyEvent, notify.sendNotify];
-      if (!fns.every((f) => typeof f === "function")) return undefined;
-      return {
-        driftNotifyFields: product.driftNotifyFields as ChantDriftNotify["driftNotifyFields"],
-        productSendOptions: product.productSendOptions as ChantDriftNotify["productSendOptions"],
-        makeNotifyEvent: notify.makeNotifyEvent as ChantDriftNotify["makeNotifyEvent"],
-        sendNotify: notify.sendNotify as ChantDriftNotify["sendNotify"],
-      };
-    } catch {
-      return undefined;
-    }
+    const product = await import("@intentius/chant/ci-product");
+    const notify = await import("@intentius/chant/notify");
+    return {
+      driftNotifyFields: product.driftNotifyFields as unknown as ChantDriftNotify["driftNotifyFields"],
+      productSendOptions: product.productSendOptions as unknown as ChantDriftNotify["productSendOptions"],
+      makeNotifyEvent: notify.makeNotifyEvent as unknown as ChantDriftNotify["makeNotifyEvent"],
+      sendNotify: notify.sendNotify as unknown as ChantDriftNotify["sendNotify"],
+    };
   })();
   return loaded;
 }
 
-/** Tests stand in chant's notify (or none); `reset` goes back to the real imports. */
-export function setChantDriftNotifyForTests(fake: Omit<ChantDriftNotify, "words"> | undefined | "reset"): void {
+/** Tests stand in chant's notify; `reset` goes back to the real imports. */
+export function setChantDriftNotifyForTests(fake: Omit<ChantDriftNotify, "words"> | "reset"): void {
   loaded = fake === "reset" ? undefined : Promise.resolve(fake);
 }

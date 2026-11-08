@@ -4,3 +4,4 @@ packages/*/dist/
 stack/.state/
 stack/.state.*/
 images/pack/
+/dist/

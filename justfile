@@ -61,13 +61,14 @@ images platform="" checksums="": build
         -f "images/plywood-$engine/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool" .
     done
 
-# Render .github/workflows/ci.yml from ci/ci.ts and publish.yml from
-# publish/publish.ts, and chant-ci-green.yml from chant.workspace.json's
-# ci.green with the pinned chant (its tick runs that chant through npx). CI
-# fails when a committed file differs from the render.
+# Render .github/workflows/ci.yml from ci/ci.ts, publish.yml from
+# chant.config.ts's release block (chant release workflow), and
+# chant-ci-green.yml from chant.workspace.json's ci.green with the pinned chant
+# (its tick runs that chant through npx). CI fails when a committed file
+# differs from the render.
 ci:
     npx chant build ci -o .github/workflows/ci.yml --format yaml
-    npx chant build publish -o .github/workflows/publish.yml --format yaml
+    npx chant release workflow --forge github
     npx chant ci workflow --token-secret CI_GREEN_TOKEN
 
 # The tutorial bench (stack/): a local Forgejo with a runner and the floci AWS
@@ -113,27 +114,18 @@ tutorial-scan:
 e2e *args:
     npx tsx e2e/main.ts {{args}}
 
-# Release steps (AGENTS.md, Releasing). Each checks before it writes, and
-# `--dry-run` on `release` runs every check and changes nothing.
-#   just release-bump 0.1.0        the version in the package, the lock file and the Dockerfiles
-#   just release 0.1.0 [--dry-run] [--commit <sha>] [--branch <b>] [--skip-green]
-#                                  checks the version, the tag, npm and the packed tarball, then
-#                                  tags the green commit v0.1.0 and pushes the tag
-#   just record-digests [<run id>] this version's image digests from GHCR into image-digests.json
-#   just github-release <version>... [--dry-run]
-#                                  each version's GitHub release on its existing tag, notes from the
-#                                  changes page; the newest named is marked latest
+# The release's version (AGENTS.md, Releasing): packages/plywood/package.json,
+# package-lock.json and both Dockerfiles' version label. Merge it to main with
+# the Changes page's `## In <version>` section, then dispatch publish.yml with
+# that version as the label.
 release-bump version:
-    node scripts/release.mjs bump {{version}}
+    npm version {{version}} --no-git-tag-version -w @intentius/plywood
+    npm run images -w @intentius/plywood
 
-release version *flags:
-    node scripts/release.mjs tag {{version}} {{flags}}
-
-record-digests run="":
-    node scripts/release.mjs digests {{ if run == "" { "" } else { "--run " + run } }}
-
-github-release *versions:
-    node scripts/github-release.mjs {{versions}}
+# One image as the OCI archive the release cut records, into dist/images
+# (PLYWOOD_IMAGE_PLATFORMS=linux/amd64 builds one platform). Nothing is pushed.
+release-image engine:
+    scripts/release-image.sh {{engine}}
 
 # Install the site's dependencies from its lock file.
 site-install:

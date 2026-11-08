@@ -1,9 +1,9 @@
 import { imageFor, imageReference, type EngineName } from "../src/images";
 
 /**
- * The image a pipeline names for `engine`: by digest only, so the commit that
- * bumps the version, before the release's images are recorded in
- * image-digests.json, names none.
+ * The image a pipeline names for `engine`, when the build carries the
+ * release's digests (a release's build, from CHANT_RELEASE_DIGESTS); a build
+ * outside a release names none.
  */
 export function publishedImage(engine: EngineName): string | undefined {
   const ref = imageFor(engine);

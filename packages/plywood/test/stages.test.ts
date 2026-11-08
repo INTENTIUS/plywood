@@ -192,7 +192,7 @@ describe("plywood ci", () => {
     expect(chant.pipelines[0]!.options).toMatchObject({ locks: "plan", words: { commands: { preview: "plan", lock: "lock", unlock: "unlock" } } });
     expect(chant.calls[0]!.argv).toEqual([
       "build", ".", "--components", "--generate", "forgejo", "--pr-loop", "--env", "production", "--gate", "up", "--stale-notes",
-      "--image", imageReference(imageFor("pulumi")), "--before-script", installLine("pulumi", TOOL_VERSIONS.pulumi),
+      ...(imageFor("pulumi").digest ? ["--image", imageReference(imageFor("pulumi"))] : []), "--before-script", installLine("pulumi", TOOL_VERSIONS.pulumi),
       "--keep-own-jobs", "--run-group", "pull-request", "--output", join(dir, ".forgejo/workflows/plywood.yml"),
     ]);
   });

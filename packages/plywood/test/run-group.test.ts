@@ -3,8 +3,9 @@
  * record jobs. Forgejo cancels the run in progress when a push starts a run of
  * a workflow that sets no workflow-level `concurrency:` (a job-level group does
  * not count), and chant writes the waves workflow and the pull request
- * workflow with none. plywood adds a group on Forgejo; GitHub cancels nothing
- * without one, and GitLab's jobs are not interruptible.
+ * workflow with none unless asked. plywood asks chant's generators for a run
+ * group on Forgejo (`--run-group`, chant#4771); GitHub cancels nothing without
+ * one, and GitLab's jobs are not interruptible.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,7 +13,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { chantProduct, setChantProductForTests } from "../src/chant-product";
 import { EXIT } from "../src/exit-codes";
-import { withRunGroup } from "../src/init/run-group";
 import { runInit } from "../src/init";
 
 afterEach(() => setChantProductForTests("reset"));
@@ -66,51 +66,6 @@ describe("Forgejo's reading of a workflow with no group (the failure in plywood#
   it("cancels the first merge's run, also when only a job sets a group", () => {
     expect(twoMerges(WAVES).firstRunCancelled).toBe(true);
     expect(twoMerges(PR_LOOP).firstRunCancelled).toBe(true);
-  });
-});
-
-describe("withRunGroup", () => {
-  it("gives each merge's waves run a group of its own on Forgejo, with nothing cancelled", () => {
-    const text = withRunGroup(WAVES, "forgejo", "commit");
-    const { a, b, firstRunCancelled } = twoMerges(text);
-    expect(a.group).not.toBe(b.group);
-    expect(a.cancelsEarlierRuns).toBe(false);
-    expect(firstRunCancelled).toBe(false);
-    // A dispatch of the same commit twice queues behind the first, as one run at a time.
-    const d1 = forgejoDecision(text, { event: "workflow_dispatch", sha: "a".repeat(40), ref: "refs/heads/main", runId: "1" });
-    const d2 = forgejoDecision(text, { event: "workflow_dispatch", sha: "a".repeat(40), ref: "refs/heads/main", runId: "2" });
-    expect(d1.group).toBe(d2.group);
-    expect(d1.group).not.toBe(a.group);
-  });
-
-  it("keeps the record job's run from being cancelled by the next merge, and keeps a pull request's runs cancelling each other", () => {
-    const text = withRunGroup(PR_LOOP, "forgejo", "pull-request");
-    expect(twoMerges(text).firstRunCancelled).toBe(false);
-    const pr = (runId: string) => forgejoDecision(text, { event: "pull_request", sha: runId, ref: "refs/pull/7/merge", runId });
-    expect(pr("1").group).toBe(pr("2").group);
-    expect(pr("2").cancelsEarlierRuns).toBe(true);
-    // Comments never cancel anything and never wait for each other.
-    const c = (runId: string) => forgejoDecision(text, { event: "issue_comment", sha: "x", ref: "refs/heads/main", runId });
-    expect(c("1").group).not.toBe(c("2").group);
-    expect(c("2").cancelsEarlierRuns).toBe(false);
-  });
-
-  it("puts the block before jobs: and leaves the rest of the file alone", () => {
-    const text = withRunGroup(WAVES, "forgejo", "commit");
-    expect(text.replace(/# Without a group[\s\S]*?cancel-in-progress: false\n\n/, "")).toBe(WAVES);
-    expect(text.indexOf("\nconcurrency:\n")).toBeLessThan(text.indexOf("\njobs:\n"));
-  });
-
-  it("keeps a workflow-level group that is already there, and does not add a second", () => {
-    const own = WAVES.replace("jobs:", "concurrency:\n  group: mine\n  cancel-in-progress: false\n\njobs:");
-    expect(withRunGroup(own, "forgejo", "commit")).toBe(own);
-    const once = withRunGroup(WAVES, "forgejo", "commit");
-    expect(withRunGroup(once, "forgejo", "commit")).toBe(once);
-  });
-
-  it("leaves GitHub and GitLab files as they were", () => {
-    expect(withRunGroup(WAVES, "github", "commit")).toBe(WAVES);
-    expect(withRunGroup("stages: [a]\njobs-like:\n  script: x\n", "gitlab", "commit")).toBe("stages: [a]\njobs-like:\n  script: x\n");
   });
 });
 

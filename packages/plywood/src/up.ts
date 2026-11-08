@@ -32,7 +32,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyMergeOf, applyWhenOf } from "./config/apply";
-import { hasChantPullRequestApprovalStatus } from "./chant-next";
 import type { RawConfig } from "./config/types";
 import { checkConfig, findConfig, loadConfig } from "./config/index";
 import { FORGES } from "./config/routing";
@@ -206,13 +205,11 @@ export function approvalStatusTarget(opts: { forge?: string; branch?: string }, 
 /**
  * After an approval of a pull request's `up` gate, post plywood/approval
  * again on the open pull requests (`run wave --approval-status --open`,
- * chant#4630), since a ledger approval starts no run on any forge. Only on
- * a chant that posts the status for pull-request waves. A refresh that
+ * chant#4630), since a ledger approval starts no run on any forge. A refresh that
  * cannot run or fails is a line on stderr and leaves the approval's exit
  * code alone.
  */
 async function refreshApprovalStatus(chant: ChantProduct, spec: Record<string, unknown>, opts: { forge?: string; branch?: string; json: boolean }, io: StageIo): Promise<void> {
-  if (!hasChantPullRequestApprovalStatus(chant)) return;
   const posts = chant.opWavesPostsApprovalStatus ? chant.opWavesPostsApprovalStatus(spec) : wavesTakePullRequestApproval(spec);
   if (!posts) return;
   const path = findConfig(io.cwd);

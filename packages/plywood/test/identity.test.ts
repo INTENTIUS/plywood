@@ -9,8 +9,8 @@ import { targetGlobMatch } from "@intentius/chant/ci-identity";
 import { toChantSettings } from "../src/chant-config";
 import { stackIdentities } from "../src/config/identity";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { FALLBACK_EXIT } from "../src/exit-codes";
-import { configIdentities, forgeCheck, identityRows, setChantForgeCheckForTests } from "../src/identities";
+import { EXIT } from "../src/exit-codes";
+import { configIdentities, identityRows } from "../src/identities";
 import type { StageIo } from "../src/stages";
 
 const errors = (text: string) => checkConfig(parseConfig(text)).filter((p) => p.severity === "error");
@@ -84,7 +84,7 @@ describe("plywood config identities and forge check", () => {
     const dir = mkdtempSync(join(tmpdir(), "plywood-identity-"));
     writeFileSync(join(dir, "plywood.yml"), CLOUD_YML);
     const t = io(dir);
-    expect(configIdentities(["--env", "production"], true, FALLBACK_EXIT, t.stageIo)).toBe(0);
+    expect(configIdentities(["--env", "production"], true, EXIT, t.stageIo)).toBe(0);
     const env = JSON.parse(t.out[0]!);
     expect(env.identity.cloud.pulumi.organization).toBe("acme");
     expect(identityRows(parseConfig(CLOUD_YML), "production").filter((r) => r.cloud === "pulumi").map((r) => [r.stack, r.up])).toEqual([
@@ -92,16 +92,8 @@ describe("plywood config identities and forge check", () => {
       ["shop/prod-east", "team:prod-deployers"],
     ]);
     const text = io(dir);
-    expect(configIdentities([], false, FALLBACK_EXIT, text.stageIo)).toBe(0);
+    expect(configIdentities([], false, EXIT, text.stageIo)).toBe(0);
     expect(text.out.join("\n")).toContain("ESC environments open with each job's own token");
-  });
-
-  it("forge check on a chant without @intentius/chant/forge-check names chant#4608 and exits failed", async () => {
-    setChantForgeCheckForTests(undefined);
-    const t = io(tmpdir());
-    expect(await forgeCheck(["check"], false, FALLBACK_EXIT, t.stageIo)).toBe(FALLBACK_EXIT.failed);
-    expect(t.err.join("\n")).toContain("chant#4608");
-    setChantForgeCheckForTests("reset");
   });
 });
 

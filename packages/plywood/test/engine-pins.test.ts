@@ -1,19 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import { toChantSettings } from "../src/chant-config";
 import { parseConfig } from "../src/config/index";
-import { ENGINE_ROOT, installLine, installLines, pinnedSums, plywoodInstallLine, setChantInstallLinesForTests, type ChantInstallLines } from "../src/images";
+import { ENGINE_ROOT, installLine, installLines, pinnedSums, unlinkedInstallLine } from "../src/images";
 import { initStacks } from "../src/init";
 import type { Detected } from "../src/init/detect";
 import { componentsFile, stepInput, wavesSpec } from "../src/init/render";
-
-function fakeLines(): ChantInstallLines & { calls: Array<[string, string, unknown]> } {
-  const calls: Array<[string, string, unknown]> = [];
-  return {
-    calls,
-    pulumiInstallLine: (version, options) => (calls.push(["pulumi", version, options]), `chant-pulumi ${version}`),
-    plungeInstallLine: (version, options) => (calls.push(["plunge", version, options]), `chant-plunge ${version}`),
-  };
-}
 
 const detected = (keys: string[]): Detected => ({
   root: "/repo",
@@ -23,38 +15,22 @@ const detected = (keys: string[]): Detected => ({
   pulumiActions: [],
 });
 
-afterEach(() => setChantInstallLinesForTests("reset"));
-
 describe("install lines", () => {
-  it("are plywood's own when the installed lexicon has no ci-setup", () => {
-    setChantInstallLinesForTests(undefined);
-    expect(installLine("pulumi", "3.272.0")).toBe(plywoodInstallLine("pulumi", "3.272.0"));
-  });
-
   it("take chant's line for a linked release, with the root /opt/plywood and plywood's sums", () => {
-    const chant = fakeLines();
-    setChantInstallLinesForTests(chant);
-    expect(installLine("pulumi", "3.272.0")).toBe("chant-pulumi 3.272.0");
-    expect(installLine("plunge", "0.2.0")).toBe("chant-plunge 0.2.0");
-    expect(chant.calls).toEqual([
-      ["pulumi", "3.272.0", { root: ENGINE_ROOT, sha256: pinnedSums("pulumi", "3.272.0") }],
-      ["plunge", "0.2.0", { root: ENGINE_ROOT, sha256: pinnedSums("plunge", "0.2.0") }],
-    ]);
+    expect(installLine("pulumi", "3.272.0")).toBe(pulumiInstallLine("3.272.0", { root: ENGINE_ROOT, sha256: pinnedSums("pulumi", "3.272.0") }));
+    expect(installLine("plunge", "0.2.0")).toBe(plungeInstallLine("0.2.0", { root: ENGINE_ROOT, sha256: pinnedSums("plunge", "0.2.0") }));
   });
 
   it("leave the sums to chant for a release plywood has not recorded", () => {
-    const chant = fakeLines();
-    setChantInstallLinesForTests(chant);
-    installLine("pulumi", "3.280.0");
-    expect(chant.calls[0]![2]).toEqual({ root: ENGINE_ROOT });
+    expect(installLine("pulumi", "3.280.0")).toBe(pulumiInstallLine("3.280.0", { root: ENGINE_ROOT }));
   });
 
   it("keep plywood's line for a pin that is not linked", () => {
-    setChantInstallLinesForTests(fakeLines());
     expect(installLines([
       { engine: "pulumi", version: "3.272.0", linked: true },
       { engine: "pulumi", version: "3.200.0", linked: false },
-    ])).toEqual([plywoodInstallLine("pulumi", "3.200.0", false), "chant-pulumi 3.272.0"]);
+    ])).toEqual([unlinkedInstallLine("pulumi", "3.200.0"), installLine("pulumi", "3.272.0")]);
+    expect(unlinkedInstallLine("pulumi", "3.200.0")).not.toContain("/usr/local/bin");
   });
 });
 

@@ -23,7 +23,7 @@ import {
   type DriftDoc,
   type DriftForge,
 } from "../src/drift";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { installLine, TOOL_VERSIONS } from "../src/images";
 import type { StageIo } from "../src/stages";
 import { driftIssueMarker, driftOpName, PRODUCT_WORDS } from "../src/words";
@@ -150,8 +150,8 @@ describe("plywood drift", () => {
     const chant = fakeChant({ shop: DRIFTED, cart: CART_CLEAN });
     setChantProductForTests(chant.api);
     const out = io(repo(YML));
-    const code = await drift([], true, FALLBACK_EXIT, out);
-    expect(code).toBe(FALLBACK_EXIT.drift);
+    const code = await drift([], true, EXIT, out);
+    expect(code).toBe(EXIT.drift);
     expect(chant.calls.map((a) => a.slice(0, 6))).toEqual([
       ["workspace", "drift", "--member", "shop", "--stack", "dev"],
       ["workspace", "drift", "--member", "cart", "--stack", "prod"],
@@ -166,35 +166,35 @@ describe("plywood drift", () => {
     const f = fakeForge();
     setDriftForgeForTests(async () => f.forge);
     setChantProductForTests(fakeChant({ shop: DRIFTED }).api);
-    expect(await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.drift);
+    expect(await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir))).toBe(EXIT.drift);
     const issue = f.open.get(driftIssueMarker("shop/dev"))!;
     expect(issue.body).toContain(URN);
     expect(issue.body).toContain("visibilityTimeoutSeconds");
 
     // The same finding leaves it alone; a changed one edits it.
-    await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir));
+    await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir));
     const changed: DriftDoc = { records: [{ ...DRIFTED.records![0]!, attributes: [{ path: "delaySeconds" }] }] };
     setChantProductForTests(fakeChant({ shop: changed }).api);
-    await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir));
+    await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir));
 
     setChantProductForTests(fakeChant({ shop: CLEAN }).api);
-    expect(await drift(["shop/dev", "--forge", "forgejo"], false, FALLBACK_EXIT, io(dir))).toBe(FALLBACK_EXIT.done);
+    expect(await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir))).toBe(EXIT.done);
     expect(f.actions).toEqual(["opened 1", "updated 1", "closed 1"]);
   });
 
   it("exits failed when a read cannot run, and maps --op back to its stack", async () => {
     const chant = fakeChant({ shop: "fail" });
     setChantProductForTests(chant.api);
-    expect(await drift(["--op", driftOpName("shop/dev")], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
+    expect(await drift(["--op", driftOpName("shop/dev")], false, EXIT, io(repo(YML)))).toBe(EXIT.failed);
     expect(chant.calls).toHaveLength(1);
     expect(chant.calls[0]!.slice(0, 6)).toEqual(["workspace", "drift", "--member", "shop", "--stack", "dev"]);
-    expect(await drift(["--op", "plywood-drift-nope"], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
+    expect(await drift(["--op", "plywood-drift-nope"], false, EXIT, io(repo(YML)))).toBe(EXIT.failed);
   });
 
   it("fails a stack whose resources could not be read, and does not say it matches", async () => {
     const chant = fakeChant({ shop: { records: [{ address: "urn:pulumi:dev::shop::aws:sqs/queue:Queue::events", status: "not-observed", unobserved: { reason: "read-failed", detail: "no credentials" } }] } });
     setChantProductForTests(chant.api);
-    expect(await drift(["--op", driftOpName("shop/dev")], false, FALLBACK_EXIT, io(repo(YML)))).toBe(FALLBACK_EXIT.failed);
+    expect(await drift(["--op", driftOpName("shop/dev")], false, EXIT, io(repo(YML)))).toBe(EXIT.failed);
   });
 
   it("reads a stack on its own backend, and puts the environment back", async () => {
@@ -208,7 +208,7 @@ describe("plywood drift", () => {
     };
     setChantProductForTests(chant.api);
     const before = process.env.PULUMI_BACKEND_URL;
-    await drift(["shop/dev"], false, FALLBACK_EXIT, io(repo(yml)));
+    await drift(["shop/dev"], false, EXIT, io(repo(yml)));
     expect(seen).toBe("s3://own-store");
     expect(process.env.PULUMI_BACKEND_URL).toBe(before);
   });
@@ -222,7 +222,7 @@ describe("plywood drift", () => {
   it("says the product pipeline is missing on a chant without it", async () => {
     setChantProductForTests(undefined);
     const out = io(repo(YML));
-    expect(await drift([], false, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.failed);
+    expect(await drift([], false, EXIT, out)).toBe(EXIT.failed);
     expect(out.stderr.join("\n")).toContain("chant#4550");
   });
 });
@@ -236,7 +236,7 @@ describe("the member a stack is read under (plywood#50)", () => {
     const chant = fakeChant({ shop: { records: [{ address: "urn:pulumi:prod-us::shop::aws:sqs/queue:Queue::events", status: "drifted", attributes: [{ path: "messageRetentionSeconds" }] }] } }, ["shop"]);
     setChantProductForTests(chant.api);
     const out = io(dir);
-    expect(await drift(["--op", driftOpName("shop/prod-us")], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.drift);
+    expect(await drift(["--op", driftOpName("shop/prod-us")], true, EXIT, out)).toBe(EXIT.drift);
     expect(chant.calls[0]!.slice(0, 6)).toEqual(["workspace", "drift", "--member", "shop", "--stack", "prod-us"]);
     expect(JSON.parse(out.stdout[0]!).stacks[0]).toMatchObject({ stack: "shop/prod-us", ok: true, drifted: 1 });
   });
@@ -257,7 +257,7 @@ describe("the member a stack is read under (plywood#50)", () => {
     const chant = fakeChant({ shop: DRIFTED }, ["shop", "cart"], { shop: ["dev"] });
     setChantProductForTests(chant.api);
     const out = io(dir);
-    expect(await drift([], true, FALLBACK_EXIT, out)).toBe(FALLBACK_EXIT.failed);
+    expect(await drift([], true, EXIT, out)).toBe(EXIT.failed);
     expect(chant.calls.map((a) => a.slice(0, 6))).toEqual([
       ["workspace", "drift", "--member", "shop", "--stack", "dev"],
       ["workspace", "drift", "--member", "shop", "--stack", "prod"],
@@ -283,10 +283,10 @@ describe.runIf(real !== undefined)("against the installed chant's workspace drif
     const was = process.cwd();
     process.chdir(dir);
     try {
-      const init = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge: "forgejo" }, FALLBACK_EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} });
+      const init = await runInit({ env: "production", bucketCheck: false, dryRun: false, yes: true, forge: "forgejo" }, EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} });
       expect(init.ok).toBe(true);
       const out = io(dir);
-      await drift(["shop/prod-us"], true, FALLBACK_EXIT, out);
+      await drift(["shop/prod-us"], true, EXIT, out);
       const read = JSON.parse(out.stdout[0]!).stacks[0] as { ok: boolean; error?: string };
       // With no stored export and no pulumi the read cannot run, but it gets as far as the member's own read.
       expect(read.error ?? "").not.toContain("member-required");
@@ -319,7 +319,7 @@ describe("the scheduled drift jobs", () => {
   it("has chant generate the jobs from the spec", async () => {
     const dir = repo(YML);
     const chant = fakeChant({});
-    await writeDriftJobs(chant.api, "forgejo", parseConfig(YML).doc, PRODUCT_WORDS, FALLBACK_EXIT, io(dir));
+    await writeDriftJobs(chant.api, "forgejo", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, io(dir));
     expect(chant.calls).toEqual([["run", "--generate", "forgejo", "--spec", DRIFT_SPEC_FILE, "--output", ".forgejo/workflows"]]);
     expect(readFileSync(join(dir, DRIFT_OP_FILE), "utf8")).toContain("plywood-drift-cart-prod");
   });

@@ -1,62 +1,10 @@
 /**
- * The chant parity features plywood reads off the ci-product entry it
- * already loads: the responses (chant#4629), the build's flags for them and
- * the merge (`PR_LOOP_BUILD_FLAGS_FLOOR`) and the approval status
- * (chant#4630), from `CI_RESPOND_FLOOR` and `APPROVAL_STATUS_FLOOR` on
- * {@link ChantProduct}; and the audit log (chant#4632), {@link chantAudit},
- * since plywood calls into it. The apply-job guard (chant#4624), the plan
- * flags (chant#4627), the stale notes (chant#4628), the scheduled Op's
- * identities and `contents: write` (chant#4631) and the merge after apply
- * (chant#4636) are in the pinned chant and need no check. The waves spec's
- * `approvals.preview` (0.124.59) is read off `@intentius/chant/op`.
+ * The chant parity pieces plywood fills in its own words: the waves spec's
+ * `approvals.preview` (chant 0.124.59) with the token each wave reads the
+ * merged pull request with, and the audit log (chant#4632), {@link chantAudit},
+ * since plywood calls into it.
  */
-import type { ChantProduct, ForgeKind } from "./chant-product";
-
-/** Whether the installed chant has chant#4629's responses: a refused wave's diff, a failed apply's triage, the description check. */
-export function hasChantRespond(chant: Pick<ChantProduct, "CI_RESPOND_FLOOR"> | undefined): boolean {
-  return typeof chant?.CI_RESPOND_FLOOR === "string";
-}
-
-/** Whether the installed chant's `build --pr-loop` takes the responses and the decide service (`PR_LOOP_BUILD_FLAGS_FLOOR`). */
-export function hasChantPrLoopFlags(chant: Pick<ChantProduct, "PR_LOOP_BUILD_FLAGS_FLOOR"> | undefined): boolean {
-  return typeof chant?.PR_LOOP_BUILD_FLAGS_FLOOR === "string";
-}
-
-/** Whether the installed chant has chant#4630's approval status, `<product>/approval` on a pull request's head. */
-export function hasChantApprovalStatus(chant: Pick<ChantProduct, "APPROVAL_STATUS_FLOOR"> | undefined): boolean {
-  return typeof chant?.APPROVAL_STATUS_FLOOR === "string";
-}
-
-/** Whether the installed chant posts that status for `pull-request` waves too, which are plywood's (chant#4630 ruling). */
-export function hasChantPullRequestApprovalStatus(chant: Pick<ChantProduct, "APPROVAL_STATUS_PULL_REQUEST_FLOOR"> | undefined): boolean {
-  return typeof chant?.APPROVAL_STATUS_PULL_REQUEST_FLOOR === "string";
-}
-
-let wavePreview: Promise<boolean> | undefined;
-
-/**
- * Whether the installed chant takes `approvals.preview` in an Op waves spec
- * (chant 0.124.59): a merged wave applies the plans its pull request
- * previewed, or exits 4. `@intentius/chant/op` exports the first release as
- * `OP_WAVES_PREVIEW_FLOOR`.
- */
-export function hasChantWavePreview(): Promise<boolean> {
-  wavePreview ??= (async () => {
-    try {
-      // @ts-ignore: older chants lack the export (chant 0.124.59).
-      const m: Record<string, unknown> = await import("@intentius/chant/op");
-      return typeof m.OP_WAVES_PREVIEW_FLOOR === "string";
-    } catch {
-      return false;
-    }
-  })();
-  return wavePreview;
-}
-
-/** Tests say whether the installed chant takes `approvals.preview`; `reset` goes back to the real import. */
-export function setChantWavePreviewForTests(has: boolean | "reset"): void {
-  wavePreview = has === "reset" ? undefined : Promise.resolve(has);
-}
+import type { ForgeKind } from "./chant-product";
 
 /** The variable chant's review reader takes the job's forge token from on GitHub and Forgejo (`reviewSourceFromEnv`). */
 export const WAVE_TOKEN_VARIABLE = "GITHUB_TOKEN";

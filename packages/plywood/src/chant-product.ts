@@ -9,10 +9,6 @@
  * `runChantInProcess` (chant#4550 names the first three as the check), the
  * verbs that need it say so and exit with chant's `failed` code, and
  * everything else keeps working on the pin.
- *
- * The `import()` carries a `@ts-ignore` so this compiles against a chant
- * without the subpath; scripts/build-cli.mjs stands in a module that throws
- * for a subpath the installed chant lacks, so the bundle builds either way.
  */
 import type { ChantCommand, ProductWordsInput } from "./words";
 

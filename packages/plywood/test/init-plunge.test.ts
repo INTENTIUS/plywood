@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { engineOf } from "../src/config/engine";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { initLines, runInit, type InitIo, type InitOptions } from "../src/init";
 import { ADOPT_OP_FILE, adoptCommand, adoptGate, adoptLines, adoptOpFile, setChantAdoptForTests, stacksToAdopt, type AdoptPreview, type AdoptView, type ChantAdopt } from "../src/init/adopt";
 import { setBucketCheckForTests, type BucketReport } from "../src/init/backend";
@@ -105,7 +105,7 @@ describe("plywood init --engine plunge", () => {
     const adopt = fakeAdopt(wouldAdopt);
     setChantAdoptForTests(adopt);
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.ok).toBe(true);
     const yml = readFileSync(join(root, "plywood.yml"), "utf8");
     const doc = parseConfig(yml);
@@ -136,18 +136,18 @@ describe("plywood init --engine plunge", () => {
     const asked: Array<Record<string, unknown>> = [];
     setBucketCheckForTests({ checkBucket: async (t) => (asked.push(t), report) });
     const root = repo(ON_FLOCI);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root, FLOCI_ENV));
+    const r = await runInit(OPTS, EXIT, io(root, FLOCI_ENV));
     expect(parseConfig(readFileSync(join(root, "plywood.yml"), "utf8")).doc).toMatchObject({ engine: "plunge", backend: `plunge+${FLOCI}` });
     expect(asked[0]).toMatchObject({ store: "s3", bucket: "state", endpoint: "http://localhost:4566" });
     expect(initLines(r).join("\n")).toContain("aws s3api put-bucket-lifecycle-configuration --bucket state");
-    expect(r.exitCode).toBe(FALLBACK_EXIT.done);
+    expect(r.exitCode).toBe(EXIT.done);
   });
 
   it("writes the adopt Op for the stacks not adopted yet, with each stack's backend", async () => {
     setChantProductForTests(undefined);
     setChantAdoptForTests(fakeAdopt((stack) => (stack === "prod" ? { ...wouldAdopt(stack), status: "already-adopted" } : wouldAdopt(stack))));
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.files.find((f) => f.file === ADOPT_OP_FILE)).toMatchObject({ status: "written" });
     const op = readFileSync(join(root, ADOPT_OP_FILE), "utf8");
     expect(op).toBe(adoptOpFile([{ member: "shop", dir: "infra", stack: "dev", url: "plunge+file:///srv/state" }]));
@@ -166,7 +166,7 @@ describe("plywood init --engine plunge", () => {
       ),
     );
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(readFileSync(join(root, ADOPT_OP_FILE), "utf8")).toBe(adoptOpFile([{ member: "shop", dir: "infra", stack: "prod", url: "plunge+file:///srv/state" }]));
     const text = initLines(r).join("\n");
     expect(text).toContain("shop/dev: plunge refuses to adopt it, so the adopt Op leaves it out:");
@@ -190,8 +190,8 @@ describe("plywood init --engine plunge", () => {
     setChantProductForTests(undefined);
     setChantAdoptForTests(fakeAdopt(wouldAdopt));
     const root = repo(ON_FILE);
-    await runInit(OPTS, FALLBACK_EXIT, io(root));
-    const again = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    await runInit(OPTS, EXIT, io(root));
+    const again = await runInit(OPTS, EXIT, io(root));
     expect(again.files.filter((f) => f.status === "written")).toEqual([]);
   });
 
@@ -201,16 +201,16 @@ describe("plywood init --engine plunge", () => {
       fakeAdopt((stack) => ({ ...wouldAdopt(stack), status: "refused", refusals: [{ code: "pending-operations", reason: "the checkpoint has 1 pending operation" }] })),
     );
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(initLines(r).join("\n")).toContain("pending-operations: the checkpoint has 1 pending operation");
-    expect(r.exitCode).toBe(FALLBACK_EXIT.done);
+    expect(r.exitCode).toBe(EXIT.done);
   });
 
   it("names the command when plunge is not on PATH", async () => {
     setChantProductForTests(undefined);
     setChantAdoptForTests(fakeAdopt(() => new Error("the plunge binary was not found on PATH")));
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     const text = initLines(r).join("\n");
     expect(text).toContain("not previewed; the plunge binary was not found on PATH");
     expect(text).toContain(adoptCommand({ dir: "infra", stack: "dev" }, "plunge+file:///srv/state"));
@@ -220,7 +220,7 @@ describe("plywood init --engine plunge", () => {
     setChantProductForTests(undefined);
     setChantAdoptForTests(undefined);
     const root = repo(ON_FILE);
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(r.notes.join("\n")).toContain("chant#4562");
     expect(r.notes.join("\n")).toContain("plunge stack adopt --json --stack dev");
     expect(r.files.find((f) => f.file === ADOPT_OP_FILE)).toMatchObject({ status: "skipped" });
@@ -231,7 +231,7 @@ describe("plywood init --engine plunge", () => {
     const adopt = fakeAdopt(wouldAdopt);
     setChantAdoptForTests(adopt);
     const root = repo({ "infra/Pulumi.yaml": "name: shop\nruntime: nodejs\n", "infra/Pulumi.dev.yaml": "" });
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     const doc = parseConfig(readFileSync(join(root, "plywood.yml"), "utf8")).doc;
     expect(doc.engine).toBeUndefined();
     expect(doc.backend).toBeUndefined();
@@ -243,7 +243,7 @@ describe("plywood init --engine plunge", () => {
     setChantProductForTests(undefined);
     setChantAdoptForTests(fakeAdopt(wouldAdopt));
     const root = repo({ ...ON_FILE, "plywood.yml": "gate: always\n" });
-    const r = await runInit(OPTS, FALLBACK_EXIT, io(root));
+    const r = await runInit(OPTS, EXIT, io(root));
     expect(readFileSync(join(root, "plywood.yml"), "utf8")).toBe("gate: always\n");
     expect(r.notes.join("\n")).toContain("backend: plunge+file:///srv/state");
   });

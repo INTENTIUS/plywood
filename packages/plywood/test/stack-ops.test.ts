@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests, type ChantProduct } from "../src/chant-product";
 import { parseConfig } from "../src/config/index";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { ADOPT_OP_FILE } from "../src/init/adopt";
 import {
   approveRequestLine,
@@ -24,7 +24,7 @@ import {
 import type { StageIo } from "../src/stages";
 import { approveTarget } from "../src/up";
 
-const T = FALLBACK_EXIT;
+const T = EXIT;
 
 function io(cwd: string, env: NodeJS.ProcessEnv = {}): StageIo & { stdout: string[]; stderr: string[] } {
   const stdout: string[] = [];

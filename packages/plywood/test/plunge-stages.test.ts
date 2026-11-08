@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { toChantSettings } from "../src/chant-config";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { DEFAULT_LOCK_GRAIN, lockGrainFor } from "../src/config/locks";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { refusalLine, refusalOf } from "../src/refusals";
 import { ENGINE_WORDS, PLUNGE_TIMING_ATTRIBUTES } from "../src/words";
 
@@ -39,14 +39,14 @@ describe("the lock grain per engine", () => {
 
 describe("saved plans and held rows in plywood's words", () => {
   it("keeps a moved saved plan on chant's moved code, apart from gated", () => {
-    expect(refusalOf(FALLBACK_EXIT.moved, FALLBACK_EXIT)).toBe("moved");
-    expect(FALLBACK_EXIT.moved).not.toBe(FALLBACK_EXIT.waiting);
+    expect(refusalOf(EXIT.moved, EXIT)).toBe("moved");
+    expect(EXIT.moved).not.toBe(EXIT.waiting);
     expect(refusalLine("moved")).toContain("saved plan");
     expect(ENGINE_WORDS.plunge.moved).toContain("moved code");
   });
 
   it("explains a held resource row", () => {
-    expect(refusalOf(FALLBACK_EXIT.held, FALLBACK_EXIT)).toBe("held");
+    expect(refusalOf(EXIT.held, EXIT)).toBe("held");
     expect(refusalLine("held", { wave: 2 })).toContain("plywood up --wave 2");
   });
 });

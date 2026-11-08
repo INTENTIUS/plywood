@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import {
   imageNote,
   moveDeclarationPins,
@@ -127,7 +127,7 @@ describe("plywood upgrade on a fixture repository", () => {
     const root = fixtureRepo();
     const calls: string[] = [];
     const err: string[] = [];
-    expect(await upgrade([], false, FALLBACK_EXIT, io(root, fakeExec(RELEASES, calls), [], err))).toBe(FALLBACK_EXIT.done);
+    expect(await upgrade([], false, EXIT, io(root, fakeExec(RELEASES, calls), [], err))).toBe(EXIT.done);
     expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).devDependencies["@intentius/plywood"]).toBe("0.2.0");
     expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8")).pins[0].version).toBe("0.125.0");
     expect(calls).toEqual([
@@ -140,10 +140,10 @@ describe("plywood upgrade on a fixture repository", () => {
 
   it("a second run moves nothing", async () => {
     const root = fixtureRepo();
-    await upgrade(["0.2.0"], false, FALLBACK_EXIT, io(root, fakeExec(RELEASES, [])));
+    await upgrade(["0.2.0"], false, EXIT, io(root, fakeExec(RELEASES, [])));
     const before = readFileSync(join(root, "package.json"), "utf8");
     const out: string[] = [];
-    expect(await upgrade(["0.2.0"], true, FALLBACK_EXIT, io(root, fakeExec(RELEASES, []), out))).toBe(FALLBACK_EXIT.done);
+    expect(await upgrade(["0.2.0"], true, EXIT, io(root, fakeExec(RELEASES, []), out))).toBe(EXIT.done);
     expect(readFileSync(join(root, "package.json"), "utf8")).toBe(before);
     expect(JSON.parse(out[0]).moves).toEqual([]);
   });
@@ -153,7 +153,7 @@ describe("plywood upgrade on a fixture repository", () => {
     const calls: string[] = [];
     const before = readFileSync(join(root, "package.json"), "utf8");
     const out: string[] = [];
-    expect(await upgrade(["--dry-run"], true, FALLBACK_EXIT, io(root, fakeExec(RELEASES, calls), out))).toBe(FALLBACK_EXIT.done);
+    expect(await upgrade(["--dry-run"], true, EXIT, io(root, fakeExec(RELEASES, calls), out))).toBe(EXIT.done);
     expect(readFileSync(join(root, "package.json"), "utf8")).toBe(before);
     expect(calls).toHaveLength(1);
     const doc = JSON.parse(out[0]);
@@ -166,7 +166,7 @@ describe("plywood upgrade on a fixture repository", () => {
     const root = fixtureRepo();
     const calls: string[] = [];
     const err: string[] = [];
-    expect(await upgrade(["0.2.0", "--no-install", "--chant", "0.125.3"], false, FALLBACK_EXIT, io(root, fakeExec(RELEASES, calls), [], err))).toBe(FALLBACK_EXIT.done);
+    expect(await upgrade(["0.2.0", "--no-install", "--chant", "0.125.3"], false, EXIT, io(root, fakeExec(RELEASES, calls), [], err))).toBe(EXIT.done);
     expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).devDependencies["@intentius/chant"]).toBe("0.125.3");
     expect(calls).toHaveLength(1);
     expect(err.join("\n")).toMatch(/left to run: npm install/);
@@ -175,7 +175,7 @@ describe("plywood upgrade on a fixture repository", () => {
   it("passes --forge and --env to plywood ci, and its failure through", async () => {
     const root = fixtureRepo();
     const calls: string[] = [];
-    expect(await upgrade(["--forge", "gitlab", "--env", "staging"], false, FALLBACK_EXIT, io(root, fakeExec(RELEASES, calls, 3)))).toBe(3);
+    expect(await upgrade(["--forge", "gitlab", "--env", "staging"], false, EXIT, io(root, fakeExec(RELEASES, calls, 3)))).toBe(3);
     expect(calls[2]).toBe("npx --no-install plywood ci --forge gitlab --env staging");
   });
 
@@ -183,9 +183,9 @@ describe("plywood upgrade on a fixture repository", () => {
     const empty = mkdtempSync(join(tmpdir(), "plywood-upgrade-none-"));
     writeFileSync(join(empty, "package.json"), "{}\n");
     const err: string[] = [];
-    expect(await upgrade([], false, FALLBACK_EXIT, io(empty, fakeExec(RELEASES, []), [], err))).toBe(FALLBACK_EXIT.failed);
+    expect(await upgrade([], false, EXIT, io(empty, fakeExec(RELEASES, []), [], err))).toBe(EXIT.failed);
     expect(err[0]).toMatch(/depends on @intentius\/plywood/);
     const root = fixtureRepo();
-    expect(await upgrade(["9.9.9"], false, FALLBACK_EXIT, io(root, fakeExec(RELEASES, [])))).toBe(FALLBACK_EXIT.failed);
+    expect(await upgrade(["9.9.9"], false, EXIT, io(root, fakeExec(RELEASES, [])))).toBe(EXIT.failed);
   });
 });

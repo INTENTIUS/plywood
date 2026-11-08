@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkConfig, parseConfig } from "../src/config/index";
-import { FALLBACK_EXIT } from "../src/exit-codes";
+import { EXIT } from "../src/exit-codes";
 import { IMPORT_SOURCES, IMPORTERS, importLines, parseFrom, sourceOfFile, type ImportSource } from "../src/import/index";
 import { parseInitArgs, runInit } from "../src/init";
 import { findPulumiProjects, stacksOf, type Detected } from "../src/init/detect";
@@ -82,7 +82,7 @@ describe("--from", () => {
     mkdirSync(join(root, ".git"));
     const opts = parseInitArgs(["--from", "spacelift", "--yes", "--no-bucket-check", "--dry-run"]);
     if ("error" in opts || "printPrompt" in opts) throw new Error("bad args");
-    const r = await runInit(opts, FALLBACK_EXIT, { out: () => {}, err: () => {}, cwd: root, env: {} });
+    const r = await runInit(opts, EXIT, { out: () => {}, err: () => {}, cwd: root, env: {} });
     expect(r.imported?.source).toBe("spacelift");
     expect(r.imported?.unsupported.length).toBe(2);
     expect(r.files.find((f) => f.file === "plywood.yml")?.status).toBe("written");

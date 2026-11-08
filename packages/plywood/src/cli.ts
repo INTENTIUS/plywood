@@ -15,7 +15,7 @@
  * place of the text.
  */
 import { configCheck } from "./config-check";
-import { exitCodes, type ExitTable } from "./exit-codes";
+import { EXIT, type ExitTable } from "./exit-codes";
 import { action } from "./actions";
 import { audit } from "./audit";
 import { mcp } from "./agents";
@@ -29,7 +29,6 @@ import { applyTelemetry } from "./telemetry";
 import { init, type InitIo } from "./init";
 import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from "./stages";
 import { tipById, tipLines, TIPS } from "./tips";
-import { useChantInstallLines } from "./images";
 import { approve, override, resume, up } from "./up";
 import { upgrade } from "./upgrade";
 import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
@@ -138,7 +137,7 @@ export function helpText(): string {
 
 /** Runs one command line (without the node and script arguments) and returns its exit code. */
 export async function main(argv: string[], io: Io = stdio): Promise<number> {
-  const { table, source } = await exitCodes();
+  const table = EXIT;
   const json = argv.includes("--json");
   const args = argv.filter((a) => a !== "--json");
   const verb = args[0];
@@ -152,11 +151,9 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     return table.done;
   }
   if (verb === "--version" || verb === "-v") {
-    emit({ command: "version", ok: true, exitCode: table.done, version: VERSION, exitCodes: source }, VERSION);
+    emit({ command: "version", ok: true, exitCode: table.done, version: VERSION, exitCodes: "chant" }, VERSION);
     return table.done;
   }
-  // chant's verified install lines, when the installed pulumi lexicon has them (chant#4592); the config translation is synchronous.
-  await useChantInstallLines();
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
   if (verb !== "config" && verb !== "init" && verb !== "tips" && verb !== "upgrade") await applyTelemetry(stageIo.cwd, stageIo.env);

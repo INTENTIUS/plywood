@@ -24,14 +24,12 @@
  * chant's pulumi lexicon renders the same verified lines
  * (`@intentius/chant-lexicon-pulumi/ci-setup`, chant#4592):
  * `pulumiInstallLine` and `plungeInstallLine` take the version, the root and
- * the recorded sums. Once {@link useChantInstallLines} finds them in the
- * installed lexicon, the line for each engine's linked release is chant's,
+ * the recorded sums. The line for each engine's linked release is chant's,
  * given the root /opt/plywood and plywood's sums, so plywood's images still
  * skip the download. A pin that is not linked keeps plywood's line: chant's
  * always links onto PATH, and its Pulumi line skips when the `pulumi` on PATH
  * is that version without checking the versioned directory, which a step
- * pinned with `engineVersion` runs from. A lexicon without ci-setup
- * (the pinned 0.124.77 has it) leaves every line plywood's.
+ * pinned with `engineVersion` runs from.
  *
  * plywood hands the lines to chant's `prLoop.engineSetup` when the installed
  * chant reads that option and the job runs in chant's default image
@@ -43,6 +41,7 @@
 // A named import, so the bundle carries the version and not the whole package.json.
 import { version as PLYWOOD_VERSION } from "../package.json";
 import digests from "./image-digests.json" with { type: "json" };
+import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
 export type EngineName = "pulumi" | "plunge";
@@ -174,62 +173,16 @@ const JOB_ARCH = `"$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"`;
  * linked into /usr/local/bin, as the stack's default engine.
  */
 export function installLine(engine: EngineName, version: string, link = true): string {
-  const chant = chantLines;
-  if (link && chant) {
-    const sums = pinnedSums(engine, version);
-    const options = { root: ENGINE_ROOT, ...(Object.keys(sums).length ? { sha256: sums } : {}) };
-    return engine === "pulumi" ? chant.pulumiInstallLine(version, options) : chant.plungeInstallLine(version, options);
-  }
-  return plywoodInstallLine(engine, version, link);
+  if (!link) return unlinkedInstallLine(engine, version);
+  const sums = pinnedSums(engine, version);
+  const options = { root: ENGINE_ROOT, ...(Object.keys(sums).length ? { sha256: sums } : {}) };
+  return engine === "pulumi" ? pulumiInstallLine(version, options) : plungeInstallLine(version, options);
 }
 
-/** plywood's own line, used when the installed lexicon has no ci-setup and for a pin that is not linked. */
-export function plywoodInstallLine(engine: EngineName, version: string, link = true): string {
+/** plywood's line for a pin that is not linked: chant's ci-setup lines always link onto PATH. */
+export function unlinkedInstallLine(engine: EngineName, version: string): string {
   const dir = engineDir(engine, version);
-  const linkCmd = `ln -sf "${dir}/${engine}" /usr/local/bin/${engine}`;
-  const install = `(set -e; ${fetchScript(engine, version, dir, JOB_ARCH)})`;
-  return link ? `{ [ -x "${dir}/${engine}" ] || ${install}; } && ${linkCmd}` : `[ -x "${dir}/${engine}" ] || ${install}`;
-}
-
-/** What plywood calls from `@intentius/chant-lexicon-pulumi/ci-setup` (chant#4592). */
-export interface ChantInstallLines {
-  pulumiInstallLine(version: string, options: { root?: string; sha256?: Partial<Record<Arch, string>> }): string;
-  plungeInstallLine(version: string, options: { root?: string; sha256?: Partial<Record<Arch, string>> }): string;
-}
-
-let chantLines: ChantInstallLines | undefined;
-let loading: Promise<boolean> | undefined;
-
-/**
- * Loads chant's install lines when the installed pulumi lexicon has them
- * (`ciRelease`, `PINNED_SHA256` and both install lines on its ci-setup
- * subpath), so {@link installLine} uses them from then on. The config
- * translation is synchronous, so the CLI awaits this once before a command.
- * True when chant's lines are in use.
- */
-export function useChantInstallLines(): Promise<boolean> {
-  loading ??= (async () => {
-    try {
-      // @ts-ignore: older lexicons lack the subpath (chant#4592).
-      const m: Record<string, unknown> = await import("@intentius/chant-lexicon-pulumi/ci-setup");
-      const ok =
-        typeof m.ciRelease === "function" &&
-        typeof m.PINNED_SHA256 === "object" &&
-        typeof m.pulumiInstallLine === "function" &&
-        typeof m.plungeInstallLine === "function";
-      chantLines = ok ? (m as unknown as ChantInstallLines) : undefined;
-    } catch {
-      chantLines = undefined;
-    }
-    return chantLines !== undefined;
-  })();
-  return loading;
-}
-
-/** Tests stand in chant's lines (or none). `reset` forgets them and the import. */
-export function setChantInstallLinesForTests(fake: ChantInstallLines | undefined | "reset"): void {
-  chantLines = fake === "reset" ? undefined : fake;
-  loading = fake === "reset" ? undefined : Promise.resolve(fake !== undefined);
+  return `[ -x "${dir}/${engine}" ] || (set -e; ${fetchScript(engine, version, dir, JOB_ARCH)})`;
 }
 
 /** One engine at one version a job needs, and whether it is the one on PATH. */
@@ -483,8 +436,7 @@ let hook: Promise<boolean> | undefined;
 /**
  * Whether the installed chant takes a product's engine lines: chant#4550's
  * `@intentius/chant/ci-product` with `prLoopSetup`. A chant before the
- * release that added them has neither; scripts/build-cli.mjs stands in a module that throws for the
- * missing subpath, and the answer is false.
+ * release that added them has neither, and the answer is false.
  */
 export function chantReadsEngineSetup(): Promise<boolean> {
   hook ??= (async () => {

@@ -26,6 +26,7 @@ import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
+import { controlBuildArgv } from "./config/control";
 import { locksOf } from "./config/locks";
 import { hasActions } from "./config/stacks";
 import { FORGES } from "./config/routing";
@@ -326,7 +327,7 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     else if (!json && "missing" in control) io.err(`  control   the waves workflow sends no dispatch: ${control.missing}; a job of your own after the last wave runs '${PRODUCT} control dispatch'`);
     if (dryRun) return table.done;
     // The pull request workflow answers /plywood up only when it updates before merge; the waves run on merge in their own workflow.
-    const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords, noteControl: plan.jobs.post.control });
+    const written = await writeWorkflow(chant, { root: io.cwd, forge, output, argv: plan.argv, words: plan.prWords });
     if (!json && written.kept.length) io.err(`  kept your own jobs: ${written.kept.join(", ")}`);
     if (written.code === table.done) for (const note of writtenNotes(plan, written.file)) io.err(`${PRODUCT}: ${note}`);
     if (json) io.out(JSON.stringify({ command: "ci", ok: written.code === 0, exitCode: written.code, dryRun, ...summary, status: written.status, kept: written.kept }));
@@ -430,6 +431,8 @@ export function workflowPlan(
     // Review stacks (plywood#15): chant's pr-env jobs, only once the pulumi lexicon can remove what they create.
     ...(doc.review_stacks !== undefined && opts.reviewStacks ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
+    // chant#4772: the control repo, so the note job the build writes reads its records (plywood#28).
+    ...(opts.control !== undefined ? controlBuildArgv(doc, (opts.control as { member: string }).member) : []),
     ...extra,
   ];
   return { jobs, words, prWords, argv, notes, ...(applyMerge ? { applyMerge } : {}) };

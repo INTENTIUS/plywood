@@ -13,7 +13,6 @@ import { dirname, isAbsolute, join } from "node:path";
 import type { ChantProduct, ForgeKind } from "../chant-product";
 import type { ProductWordsInput } from "../words";
 import { jobBlocks, ownJobsOf } from "@intentius/chant/ci-own-jobs";
-import { withNoteControl, type NoteControlStep } from "./note-control";
 
 export interface WriteWorkflowInput {
   /** Where the build runs: the repository root. */
@@ -24,8 +23,6 @@ export interface WriteWorkflowInput {
   /** chant's build argv without `--output`. */
   argv: string[];
   words: ProductWordsInput;
-  /** chant's `post.control` (chant#4619): the note job's read of the control repo, placed before the post. */
-  noteControl?: NoteControlStep;
 }
 
 export interface WriteWorkflowResult {
@@ -45,8 +42,7 @@ export async function writeWorkflow(chant: Pick<ChantProduct, "runChantInProcess
     if (previous !== undefined) writeFileSync(file, previous);
     return { code: code !== 0 ? code : 1, file, status: "failed", kept: [] };
   }
-  const text = withNoteControl(readFileSync(file, "utf8"), input.forge, input.noteControl);
-  writeFileSync(file, text);
+  const text = readFileSync(file, "utf8");
   const kept = previous === undefined ? [] : keptJobs(previous, text, input.forge, input.words.bin);
   return { code, file, status: text === previous ? "unchanged" : "written", kept };
 }

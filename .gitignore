@@ -5,5 +5,3 @@ stack/.state/
 stack/.state.*/
 images/pack/
 /dist/
-# Written by the publish job's `chant release images` (chant issue 4853).
-.chant/release-digests.json

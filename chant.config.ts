@@ -4,10 +4,6 @@ import { imageName, imageTag, REGISTRY, type EngineName } from "./packages/plywo
 /** The images a release builds and pushes, one per engine. */
 const ENGINES: readonly EngineName[] = ["pulumi", "plunge"];
 
-/** Trusted publishing needs npm 11.5.1 or later; this one is installed when the Node in use bundles an older npm. */
-const NPM_TRUSTED_PUBLISHING_MIN = "11.5.1";
-const NPM_VERSION = "11.19.0";
-
 /** What every image copies in: the bundle, built without the release's digests, packed into images/pack. */
 const PREPARE_IMAGES = "npm run build && mkdir -p images/pack && npm pack -w @intentius/plywood --pack-destination images/pack";
 
@@ -50,14 +46,11 @@ export default {
       install: "npm ci",
       build: "npm run build",
       chant: "npx chant",
-      // GHCR: the oci target pushes with this run's token. chant gives the publish job GITHUB_TOKEN for the GitHub release target.
-      permissions: { packages: "write" },
-      env: { OCI_USERNAME: "${{ github.actor }}", OCI_PASSWORD: "${{ github.token }}" },
+      // chant works out the rest from the targets (chant issue 4786): packages: write and the run's token for
+      // the GHCR oci targets, GITHUB_TOKEN for the GitHub release target, and npm 11.5.1+ for trusted publishing.
       setup: [
         // QEMU, so an amd64 runner builds the arm64 half of each image.
         { uses: "docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0", with: { platforms: "arm64" } },
-        // npm trusted publishing needs npm 11.5.1 or later.
-        { run: `have="$(npm --version)"; if [ "$(printf '%s\\n' "${NPM_TRUSTED_PUBLISHING_MIN}" "$have" | sort -V | head -n1)" != "${NPM_TRUSTED_PUBLISHING_MIN}" ]; then npm install -g npm@${NPM_VERSION}; fi; npm --version` },
       ],
       file: ".github/workflows/publish.yml",
     },

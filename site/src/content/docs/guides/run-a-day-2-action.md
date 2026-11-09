@@ -39,4 +39,4 @@ On GitHub and Forgejo, `plywood ci` adds an action job to the workflow when any 
 /plywood action shop/prod-us rotate
 ```
 
-You can also dispatch the workflow by hand with the `stack` and `action` inputs. The job runs `plywood action --from-event` at the target branch's commit, and the commenter is the requester. Each comment asks for a new request. The first job ends green while the request waits. After the approval, a second comment runs the action. A GitLab pipeline does not start on a comment, so run `plywood action` from a pipeline of your own.
+You can also dispatch the workflow by hand with the `stack` and `action` inputs. The job runs `plywood action --from-event` at the target branch's commit, and the commenter is the requester. Each comment asks for a new request. The first job ends green while the request waits. After the approval, a second comment runs the action. GitLab has no action job: there the note-commands job answers `/plywood action` with a reply naming the command, so run `plywood action` from a pipeline of your own.

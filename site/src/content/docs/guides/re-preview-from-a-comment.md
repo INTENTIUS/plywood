@@ -23,6 +23,6 @@ The note lists the URNs of each narrowed stack. A stack name in the comment narr
 
 A push to the target branch can leave a note behind. A job on that push then adds a stale line to the note with this comment in it, and the `plywood/preview` status waits again. Comment to preview against the new tip.
 
-The preview job holds a read token only, and drops it before your program runs. On GitHub only someone with write access to the repository can start it. Forgejo has no such check. On GitLab, a note starts nothing: run a pipeline of the target branch with the variable `CHANT_PREVIEW_PR` holding the merge request's number.
+The preview job holds a read token only, and drops it before your program runs. On GitHub only someone with write access to the repository can start it. Forgejo has no such check. On GitLab the scheduled note-commands job reads the comment and starts the preview, and it ignores an author below Developer; [Add plywood to a repo](/plywood/guides/add-to-a-repo/#comment-commands-on-gitlab) sets up the schedule.
 
 `plywood ci` writes the two jobs into the workflow once your chant has them. Run it again after you upgrade.

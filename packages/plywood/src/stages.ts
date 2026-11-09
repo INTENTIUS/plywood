@@ -405,6 +405,8 @@ export function workflowPlan(
     ...respond.options,
     ...(applyMerge ? { applyMerge } : {}),
     ...(actionJob ? { actionJob: true } : {}),
+    // chant#4785: GitLab starts no pipeline on a note, so a scheduled note-commands job answers the comments.
+    ...(forge === "gitlab" ? { noteCommands: true } : {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(jobsWanted.filter((j) => j !== "apply"));
   const argv = [
@@ -415,6 +417,7 @@ export function workflowPlan(
     "--preview-comment",
     "--stale-notes",
     ...(actionJob ? ["--action-job"] : []),
+    ...(forge === "gitlab" ? ["--note-commands"] : []),
     // Review stacks (plywood#15): chant's pr-env jobs.
     ...(doc.review_stacks !== undefined ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
@@ -427,7 +430,7 @@ export function workflowPlan(
 
 /** What plywood ci says when plywood.yml declares actions on GitLab. */
 export const ACTIONS_NOT_ON_GITLAB =
-  "plywood.yml declares actions, and a GitLab pipeline starts on no comment or dispatch with inputs, so it has no action job; run 'plywood action <stack> <name>' from a pipeline of your own";
+  "plywood.yml declares actions, and chant's GitLab pipeline has no action job: GitLab has no dispatch with inputs, and the note-commands job answers no /plywood action; run 'plywood action <stack> <name>' from a pipeline of your own";
 
 /** Whether the workflow gets chant's action job: actions declared, GitHub or Forgejo, `notes` says why not. */
 export function actionJobFor(doc: RawConfig, forge: ForgeKind, notes: string[]): boolean {

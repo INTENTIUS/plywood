@@ -67,6 +67,8 @@ export interface ProductPipelineOptions {
   applyMerge?: { tokenEnv: string; method?: string };
   /** The job that answers `/plywood action <stack> <name>` and a dispatch with `stack` and `action` inputs (chant#4654). */
   actionJob?: boolean | { inputs?: { member?: string; action?: string } };
+  /** GitLab only: the note-commands job a schedule starts with `CHANT_NOTE_COMMANDS=1`, which answers the comment commands (chant#4785). */
+  noteCommands?: boolean;
 }
 
 /** What an action job was asked for, as chant's `productActionFromEnv` reads it (chant#4654). */

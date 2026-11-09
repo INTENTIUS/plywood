@@ -41,3 +41,15 @@ The pipeline is chant's [pull request CI](https://intentius.io/chant/guide/pull-
 | Forgejo | `.forgejo/workflows/plywood.yml` | `plywood/preview` commit status |
 
 Make `plywood/preview` a required status on the default branch. [plywood.yml](/plywood/reference/config/) lists every key.
+
+## Comment commands on GitLab
+
+GitLab starts no pipeline on a merge request note, so the `.gitlab-ci.yml` that plywood writes has a `note-commands` job that reads the notes for you. It runs only in a pipeline of the default branch started with `CHANT_NOTE_COMMANDS=1`, one run at a time. Add a pipeline schedule for it under Build, Pipeline schedules:
+
+- target branch: the default branch;
+- variable `CHANT_NOTE_COMMANDS` with the value `1`;
+- interval: as often as you want comments answered, for example `*/5 * * * *`.
+
+Each run reads the merge requests updated in the last day and their notes. It ignores comments from authors below Developer. For each other `/plywood` comment it starts the job the comment asks for and replies on the merge request. It answers each note once, and records it on `chant/lifecycle`, so the job token must be allowed to push to the repository (a project setting under CI/CD, Job token permissions).
+
+The job calls GitLab's API with `CHANT_GITLAB_TOKEN`, or `GITLAB_TOKEN` when that is unset; the job token cannot list notes or start pipelines. Add a project access token with the `api` scope and a role that may run pipelines on the default branch as a masked, protected CI/CD variable named `CHANT_GITLAB_TOKEN`. The scheduled job runs on a protected branch and sees the variable. A merge request pipeline does not.

@@ -7,7 +7,7 @@ Each release lists its changes here, newest first.
 
 ## In 0.3.6
 
-The jobs plywood writes run chant's stages from the release plywood pins, which is now 0.124.80 for chant and each of its lexicons.
+The jobs plywood writes run chant's stages from the release plywood pins, which is now 0.124.81 for chant and each of its lexicons.
 
 Comment commands work on GitLab. `plywood ci` writes a `note-commands` job into `.gitlab-ci.yml`, and a pipeline schedule of the default branch with `CHANT_NOTE_COMMANDS=1` runs it. The job reads the merge request notes and starts the job each `/plywood` comment asks for. It needs a `CHANT_GITLAB_TOKEN` CI/CD variable; [Add plywood to a repo](/plywood/guides/add-to-a-repo/#comment-commands-on-gitlab) has the schedule and the token. An existing repository picks this up the next time you run `plywood ci`.
 

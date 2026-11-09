@@ -5,6 +5,10 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.6
+
+The jobs plywood writes run chant's stages from the release plywood pins, which is now 0.124.80 for chant and each of its lexicons.
+
 ## In 0.3.5
 
 The two labels before this one were cut but never published, because the release workflow stopped before npm each time.

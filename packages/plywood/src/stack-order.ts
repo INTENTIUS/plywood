@@ -41,8 +41,8 @@ interface PulumiReferenceReader {
     reader: { component: string; project: string },
     owners: ReadonlyArray<{ component: string; project: string; stack: string }>,
   ): { owner: { component: string } } | { outside: string };
-  memberExportOf?(dir: string, opts?: { stack?: string }): Promise<unknown>;
-  readMemberExport?(dir: string): unknown;
+  memberExportOf(dir: string, opts?: { stack?: string }): Promise<unknown>;
+  readMemberExport(dir: string): unknown;
 }
 
 let cached: Promise<PulumiReferenceReader> | undefined;
@@ -70,15 +70,13 @@ export function setReferenceReaderForTests(fake: PulumiReferenceReader | "reset"
 /** The stack's last export, as chant reads it for the stack's own reads. */
 async function exportOf(reader: PulumiReferenceReader, root: string, s: Pick<InitStack, "dir" | "stack">): Promise<unknown> {
   const dir = join(root, s.dir);
-  if (reader.memberExportOf) {
-    try {
-      const found = await reader.memberExportOf(dir, { stack: s.stack });
-      if (found !== undefined) return found;
-    } catch {
-      // No index store reachable from here: the checked-in export below.
-    }
+  try {
+    const found = await reader.memberExportOf(dir, { stack: s.stack });
+    if (found !== undefined) return found;
+  } catch {
+    // No index store reachable from here: the checked-in export below.
   }
-  return reader.readMemberExport?.(dir);
+  return reader.readMemberExport(dir);
 }
 
 /** Every edge between `stacks`: their StackReferences, read from each export, and `after`. */

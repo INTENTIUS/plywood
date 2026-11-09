@@ -159,3 +159,16 @@ describe("the waves spec's control (chant#4617)", () => {
     expect(await wavesControl(repo("gate: always\n"))).toEqual({ none: true });
   });
 });
+
+describe("control init", () => {
+  it("writes the control repo's workflow from plywood's pinned forge lexicon, with nothing installed in the control repo", async () => {
+    setChantControlForTests(fakeChant());
+    for (const forge of ["github", "gitlab", "forgejo"] as const) {
+      const dir = mkdtempSync(join(tmpdir(), "plywood-control-init-"));
+      const out: string[] = [];
+      const err: string[] = [];
+      expect(await control(["init", "--forge", forge], false, EXIT, io(dir, out, err)), err.join("\n")).toBe(EXIT.done);
+      expect(out.join("\n"), forge).toMatch(/control init: \S+ written/);
+    }
+  });
+});

@@ -8,7 +8,7 @@
  *   control init [--forge <kind>] [--dry-run]
  *       in the control repo: its own workflow, which runs a repository's
  *       dependents once that repository tells it a stack applied (the forge
- *       lexicon's generateControlPipeline, installed in the control repo)
+ *       lexicon's generateControlPipeline, at the chant release plywood pins)
  *   control put <host/owner/name>|defaults [--file <yml>] [--approver <glob>=<role>[:<quorum>]]...
  *       [--pin pulumi=<v>|plunge=<v>|image=<ref>]... [--estate <name>]... [--by <who>] [--dry-run]
  *       in the control repo: one entry's settings, laid over its current
@@ -36,9 +36,7 @@
  * here writes git, and nothing pushes: the commands say what to push.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { emitYAMLEntry, parseYAML } from "@intentius/chant/yaml";
 import type { ChantControlSettings } from "./chant-config";
 import { checkConfig, CONFIG_NAMES, findConfig, loadConfig, parseConfig, type RawConfig } from "./config/index";
@@ -263,15 +261,15 @@ export async function control(args: string[], json: boolean, table: ExitTable, i
 
 type Emit = (envelope: Record<string, unknown>, lines: string[]) => void;
 
-/** The forge lexicon's generateControlPipeline, from the control repo's own install. */
-async function forgeControlPipeline(cwd: string, forge: ForgeKind): Promise<((options: { words: unknown }) => { path: string; content: string; notes: string[] }) | undefined> {
-  const name = `@intentius/chant-lexicon-${forge}/components/control-pipeline`;
-  try {
-    const require = createRequire(join(cwd, "package.json"));
-    const m: Record<string, unknown> = await import(pathToFileURL(require.resolve(name)).href);
-    return typeof m.generateControlPipeline === "function" ? (m.generateControlPipeline as never) : undefined;
-  } catch {
-    return undefined;
+/** The forge lexicon's generateControlPipeline, at the chant release plywood pins. */
+async function forgeControlPipeline(forge: ForgeKind): Promise<(options: { words: unknown }) => { path: string; content: string; notes: string[] }> {
+  switch (forge) {
+    case "github":
+      return (await import("@intentius/chant-lexicon-github/components/control-pipeline")).generateControlPipeline as never;
+    case "gitlab":
+      return (await import("@intentius/chant-lexicon-gitlab/components/control-pipeline")).generateControlPipeline as never;
+    case "forgejo":
+      return (await import("@intentius/chant-lexicon-forgejo/components/control-pipeline")).generateControlPipeline as never;
   }
 }
 
@@ -283,10 +281,7 @@ async function controlInit(chant: ChantControl, args: string[], emit: Emit, tabl
   const dryRun = forgeFlag.rest.includes("--dry-run");
   const forge = (forgeFlag.value ?? "github") as ForgeKind;
   if (!(FORGES as readonly string[]).includes(forge)) return usage(`--forge ${forge} is not one of ${FORGES.join(", ")}`, table, io);
-  const generate = await forgeControlPipeline(io.cwd, forge);
-  if (!generate) {
-    return usage(`control init writes the control repo's workflow with @intentius/chant-lexicon-${forge}'s generateControlPipeline (chant#4568); install it in the control repo at the chant release that has it`, table, io);
-  }
+  const generate = await forgeControlPipeline(forge);
   const file = generate({ words: PRODUCT_WORDS });
   const path = join(io.cwd, file.path);
   const before = existsSync(path) ? readFileSync(path, "utf8") : undefined;

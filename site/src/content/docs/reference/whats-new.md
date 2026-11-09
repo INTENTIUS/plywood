@@ -5,7 +5,9 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
-## In 0.3.6
+## In 0.3.7
+
+0.3.6 was cut but never published: GHCR refused some of its image uploads, which chant 0.124.84 now tries again.
 
 The jobs plywood writes run chant's stages from the release plywood pins, which is now 0.124.84 for chant and each of its lexicons.
 

@@ -30,6 +30,10 @@ const fixtureReader = {
     const found = owners.filter((o) => o.component !== reader.component && o.project === (ref.project ?? reader.project) && o.stack === ref.stack);
     return found.length === 1 ? { owner: found[0]! } : { outside: `no step in the project applies ${ref.name}` };
   },
+  // No index store in these tests: every read falls through to the checked-in export.
+  async memberExportOf() {
+    return undefined;
+  },
   readMemberExport(dir: string) {
     try {
       return JSON.parse(readFileSync(join(dir, "stack-export.json"), "utf8"));

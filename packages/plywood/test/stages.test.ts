@@ -198,6 +198,17 @@ describe("plywood ci", () => {
     expect(chant.calls[0]!.argv).toContain("--preview-comment");
   });
 
+  it("asks for the note-commands job on GitLab only (chant#4785)", async () => {
+    for (const forge of ["gitlab", "github", "forgejo"] as const) {
+      const chant = fakeChant();
+      setChantProductForTests(chant.api);
+      expect(await ci(["--forge", forge], false, EXIT, io(repo()))).toBe(0);
+      const gitlab = forge === "gitlab";
+      expect(chant.pipelines[0]!.options.noteCommands).toBe(gitlab ? true : undefined);
+      expect(chant.calls[0]!.argv.includes("--note-commands")).toBe(gitlab);
+    }
+  });
+
   it("writes nothing with --dry-run", async () => {
     const chant = fakeChant();
     setChantProductForTests(chant.api);

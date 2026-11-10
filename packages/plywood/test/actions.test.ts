@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { stackOpApproveCommand } from "@intentius/chant-lexicon-pulumi";
 import { action, actionSubject, setChantStackActionForTests, type ActionResult, type ChantStackAction } from "../src/actions";
 import { main, type Io } from "../src/cli";
 import { chantProduct, setChantProductForTests, type ChantProduct, type ProductActionRequest, type ProductPipelineOptions } from "../src/chant-product";
@@ -62,7 +63,8 @@ function fakeLexicon(preview: Array<{ op: string; urn: string }> = [{ op: "repla
     const subject = `action:${opts.stack}:${opts.name}`;
     if (applied.has(subject) && !opts.anew) return { status: "spent", digest };
     if (opts.anew) applied.delete(subject);
-    if (!approvals.has(subject)) return { status: "waiting", digest, command: "chant approve" };
+    // chant prints the approve line from the approveCommand plywood passes (chant#4911).
+    if (!approvals.has(subject)) return { status: "waiting", digest, command: stackOpApproveCommand(opts)!(subject, digest) };
     approvals.delete(subject);
     applied.add(subject);
     const result: ActionResult = { urn: opts.urn, engine: "pulumi", preview: digest, exit: 0, tail: "Resources: 1 replaced" };

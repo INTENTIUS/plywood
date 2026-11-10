@@ -42,9 +42,10 @@
  * The steps are separate functions so `--engine plunge` (src/init/engine.ts)
  * and `--from <workflow>` add a step rather than change one.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { planFile, writePlannedFiles } from "@intentius/chant/planned-files";
 import { emitYAMLEntry } from "@intentius/chant/yaml";
-import { dirname, join, posix, relative, sep } from "node:path";
+import { join, posix, relative, sep } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { chantProduct, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
@@ -188,16 +189,11 @@ export function parseInitArgs(args: string[]): InitOptions | { error: string } |
   };
 }
 
-/** Writes `text` to `root/rel` when it differs, creating directories; with dryRun, writes nothing. */
+/** `text` at `root/rel`, planned with chant's `planFile` and written with `writePlannedFiles` unless dry run (chant#4966). */
 function put(root: string, rel: string, text: string, dryRun: boolean, note?: string): InitFile {
-  const file = join(root, rel);
-  const before = existsSync(file) ? readFileSync(file, "utf8") : undefined;
-  if (before === text) return { file: rel, status: "unchanged", ...(note ? { note } : {}) };
-  if (!dryRun) {
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, text);
-  }
-  return { file: rel, status: "written", ...(note ? { note } : {}) };
+  const plan = planFile(join(root, rel), text);
+  if (!dryRun) writePlannedFiles([plan]);
+  return { file: rel, status: plan.status === "unchanged" ? "unchanged" : "written", ...(note ? { note } : {}) };
 }
 
 /** The plywood.yml there already, if any. */

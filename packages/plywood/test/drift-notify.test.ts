@@ -1,18 +1,20 @@
 /**
  * The drift event (plywood#30): one signed event per run to a loopback
- * webhook, through the pinned chant's makeNotifyEvent and sendNotify, with
- * chant#4610's driftNotifyFields and productSendOptions stood in when the
- * installed chant lacks them. Nothing leaves 127.0.0.1.
+ * webhook, through the pinned chant's driftNotifyFields (which computes the
+ * fingerprint from the stacks, chant#4944), productSendOptions,
+ * makeNotifyEvent and sendNotify. Nothing leaves 127.0.0.1.
  */
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { makeNotifyEvent, sendNotify, verifyWebhook } from "@intentius/chant/notify";
+import { assertProductWords } from "@intentius/chant/ci-product";
+import { verifyWebhook } from "@intentius/chant/notify";
 import { parseConfig } from "../src/config/index";
 import { chantNotifyOf } from "../src/config/observe";
 import { driftNotifyVariables } from "../src/drift";
 import { driftRunFingerprint } from "@intentius/chant/drift-issue";
-import { notifiesDrift, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
+import { chantDriftNotify, notifiesDrift, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
+import { PRODUCT_WORDS } from "../src/words";
 
 const KEY = "loopback-signing-key";
 const received: Array<{ headers: IncomingHttpHeaders; body: string }> = [];
@@ -31,17 +33,8 @@ beforeAll(async () => {
 });
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-/** chant#4610's two functions, as chant writes them, over the pinned notify. */
-const chant: ChantDriftNotify = {
-  words: { product: "plywood", noun: ["stack", "stacks"], notify: { source: "plywood", headers: "x-plywood" } },
-  driftNotifyFields: (words, input) => {
-    const w = words as { noun: [string, string]; notify: { source: string } };
-    return { source: w.notify.source, event: "drift", summary: `${input.changed.length} ${w.noun[1]} drifted: ${input.changed.join(", ")}`, targets: input.changed, drift: { changed: input.changed, ...(input.fingerprint ? { fingerprint: input.fingerprint } : {}) } };
-  },
-  productSendOptions: (words, options = {}) => ({ ...options, prefix: (words as { notify: { headers: string } }).notify.headers }),
-  makeNotifyEvent: makeNotifyEvent as ChantDriftNotify["makeNotifyEvent"],
-  sendNotify: sendNotify as ChantDriftNotify["sendNotify"],
-};
+/** The pinned chant's drift fields and notify, in plywood's words. */
+const chant: ChantDriftNotify = { ...(await chantDriftNotify()), words: assertProductWords(PRODUCT_WORDS) };
 
 const record = { member: "shop", address: "urn:pulumi:dev::shop::aws:s3/bucket:Bucket::assets", status: "drifted" as const, attributes: [{ path: "tags" }] };
 const results = (issue?: string): DriftNoticeStack[] => [
@@ -66,7 +59,7 @@ describe("the drift event", () => {
   it("sends nothing when every drifted stack's issue already holds the finding", async () => {
     received.length = 0;
     const notice = await sendDriftNotice({ notify, results: results("unchanged"), chant, env: env(), log: () => {} });
-    expect(notice).toMatchObject({ sent: false, reason: expect.stringContaining("already holds") });
+    expect(notice).toMatchObject({ sent: false, reason: expect.stringContaining("already holds"), fingerprint: driftRunFingerprint(results().slice(0, 1)) });
     expect(received).toEqual([]);
   });
 

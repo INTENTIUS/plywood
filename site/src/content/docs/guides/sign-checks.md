@@ -32,17 +32,17 @@ The pull request workflow is the same file with or without the key, and its prev
 When `plywood.yml` has the key, `plywood init` writes `.chant/trust.json`, which chant reads at the base commit:
 
 - For `identity: oidc` on GitHub or GitLab, the waves workflow's identity on the default branch, under `keyless.identities`, with its principal `ci` in `roles.runner`. Put sigstore's `trusted_root.json` at `.chant/trusted_root.json`, the path the file names. A Forgejo job's certificate comes from an authority you run; add its issuer and subject yourself.
-- For `runner_key_secret`, no identity. Add the runner key's public half under `runners`, and its PEM to the secret.
-- A rule for the default branch under `refs`, naming each check hook, `plan` and `policy`, with the ref gate's status `chant/ref-gate`.
+- For `runner_key_secret`, no identity. Add the runner key's public half under `runners`, and its PEM to the secret. `plywood init` prints chant's commands for making and listing the key.
+- A rule for the default branch under `refs`, naming each check hook, `plan` and `policy`. chant writes the rule (its `refGateInitPlan`), and the ref gate's status is chant's default, `chant/ref-gate`.
 
-A trust file already there is merged into, and the entries it has stay as they are.
+A trust file already there is merged into, and the entries it has stay as they are. A file that already has a rule for the default branch keeps it.
 
 ## The ref gate
 
-`plywood init` prints the line that installs chant's [ref gate](https://intentius.io/chant/cli/workspace-ref-gate/) as a pre-push hook in a clone:
+`plywood init` installs chant's [ref gate](https://intentius.io/chant/cli/workspace-ref-gate/) in `.git/hooks/pre-push` of the clone it runs in, where it runs `npx chant workspace ref-gate pre-push`. A `pre-push` file that is not chant's is left as it is, and init says so. Git never commits that directory, so each other clone installs the gate with:
 
 ```sh
-chant workspace ref-gate install --hook pre-push
+npx chant workspace ref-gate install --hook pre-push
 ```
 
 The hook refuses a push to the default branch whose commit has no current evidence for a check the rule names, and names each missing check and the command that produces it. Wave evidence is signed after the merge, and the preview signs no `plan` or `policy` for a pull request's commit, so keep `plywood/preview` as the required status on the default branch.

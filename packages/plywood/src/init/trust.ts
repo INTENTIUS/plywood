@@ -8,13 +8,16 @@
  *             `withRunnerIdentity` (chant#4869), its principal in roles.runner
  *   local     with `evidence.local: true`, the check hooks by name under
  *             `local.checks` (chant#4868); absent, no check takes local evidence
- *   refs      a rule for the default branch naming the check hooks, `plan`
- *             and `policy`, with the ref gate's status (chant#4867)
  *
- * A file already there is merged into: an identity, a local check or a ref
- * rule it has is kept as it is. Without `evidence` init writes no trust file.
+ * A file already there is merged into: an identity or a local check it has
+ * is kept as it is. Without `evidence` init writes no trust file.
+ *
+ * The ref gate's pieces are chant's (`refGateInitPlan` in
+ * `@intentius/chant/ref-gate-init`, chant#4913): the `refs` rule for the
+ * default branch, the `pre-push` hook and the runner key hint. plywood names
+ * the rule's checks ({@link refGateChecks}).
  */
-import { REF_GATE_STATUS } from "@intentius/chant/workspace/trust/ref-gate";
+import type { RefGateInitCheck } from "@intentius/chant/ref-gate-init";
 import { trustConfigSchema, type TrustConfig } from "@intentius/chant/workspace/trust/policy";
 import { ciRunnerIdentity, DEFAULT_TRUSTED_ROOT_PATH, withRunnerIdentity } from "@intentius/chant/workspace/trust/runner-identity";
 import type { PipelineEvidence } from "@intentius/chant/ci-evidence-jobs";
@@ -28,8 +31,19 @@ export const TRUST_FILE = ".chant/trust.json";
 export const CHECK_COMMAND = `${PRODUCT} check`;
 export const PREVIEW_COMMAND = `/${PRODUCT} preview on the pull request`;
 
-/** The line that installs the ref gate's pre-push hook. */
-export const REF_GATE_INSTALL = "chant workspace ref-gate install --hook pre-push";
+/**
+ * The checks the ref gate's rule for the default branch needs evidence for:
+ * the check hooks, then `plan` and `policy`. A check local evidence stands in
+ * for has no runner evidence after CI skips it, so with `local` the rule
+ * names no hook.
+ */
+export function refGateChecks(hooks: readonly string[], local: boolean): RefGateInitCheck[] {
+  return [
+    ...(local ? [] : hooks).map((check) => ({ check, command: CHECK_COMMAND })),
+    { check: "plan", command: PREVIEW_COMMAND },
+    { check: "policy", command: PREVIEW_COMMAND },
+  ];
+}
 
 export interface TrustInput {
   forge: ForgeKind;
@@ -37,7 +51,7 @@ export interface TrustInput {
   repository?: string;
   /** A self-hosted forge's base URL. */
   server?: string;
-  /** The default branch, which the waves run on and the ref rule protects. */
+  /** The default branch, which the waves run on. */
   branch: string;
   evidence: { chant: PipelineEvidence; local: boolean };
   /** The check hooks by name, as `chant ci check` signs them. */
@@ -70,8 +84,6 @@ export function trustText(existing: string | undefined, input: TrustInput): Trus
       text = withRunnerIdentity(text, identity);
     }
     todo.push(`Put sigstore's trusted_root.json at ${DEFAULT_TRUSTED_ROOT_PATH}, which ${TRUST_FILE} names under keyless.trustedRoot; until it is there, no keyless evidence verifies`);
-  } else {
-    todo.push(`Add the runner key's public half under runners in ${TRUST_FILE}, with its principal in roles.runner, and its PEM to the ${input.evidence.chant.runnerKeySecret} ${input.forge === "gitlab" ? "CI/CD variable" : "secret"}`);
   }
   const config: TrustConfig = text === undefined || text.trim() === "" ? { schema: 1 } : (JSON.parse(text) as TrustConfig);
   const next: TrustConfig = { ...config };
@@ -81,18 +93,7 @@ export function trustText(existing: string | undefined, input: TrustInput): Trus
     next.local = { ...local, checks: [...(local.checks ?? []), ...input.hooks.filter((h) => !named.has(h)).map((check) => ({ check }))] };
     if (!local.keys?.length) todo.push(`Add each person's ssh-ed25519 key under local.keys in ${TRUST_FILE}, so ${input.hooks.join(", ")} proven on their machine is skipped in CI`);
   }
-  if (!(config.refs ?? []).some((r) => r.ref === ref)) {
-    // A check local evidence stands in for has no runner evidence after CI skips it, so the ref gate does not name it.
-    const hooks = input.evidence.local ? [] : input.hooks;
-    const rule = {
-      ref,
-      checks: [...hooks.map((check) => ({ check, command: CHECK_COMMAND })), { check: "plan", command: PREVIEW_COMMAND }, { check: "policy", command: PREVIEW_COMMAND }],
-      status: REF_GATE_STATUS,
-    };
-    next.refs = [...(config.refs ?? []), rule];
-  }
   const parsed = trustConfigSchema.safeParse(next);
   if (!parsed.success) throw new Error(`${TRUST_FILE} with plywood.yml's evidence is not a trust config chant reads: ${parsed.error.issues.map((i) => `${i.path.join(".") || "/"}: ${i.message}`).join("; ")}`);
-  todo.push(`Install the ref gate's pre-push hook in each clone: ${REF_GATE_INSTALL}`);
   return { text: `${JSON.stringify(next, null, 2)}\n`, todo };
 }

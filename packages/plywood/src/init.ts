@@ -25,8 +25,9 @@
  *                         keeping the team's own jobs (src/init/workflow.ts)
  *   plywood.adopt.op.ts   with a plunge+ backend, chant's PulumiAdoptOp over
  *                         the stacks not adopted yet (src/init/adopt.ts)
- *   .chant/trust.json     with plywood.yml's evidence, the runner identity, the
- *                         local checks and the ref gate's rule (src/init/trust.ts)
+ *   .chant/trust.json     with plywood.yml's evidence, the runner identity and the
+ *                         local checks (src/init/trust.ts), and chant's ref gate
+ *                         rule and pre-push hook (refGateInitPlan, chant#4913)
  *
  * A `.pre-commit-config.yaml` becomes a check hook (chant#4556). An S3, GCS
  * or Azure backend gets chant's bucket check (chant#4558), and each missing
@@ -41,9 +42,9 @@
  * The steps are separate functions so `--engine plunge` (src/init/engine.ts)
  * and `--from <workflow>` add a step rather than change one.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { emitYAMLEntry } from "@intentius/chant/yaml";
-import { dirname, join, posix } from "node:path";
+import { dirname, join, posix, relative, sep } from "node:path";
 import { dependencies as PLYWOOD_DEPENDENCIES } from "../package.json";
 import { chantProduct, type ChantProduct, type ForgeKind } from "./chant-product";
 import { toChantSettings, type ChantSettings } from "./chant-config";
@@ -408,8 +409,8 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   // The adopt preview for each stack on a plunge+ backend, and the Op that adopts them.
   adopt.push(...(await adoptStep(root, detected, doc, io.env, declaration.doc, opts.dryRun, files, notes, todo)));
 
-  // chant#4867 to #4870: with plywood.yml's evidence, the runner identity, the local checks and the ref rule.
-  if (evidenceOf(doc)) files.push(await trustStep(root, detected, doc, forge.kind, declaration.doc, opts.dryRun, todo));
+  // chant#4867 to #4870, #4913: with plywood.yml's evidence, the runner identity, the local checks, and chant's ref gate pieces.
+  if (evidenceOf(doc)) files.push(...await trustStep(root, detected, doc, forge.kind, declaration.doc, opts.dryRun, todo));
 
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
   // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
@@ -475,8 +476,8 @@ function providersPresetStep(root: string, doc: RawConfig, dryRun: boolean, note
   return out;
 }
 
-/** `.chant/trust.json` for plywood.yml's evidence (src/init/trust.ts), with the check hooks the declaration names. */
-async function trustStep(root: string, detected: Detected, doc: RawConfig, forge: ForgeKind, declared: Record<string, unknown> | undefined, dryRun: boolean, todo: string[]): Promise<InitFile> {
+/** `.chant/trust.json` for plywood.yml's evidence (src/init/trust.ts), with the check hooks the declaration names, then chant's ref gate pieces. */
+async function trustStep(root: string, detected: Detected, doc: RawConfig, forge: ForgeKind, declared: Record<string, unknown> | undefined, dryRun: boolean, todo: string[]): Promise<InitFile[]> {
   const { checkHookName, checkHooksOf } = await import("@intentius/chant/components/check-hooks");
   const { trustText, TRUST_FILE } = await import("./init/trust");
   let declaration = declared;
@@ -489,7 +490,7 @@ async function trustStep(root: string, detected: Detected, doc: RawConfig, forge
   try {
     hooks = declaration ? checkHooksOf(declaration as Parameters<typeof checkHooksOf>[0], null).map(checkHookName) : [];
   } catch (e) {
-    return { file: TRUST_FILE, status: "failed", note: `the check hooks in ${DECLARATION_FILE}: ${(e as Error).message}` };
+    return [{ file: TRUST_FILE, status: "failed", note: `the check hooks in ${DECLARATION_FILE}: ${(e as Error).message}` }];
   }
   const file = join(root, TRUST_FILE);
   const existing = existsSync(file) ? readFileSync(file, "utf8") : undefined;
@@ -500,10 +501,50 @@ async function trustStep(root: string, detected: Detected, doc: RawConfig, forge
   try {
     result = trustText(existing, { forge, ...(repository ? { repository } : {}), ...(server ? { server } : {}), branch: detected.defaultBranch, evidence: evidenceOf(doc)!, hooks });
   } catch (e) {
-    return { file: TRUST_FILE, status: "failed", note: (e as Error).message };
+    return [{ file: TRUST_FILE, status: "failed", note: (e as Error).message }];
   }
   todo.push(...result.todo);
-  return put(root, TRUST_FILE, result.text, dryRun, "the runner identity, the local checks and the ref gate's rule, read at base");
+  const trust = put(root, TRUST_FILE, result.text, dryRun, "the runner identity and the local checks, read at base");
+  return [trust, ...(await refGateStep(root, detected, doc, hooks, trust, dryRun, todo))];
+}
+
+/**
+ * chant's ref gate pieces (`refGateInitPlan`, chant#4913): the `refs` rule
+ * for the default branch in .chant/trust.json, the `pre-push` hook and the
+ * runner key hint, planned after plywood's part of the trust file is in
+ * place and written unless dry run.
+ */
+async function refGateStep(root: string, detected: Detected, doc: RawConfig, hooks: string[], trust: InitFile, dryRun: boolean, todo: string[]): Promise<InitFile[]> {
+  const { refGateInitPlan, writeRefGateInit } = await import("@intentius/chant/ref-gate-init");
+  const { refGateChecks, TRUST_FILE } = await import("./init/trust");
+  const e = evidenceOf(doc)!;
+  let plan;
+  try {
+    plan = refGateInitPlan(root, {
+      branch: detected.defaultBranch,
+      checks: refGateChecks(hooks, e.local),
+      chant: "npx chant",
+      ...(e.chant.runnerKeySecret ? { runnerKeySecret: e.chant.runnerKeySecret } : {}),
+    });
+  } catch (err) {
+    todo.push(`Add the ref gate's rule and pre-push hook: ${(err as Error).message}`);
+    return [];
+  }
+  if (!dryRun) writeRefGateInit(plan);
+  todo.push(...plan.notes);
+  // chant plans under the checkout's real path (git's top level), so the trust file is matched against that.
+  const top = realpathSync(root);
+  const out: InitFile[] = [];
+  for (const f of plan.files) {
+    const rel = relative(top, f.path).split(sep).join("/");
+    const status = f.status === "unchanged" ? "unchanged" : "written";
+    if (rel === TRUST_FILE) {
+      if (status === "written") Object.assign(trust, { status, note: "the runner identity, the local checks and the ref gate's rule, read at base" });
+      continue;
+    }
+    out.push({ file: f.local ? f.path : rel, status, note: f.local ? "the ref gate's pre-push hook, in this clone only" : "the ref gate" });
+  }
+  return out;
 }
 
 /** `.pre-commit-config.yaml` as a check hook, so plywood check runs the team's hooks at the base commit. */

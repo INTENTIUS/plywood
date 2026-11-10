@@ -4,7 +4,8 @@
  * productPipelineJobs call and in the waves spec's options, and `plywood
  * init` writes `.chant/trust.json` from it. Without the key nothing changes.
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,7 +16,7 @@ import { evidenceOf } from "../src/config/evidence";
 import { EXIT } from "../src/exit-codes";
 import { runInit, type InitOptions } from "../src/init";
 import { repoName, repositoryOfRemote } from "../src/init/detect";
-import { REF_GATE_INSTALL, TRUST_FILE, trustText } from "../src/init/trust";
+import { refGateChecks, TRUST_FILE, trustText } from "../src/init/trust";
 import { workflowPlan } from "../src/stages";
 import { wavesEngine, wavesSpecText } from "../src/waves-workflow";
 import { CHANT_DEFAULTS } from "./chant-defaults";
@@ -76,6 +77,11 @@ describe("plywood.yml evidence: the config", () => {
     expect("evidence" in seen[0]!).toBe(false);
     expect(seen[1]!.evidence).toEqual({ runnerKeySecret: "RUNNER_PEM" });
   });
+
+  it("the ref gate's rule names the check hooks, plan and policy, and no hook that takes local evidence", () => {
+    expect(refGateChecks(["pre-commit"], false).map((c) => c.check)).toEqual(["pre-commit", "plan", "policy"]);
+    expect(refGateChecks(["pre-commit"], true).map((c) => c.check)).toEqual(["plan", "policy"]);
+  });
 });
 
 describe("plywood init's .chant/trust.json", () => {
@@ -90,7 +96,8 @@ describe("plywood init's .chant/trust.json", () => {
     const { text } = trustText(undefined, { forge: "gitlab", repository: "infra/shop", server: "https://gitlab.acme.internal", branch: "main", evidence: { chant: { identity: "oidc" }, local: false }, hooks: [] });
     const t = JSON.parse(text);
     expect(t.keyless.identities).toEqual([{ principal: "ci", class: "runner", issuer: "https://gitlab.acme.internal", subject: "https://gitlab.acme.internal/infra/shop//.gitlab-ci.yml@refs/heads/main" }]);
-    expect(t.refs[0].checks.map((c: { check: string }) => c.check)).toEqual(["plan", "policy"]);
+    // The ref gate's rule is chant's (refGateInitPlan, chant#4913).
+    expect(t.refs).toBeUndefined();
   });
 
   it("keeps what a file already there says: its identities, its local checks and its rule for the branch", () => {
@@ -131,11 +138,12 @@ function fakeChant(root: () => string): ChantProduct {
   } as ChantProduct;
 }
 
-/** A repository with one project of two stacks, `origin` and `files`. */
+/** A git repository with one project of two stacks, `origin` and `files`: chant's ref gate init needs a real checkout. */
 function repo(origin: string, files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "plywood-evidence-"));
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+  execFileSync("git", ["remote", "add", "origin", origin], { cwd: dir });
   mkdirSync(join(dir, ".git", "refs", "remotes", "origin"), { recursive: true });
-  writeFileSync(join(dir, ".git", "config"), `[remote "origin"]\n\turl = ${origin}\n`);
   writeFileSync(join(dir, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/main\n");
   const all = { "Pulumi.yaml": "name: shop\nruntime: nodejs\n", "Pulumi.dev.yaml": "config: {}\n", "Pulumi.prod.yaml": "config: {}\n", "package.json": '{"name":"shop","private":true}\n', ...files };
   for (const [rel, text] of Object.entries(all)) {
@@ -156,7 +164,7 @@ async function initIn(dir: string, opts: Partial<InitOptions> = {}) {
 }
 
 describe("plywood init with plywood.yml evidence", () => {
-  it("identity oidc on GitHub: the waves workflow's identity, no local checks, and a ref rule naming the hooks, plan and policy with the ref gate's status", async () => {
+  it("identity oidc on GitHub: the waves workflow's identity, no local checks, and chant's ref rule naming the hooks, plan and policy, with its pre-push hook", async () => {
     const dir = repo("git@github.com:acme/shop.git", { ...PRE_COMMIT, "plywood.yml": "evidence:\n  identity: oidc\n" });
     const r = await initIn(dir);
     expect(r.files.find((f) => f.file === TRUST_FILE)?.status).toBe("written");
@@ -176,15 +184,29 @@ describe("plywood init with plywood.yml evidence", () => {
             { check: "plan", command: "/plywood preview on the pull request" },
             { check: "policy", command: "/plywood preview on the pull request" },
           ],
-          status: "chant/ref-gate",
         },
       ],
     });
-    expect(r.todo).toContain(`Install the ref gate's pre-push hook in each clone: ${REF_GATE_INSTALL}`);
+    // chant's pre-push hook, executable, in this clone's hooks directory, running chant through npx.
+    const hook = join(realpathSync(dir), ".git", "hooks", "pre-push");
+    expect(r.files.find((f) => f.file === hook)).toMatchObject({ status: "written" });
+    expect(statSync(hook).mode & 0o111).not.toBe(0);
+    expect(readFileSync(hook, "utf8")).toContain("npx chant workspace ref-gate");
     expect(r.todo.some((t) => t.includes("trusted_root.json"))).toBe(true);
+    // A keyless identity is listed, so chant gives no runner key hint.
+    expect(r.todo.some((t) => t.includes("no runner key or keyless identity"))).toBe(false);
     // Run again: nothing changes.
     const again = await initIn(dir);
     expect(again.files.find((f) => f.file === TRUST_FILE)?.status).toBe("unchanged");
+    expect(again.files.find((f) => f.file === hook)?.status).toBe("unchanged");
+  });
+
+  it("--dry-run plans chant's pieces and writes none of them", async () => {
+    const dir = repo("git@github.com:acme/shop.git", { ...PRE_COMMIT, "plywood.yml": "evidence:\n  identity: oidc\n" });
+    const r = await initIn(dir, { dryRun: true });
+    expect(r.files.find((f) => f.file === join(realpathSync(dir), ".git", "hooks", "pre-push"))).toMatchObject({ status: "written" });
+    expect(existsSync(join(dir, ".git", "hooks", "pre-push"))).toBe(false);
+    expect(existsSync(join(dir, TRUST_FILE))).toBe(false);
   });
 
   it("local: true names the check hooks under local.checks and leaves them out of the ref rule", async () => {

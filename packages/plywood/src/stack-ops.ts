@@ -32,13 +32,15 @@
  *       a command resource plywood.yml names under the stack's actions.
  *
  * Each request is approved with `plywood approve <gate> --op
- * pulumi-stack-ops --plan <digest>`, the line a waiting request prints, and
+ * pulumi-stack-ops --plan <digest>`, the line a waiting request prints
+ * (chant fills it from {@link APPROVE_COMMAND}, chant#4911), and
  * the requester runs the same command again to carry it out. The requester's
  * own approval never counts.
 
  */
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { actorFromEnv } from "@intentius/chant/actor";
 import type { ForgeTargetOptions } from "@intentius/chant/pr-forge";
 import type * as PulumiLexicon from "@intentius/chant-lexicon-pulumi";
 import type { PulumiStackExportResult, PulumiStackMoveResult, PulumiStackOpOutcome } from "@intentius/chant-lexicon-pulumi";
@@ -57,45 +59,34 @@ import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./word
 export const STACK_OPS_OP = "pulumi-stack-ops";
 
 /** What every request takes: the part of `PulumiStackOpCommon` plywood sets; it leaves the runners to chant. */
-export type StackOpCommon = Pick<PulumiLexicon.PulumiStackOpCommon, "by" | "rules" | "op" | "ledgerCwd" | "env">;
-
-/** The part of chant's pulumi lexicon these verbs call (lexicons/pulumi/src/stack-ops.ts). */
-export type ChantStackOps = Pick<typeof PulumiLexicon, "gatedStackExport" | "gatedStackCancel" | "gatedStackMove" | "PulumiStackOpRefused">;
-
-/** chant's stack lock reader (`pulumiStackLockIds`, chant#4615): the lock ids a stack holds now, read from a `file://` backend. */
-export type ChantStackLockReader = typeof PulumiLexicon.pulumiStackLockIds;
-
-let cachedLocks: Promise<ChantStackLockReader> | undefined;
-
-/** chant's lock reader; `cancel` uses it when no `--lock` is given. */
-export function chantStackLockReader(): Promise<ChantStackLockReader> {
-  cachedLocks ??= import("@intentius/chant-lexicon-pulumi").then((m) => m.pulumiStackLockIds);
-  return cachedLocks;
-}
-
-/** Tests stand in a lock reader. `reset` goes back to the real import. */
-export function setChantStackLockReaderForTests(fake: ChantStackLockReader | "reset"): void {
-  cachedLocks = fake === "reset" ? undefined : Promise.resolve(fake);
-}
+export type StackOpCommon = Pick<PulumiLexicon.PulumiStackOpCommon, "by" | "rules" | "op" | "ledgerCwd" | "env" | "approveCommand">;
 
 /**
- * The lock id `cancel` asks to release: `--lock`, else the one lock chant's
- * reader finds on the stack's `file://` backend (chant#4615). No lock, two
- * locks, or a backend the reader cannot list is an error that says which.
+ * The part of chant's pulumi lexicon these verbs call (lexicons/pulumi/src/stack-ops.ts):
+ * the gated operations, the lock a cancel releases and a move's destination name (chant#4911).
  */
-export async function lockToCancel(given: string | undefined, stack: { dir: string; stack: string; project?: string; engine?: string }, env: Record<string, string | undefined>): Promise<{ lockId: string; read: boolean } | { error: string }> {
-  if (given) return { lockId: given, read: false };
-  const reader = await chantStackLockReader();
-  let locks: Awaited<ReturnType<ChantStackLockReader>>;
-  try {
-    locks = await reader({ dir: stack.dir, stack: stack.stack, ...(stack.project ? { project: stack.project } : {}), ...(stack.engine ? { engine: stack.engine as "pulumi" | "plunge" } : {}), env });
-  } catch (e) {
-    return { error: `${STACK_OP_WORDS.needsLock}. Reading the stack's lock failed: ${(e as Error).message}` };
+export type ChantStackOps = Pick<typeof PulumiLexicon, "gatedStackExport" | "gatedStackCancel" | "gatedStackMove" | "PulumiStackOpRefused" | "pulumiStackLockToCancel" | "pulumiMoveDestStack">;
+
+/** The line a waiting request prints, in plywood's words: chant fills the op, the gate, the digest and `--sign` (chant#4911). */
+export const APPROVE_COMMAND = `${PRODUCT} approve {gate} --op {op} --plan {digest} {sign}`;
+
+/** Who asks (--by, else chant's `actorFromEnv`) and what every request takes. */
+export function requestCommon(by: string | undefined, rules: StackOpCommon["rules"], io: StageIo): StackOpCommon {
+  return { by: by ?? actorFromEnv(io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env, approveCommand: APPROVE_COMMAND };
+}
+
+/** chant's refusal of a cancel with no `--lock` (`pulumiStackLockToCancel`), in plywood's words. */
+function lockRefusal(r: Extract<PulumiLexicon.PulumiLockToCancel, { refusal: string }>, stack: string): string {
+  switch (r.refusal) {
+    case "read-failed":
+      return `${STACK_OP_WORDS.needsLock}. ${r.message}`;
+    case "not-listed":
+      return STACK_OP_WORDS.lockNotListed(r.backend);
+    case "no-lock":
+      return STACK_OP_WORDS.noLock(stack);
+    case "many-locks":
+      return STACK_OP_WORDS.manyLocks(stack, r.ids ?? []);
   }
-  if (!locks.checked) return { error: STACK_OP_WORDS.lockNotListed(locks.backend) };
-  if (locks.ids.length === 0) return { error: STACK_OP_WORDS.noLock(stack.stack) };
-  if (locks.ids.length > 1) return { error: STACK_OP_WORDS.manyLocks(stack.stack, locks.ids) };
-  return { lockId: locks.ids[0]!, read: true };
 }
 
 let cachedOps: Promise<ChantStackOps> | undefined;
@@ -159,28 +150,6 @@ export function requestRules(config: PlywoodConfig): StackOpCommon["rules"] {
   return { mode: p.approval ?? "ledger", ...(p.quorum?.length ? { quorum: p.quorum } : {}) };
 }
 
-/** Who asks: --by, else the name chant's approve would record (the forge's actor, else the user). */
-export function requesterOf(by: string | undefined, env: NodeJS.ProcessEnv): string {
-  return by ?? env.GITHUB_ACTOR ?? env.GITLAB_USER_LOGIN ?? env.USER ?? "unknown";
-}
-
-/**
- * The destination as `pulumi state move --dest` takes it: the bare stack in
- * the same project, else fully qualified. A DIY backend's organization is
- * always `organization`; on Pulumi Cloud it is plywood.yml's pulumi_cloud.org.
- */
-export function destStackName(source: ResolvedStack, dest: ResolvedStack, config: PlywoodConfig): string {
-  if (dest.project === source.project) return dest.stack;
-  const cloud = !dest.backend || /^https?:\/\//.test(dest.backend);
-  const org = cloud ? pulumiCloudOf(config.doc).org : undefined;
-  return `${org ?? "organization"}/${dest.project}/${dest.stack}`;
-}
-
-/** The line that approves a waiting request, in plywood's words. */
-export function approveRequestLine(gate: string, digest: string, mode: string): string {
-  return `${PRODUCT} approve ${gate} --op ${STACK_OPS_OP} --plan ${digest}${mode === "sealed" ? " --sign" : ""}`;
-}
-
 /** The backend a stack names, for the engine's run, when the environment names none. */
 export function useBackend(stacks: ResolvedStack[], env: NodeJS.ProcessEnv): string | undefined {
   const named = [...new Set(stacks.map((s) => s.backend).filter((b): b is string => b !== undefined))];
@@ -189,18 +158,17 @@ export function useBackend(stacks: ResolvedStack[], env: NodeJS.ProcessEnv): str
   return undefined;
 }
 
-/** Print what a request's outcome means, and return chant's code for it. */
+/** Print what a request's outcome means, and return chant's code for it. A waiting request's approve line is chant's, from {@link APPROVE_COMMAND}. */
 export function reportOutcome<T>(
   verb: StackOpVerb,
   outcome: PulumiStackOpOutcome<T>,
   gate: string,
-  rules: StackOpCommon["rules"],
   done: (result: T) => string,
   json: boolean,
   table: ExitTable,
   io: StageIo,
 ): number {
-  const approveLine = outcome.status === "waiting" || outcome.status === "refused" ? approveRequestLine(gate, outcome.digest, rules.mode) : undefined;
+  const approveLine = outcome.status === "waiting" || outcome.status === "refused" ? outcome.command : undefined;
   let code: number;
   let text: string;
   switch (outcome.status) {
@@ -294,10 +262,10 @@ export async function exportStack(args: string[], json: boolean, table: ExitTabl
   const outFile = resolve(io.cwd, out.value);
   return runRequest("export", json, table, io, async (ops) => {
     const outcome = await ops.gatedStackExport({
-      by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
+      ...requestCommon(common.by, rules, io),
       dir: stack.dir, stack: stack.stack, out: outFile, ...(version.value ? { version: version.value } : {}), ...(stack.engine ? { engine: stack.engine } : {}),
     });
-    return reportOutcome("export", outcome, stack.stack, rules, (r: PulumiStackExportResult) => STACK_OP_WORDS.exported(stack.key, r), json, table, io);
+    return reportOutcome("export", outcome, stack.stack, (r: PulumiStackExportResult) => STACK_OP_WORDS.exported(stack.key, r), json, table, io);
   });
 }
 
@@ -331,18 +299,19 @@ export async function cancelStack(args: string[], json: boolean, table: ExitTabl
   const stack = resolveStack(read.config, read.path, named[0]!, common.dir);
   if ("error" in stack) return usage(stack.error, table, io);
   useBackend([stack], io.env);
-  // chant#4615: with no --lock, the one lock a file:// backend holds for the stack.
-  const lockId = await lockToCancel(lock.value, stack, io.env);
-  if ("error" in lockId) return usage(lockId.error, table, io);
+  // chant#4615, #4911: with no --lock, the one lock a file:// backend holds for the stack.
+  const ops = await chantStackOps();
+  const lockId = await ops.pulumiStackLockToCancel(lock.value, { dir: stack.dir, stack: stack.stack, project: stack.project, ...(stack.engine ? { engine: stack.engine } : {}), env: io.env });
+  if ("refusal" in lockId) return usage(lockRefusal(lockId, stack.stack), table, io);
   if (lockId.read && !json) io.err(`${PRODUCT} cancel: ${stack.key} holds lock ${lockId.lockId}`);
   const rules = requestRules(read.config);
   return runRequest("cancel", json, table, io, async (ops) => {
     const outcome = await ops.gatedStackCancel({
-      by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
+      ...requestCommon(common.by, rules, io),
       dir: stack.dir, stack: stack.stack, lockId: lockId.lockId, project: stack.project, ...(stack.engine ? { engine: stack.engine } : {}),
       forge: cancelForge(read.config, dirname(read.path)),
     });
-    return reportOutcome("cancel", outcome, stack.stack, rules, (r) => STACK_OP_WORDS.cancelled(stack.key, lockId.lockId, r.lockChecked), json, table, io);
+    return reportOutcome("cancel", outcome, stack.stack, (r) => STACK_OP_WORDS.cancelled(stack.key, lockId.lockId, r.lockChecked), json, table, io);
   });
 }
 
@@ -379,17 +348,20 @@ export async function moveStack(args: string[], json: boolean, table: ExitTable,
   const backend = useBackend([source, dest], io.env);
   if (backend) return usage(backend, table, io);
   const rules = requestRules(read.config);
-  const destName = destStackName(source, dest, read.config);
   const engine = source.engine ?? dest.engine;
+  // chant names the destination as --dest takes it (chant#4911); plywood.yml's pulumi_cloud.org qualifies one in another project on Pulumi Cloud.
+  const org = pulumiCloudOf(read.config.doc).org;
   return runRequest("move", json, table, io, async (ops) => {
     const outcome = await ops.gatedStackMove({
-      by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
-      source: { member: source.key, dir: source.dir, stack: source.stack },
-      dest: { member: dest.key, dir: dest.dir, stack: destName },
+      ...requestCommon(common.by, rules, io),
+      source: { member: source.key, dir: source.dir, stack: source.stack, project: source.project },
+      dest: { member: dest.key, dir: dest.dir, stack: dest.stack, project: dest.project },
       urns,
       ...(engine ? { engine } : {}),
+      ...(org ? { org } : {}),
     });
-    return reportOutcome("move", outcome, `move:${source.stack}:${destName}`, rules, (r: PulumiStackMoveResult) => STACK_OP_WORDS.moved(source.key, dest.key, r), json, table, io);
+    const destName = ops.pulumiMoveDestStack(source, dest, org ? { org } : {});
+    return reportOutcome("move", outcome, `move:${source.stack}:${destName}`, (r: PulumiStackMoveResult) => STACK_OP_WORDS.moved(source.key, dest.key, r), json, table, io);
   });
 }
 

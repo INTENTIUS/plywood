@@ -8,21 +8,19 @@ import { parseConfig } from "../src/config/index";
 import { EXIT } from "../src/exit-codes";
 import { ADOPT_OP_FILE } from "../src/init/adopt";
 import {
-  approveRequestLine,
+  APPROVE_COMMAND,
   cancelStack,
-  destStackName,
   exportStack,
   moveStack,
   requestRules,
   resolveStack,
   rollbackStack,
-  setChantStackLockReaderForTests,
   setChantStackOpsForTests,
   STACK_OPS_OP,
   cancelForge,
   type ChantStackOps,
 } from "../src/stack-ops";
-import { PulumiStackOpRefused } from "@intentius/chant-lexicon-pulumi";
+import { pulumiMoveDestStack, PulumiStackOpRefused, stackOpApproveCommand } from "@intentius/chant-lexicon-pulumi";
 import type { StageIo } from "../src/stages";
 import { approveTarget } from "../src/up";
 
@@ -43,17 +41,33 @@ function repo(yml: string, files: Record<string, string> = {}): string {
 
 const YML = "stacks:\n  shop/dev: { dir: infra }\n  shop/prod: { dir: infra }\n  web/prod: { dir: web, backend: file:///srv/state }\napproval: sealed\n";
 
-/** A fake lexicon: records each call's options and answers with `outcome` (a `PulumiStackOpOutcome`, or a throw). */
-function fakeOps(outcome: { status: string; digest: string; [k: string]: unknown } | Error) {
+type LockToCancel = ChantStackOps["pulumiStackLockToCancel"];
+
+/** chant's answer for a stack whose backend it cannot list: the given lock, else `not-listed`. */
+const unlisted: LockToCancel = async (given) => (given ? { lockId: given, read: false } : { refusal: "not-listed", message: "not listed" });
+
+/**
+ * A fake lexicon: records each call's options and answers with `outcome` (a
+ * `PulumiStackOpOutcome`, or a throw), with `locks` for the lock a cancel
+ * releases and chant's own `pulumiMoveDestStack`.
+ */
+function fakeOps(outcome: { status: string; digest: string; [k: string]: unknown } | Error, locks: LockToCancel = unlisted) {
   const calls: Array<{ op: string; opts: Record<string, unknown> }> = [];
   const answer = (op: string) => async (opts: unknown) => {
     calls.push({ op, opts: opts as Record<string, unknown> });
     if (outcome instanceof Error) throw outcome;
     return outcome as never;
   };
-  const ops: ChantStackOps = { gatedStackExport: answer("export"), gatedStackCancel: answer("cancel"), gatedStackMove: answer("move"), PulumiStackOpRefused };
+  const ops: ChantStackOps = {
+    gatedStackExport: answer("export"), gatedStackCancel: answer("cancel"), gatedStackMove: answer("move"), PulumiStackOpRefused,
+    pulumiStackLockToCancel: locks, pulumiMoveDestStack,
+  };
   return { ops, calls };
 }
+
+/** The approve line chant prints for a request plywood made, from the approveCommand it passed. */
+const approveLineOf = (opts: Record<string, unknown>, gate: string, digest: string): string =>
+  stackOpApproveCommand(opts as unknown as Parameters<typeof stackOpApproveCommand>[0])!(gate, digest);
 
 function fakeChant(code = 0) {
   const calls: string[][] = [];
@@ -72,7 +86,6 @@ function fakeChant(code = 0) {
 
 afterEach(() => {
   setChantStackOpsForTests("reset");
-  setChantStackLockReaderForTests("reset");
   setChantProductForTests("reset");
 });
 
@@ -96,19 +109,10 @@ describe("the request's inputs", () => {
     });
   });
 
-  it("qualifies a destination in another project", () => {
-    const config = parseConfig(YML);
-    const s = resolveStack(config, "/r/plywood.yml", "shop/dev") as never;
-    expect(destStackName(s, resolveStack(config, "/r/plywood.yml", "shop/prod") as never, config)).toBe("prod");
-    expect(destStackName(s, resolveStack(config, "/r/plywood.yml", "web/prod") as never, config)).toBe("organization/web/prod");
-    const cloud = parseConfig(`${YML}pulumi_cloud: { org: acme }\n`);
-    const d = { key: "web/dev", project: "web", stack: "dev", dir: "/r/web" };
-    expect(destStackName(s, d, cloud)).toBe("acme/web/dev");
-  });
-
-  it("prints an approve line plywood approve takes back as chant's op and gate", () => {
-    const line = approveRequestLine("move:dev:prod", "sha256:ab", "sealed");
+  it("asks chant for an approve line plywood approve takes back as chant's op and gate", () => {
+    const line = approveLineOf({ approveCommand: APPROVE_COMMAND, rules: { mode: "sealed" }, op: STACK_OPS_OP }, "move:dev:prod", "sha256:ab");
     expect(line).toBe(`plywood approve move:dev:prod --op ${STACK_OPS_OP} --plan sha256:ab --sign`);
+    expect(approveLineOf({ approveCommand: APPROVE_COMMAND, rules: { mode: "ledger" }, op: STACK_OPS_OP }, "dev", "sha256:ab")).toBe(`plywood approve dev --op ${STACK_OPS_OP} --plan sha256:ab`);
     expect(approveTarget("move:dev:prod", { op: STACK_OPS_OP })).toEqual({ op: STACK_OPS_OP, gate: "move:dev:prod" });
   });
 });
@@ -116,11 +120,12 @@ describe("the request's inputs", () => {
 describe("plywood export", () => {
   it("waits for a second person, printing the approve line, with chant's waiting code", async () => {
     const dir = repo(YML);
-    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:e1", command: "chant approve pulumi-stack-ops dev --plan sha256:e1" });
+    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:e1", command: "plywood approve dev --op pulumi-stack-ops --plan sha256:e1 --sign" });
     setChantStackOpsForTests(ops);
     const out = io(dir, { USER: "ana" });
     expect(await exportStack(["shop/dev", "--out", "/home/ana/dev.json"], false, T, out)).toBe(T.waiting);
-    expect(calls[0]!.opts).toMatchObject({ by: "ana", stack: "dev", dir: join(dir, "infra"), out: "/home/ana/dev.json", op: STACK_OPS_OP, rules: { mode: "sealed" } });
+    expect(calls[0]!.opts).toMatchObject({ by: "ana", stack: "dev", dir: join(dir, "infra"), out: "/home/ana/dev.json", op: STACK_OPS_OP, rules: { mode: "sealed" }, approveCommand: APPROVE_COMMAND });
+    expect(approveLineOf(calls[0]!.opts, "dev", "sha256:e1")).toBe("plywood approve dev --op pulumi-stack-ops --plan sha256:e1 --sign");
     expect(out.stderr.join("\n")).toContain("plywood approve dev --op pulumi-stack-ops --plan sha256:e1 --sign");
   });
 
@@ -171,7 +176,6 @@ describe("plywood cancel", () => {
 
   it("needs --lock", async () => {
     setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
-    setChantStackLockReaderForTests(async () => ({ checked: false, ids: [] }));
     const out = io(repo(YML));
     expect(await cancelStack(["shop/dev"], false, T, out)).toBe(T.failed);
     expect(out.stderr.join("\n")).toContain("--lock <id>");
@@ -212,54 +216,54 @@ describe("plywood cancel", () => {
   });
 });
 
-describe("plywood cancel with chant's lock reader (plywood#26, chant#4615)", () => {
-  it("reads the one lock a file:// backend holds when --lock is left out", async () => {
-    const { ops, calls } = fakeOps({ status: "done", digest: "sha256:c", result: { lockChecked: true } });
+describe("plywood cancel with chant's lock to cancel (plywood#26, chant#4615, chant#4911)", () => {
+  it("takes the one lock chant reads when --lock is left out", async () => {
+    const asked: unknown[][] = [];
+    const { ops, calls } = fakeOps({ status: "done", digest: "sha256:c", result: { lockChecked: true } }, async (...a) => (asked.push(a), { lockId: "lock-7", read: true }));
     setChantStackOpsForTests(ops);
-    const asked: unknown[] = [];
-    setChantStackLockReaderForTests(async (o) => (asked.push(o), { checked: true, backend: "file:///srv/state", ids: ["lock-7"] }));
     const out = io(repo(YML));
     expect(await cancelStack(["web/prod"], false, T, out)).toBe(T.done);
-    expect(asked[0]).toMatchObject({ stack: "prod", project: "web" });
+    expect(asked[0]).toEqual([undefined, expect.objectContaining({ stack: "prod", project: "web" })]);
     expect(calls[0]!.opts).toMatchObject({ stack: "prod", lockId: "lock-7" });
     expect(out.stderr.join("\n")).toContain("web/prod holds lock lock-7");
   });
 
-  it("refuses no lock, two locks, and a backend the reader cannot list, and runs nothing", async () => {
-    const { ops, calls } = fakeOps({ status: "spent", digest: "x" });
-    setChantStackOpsForTests(ops);
+  it("words chant's refusals (no lock, two locks, a backend it cannot list) and runs nothing", async () => {
     for (const [answer, words] of [
-      [{ checked: true, ids: [] }, "holds no lock"],
-      [{ checked: true, ids: ["a", "b"] }, "holds 2 locks (a, b)"],
-      [{ checked: false, backend: "s3://state", ids: [] }, "s3://state"],
+      [{ refusal: "no-lock", message: "", ids: [] }, "prod holds no lock"],
+      [{ refusal: "many-locks", message: "", ids: ["a", "b"] }, "holds 2 locks (a, b); name the one to release with --lock <id>"],
+      [{ refusal: "not-listed", message: "", backend: "s3://state" }, "s3://state"],
+      [{ refusal: "read-failed", message: "reading stack prod's lock failed: EACCES" }, "EACCES"],
     ] as const) {
-      setChantStackLockReaderForTests(async () => ({ ...answer, ids: [...answer.ids] }));
+      const { ops, calls } = fakeOps({ status: "spent", digest: "x" }, async () => answer as never);
+      setChantStackOpsForTests(ops);
       const out = io(repo(YML));
       expect(await cancelStack(["web/prod"], false, T, out)).toBe(T.failed);
       expect(out.stderr.join("\n")).toContain(words);
+      expect(calls).toEqual([]);
     }
-    expect(calls).toEqual([]);
-  });
-
-  it("takes --lock over the reader", async () => {
-    const { ops, calls } = fakeOps({ status: "done", digest: "sha256:c", result: { lockChecked: true } });
-    setChantStackOpsForTests(ops);
-    let read = false;
-    setChantStackLockReaderForTests(async () => ((read = true), { checked: true, ids: ["other"] }));
-    expect(await cancelStack(["web/prod", "--lock", "mine"], false, T, io(repo(YML)))).toBe(T.done);
-    expect(read).toBe(false);
-    expect(calls[0]!.opts).toMatchObject({ lockId: "mine" });
   });
 });
 
 describe("plywood move", () => {
   it("names both stacks and the URNs, under the gate move:<source>:<dest>", async () => {
-    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:m", command: "" });
+    const line = `plywood approve move:dev:prod --op ${STACK_OPS_OP} --plan sha256:m --sign`;
+    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:m", command: line });
     setChantStackOpsForTests(ops);
     const out = io(repo(YML));
     expect(await moveStack([URN, "--from", "shop/dev", "--to", "shop/prod"], true, T, out)).toBe(T.waiting);
-    expect(calls[0]!.opts).toMatchObject({ source: { member: "shop/dev", stack: "dev" }, dest: { member: "shop/prod", stack: "prod" }, urns: [URN] });
-    expect(JSON.parse(out.stdout[0]!)).toMatchObject({ gate: "move:dev:prod", approve: `plywood approve move:dev:prod --op ${STACK_OPS_OP} --plan sha256:m --sign` });
+    expect(calls[0]!.opts).toMatchObject({ source: { member: "shop/dev", stack: "dev", project: "shop" }, dest: { member: "shop/prod", stack: "prod", project: "shop" }, urns: [URN] });
+    expect(approveLineOf(calls[0]!.opts, "move:dev:prod", "sha256:m")).toBe(line);
+    expect(JSON.parse(out.stdout[0]!)).toMatchObject({ gate: "move:dev:prod", approve: line });
+  });
+
+  it("leaves a destination in another project to chant to qualify, with plywood.yml's Pulumi Cloud org", async () => {
+    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:m", command: "" });
+    setChantStackOpsForTests(ops);
+    const out = io(repo(`stacks:\n  shop/dev: { dir: infra }\n  web/dev: { dir: web }\npulumi_cloud: { org: acme }\n`));
+    expect(await moveStack([URN, "--from", "shop/dev", "--to", "web/dev"], true, T, out)).toBe(T.waiting);
+    expect(calls[0]!.opts).toMatchObject({ dest: { stack: "dev", project: "web" }, org: "acme" });
+    expect(JSON.parse(out.stdout[0]!)).toMatchObject({ gate: "move:dev:acme/web/dev" });
   });
 
   it("is chant's moved when a stack changed after the approval, and nothing was moved (chant#4808)", async () => {

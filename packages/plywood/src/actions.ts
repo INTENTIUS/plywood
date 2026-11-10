@@ -31,7 +31,7 @@ import {
   commonFlags,
   readConfig,
   reportOutcome,
-  requesterOf,
+  requestCommon,
   requestRules,
   resolveStack,
   STACK_OPS_OP,
@@ -119,12 +119,12 @@ export async function action(args: string[], json: boolean, table: ExitTable, io
   const rules = requestRules(read.config);
   try {
     const outcome = await gated({
-      by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
+      ...requestCommon(common.by, rules, io),
       dir: stack.dir, stack: stack.stack, urn: chosen.urn, name: chosen.name,
       ...(stack.engine ? { engine: stack.engine } : {}),
       ...(anew ? { anew: true } : {}),
     });
-    return reportOutcome("action", outcome, actionSubject(stack.stack, chosen.name), rules, (r) => STACK_OP_WORDS.acted(stack.key, chosen.name, r), json, table, io);
+    return reportOutcome("action", outcome, actionSubject(stack.stack, chosen.name), (r) => STACK_OP_WORDS.acted(stack.key, chosen.name, r), json, table, io);
   } catch (e) {
     // chant refuses before asking: PulumiStackActionRefused carries `code` (action-urn, action-type, action-scope) and the other URNs.
     const err = e as Error & { code?: unknown; urns?: unknown };

@@ -14,7 +14,6 @@ afterEach(() => setHarnessForTests("reset"));
 describe("reaching chant's harness", () => {
   it("loads every piece the bench calls from the pinned chant", async () => {
     const h = (await harness()) as unknown as Record<string, unknown>;
-    expect(h.E2E_HARNESS_FLOOR).toBe("0.124.56");
     for (const k of ["harnessStack", "lintScenario", "runClaim", "claimRow", "renderClaims", "recordClaimRow", "SafeRun", "FlociBucket", "ForgejoForge"]) expect(h[k], k).toBeDefined();
   });
 });

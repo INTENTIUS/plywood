@@ -226,7 +226,6 @@ export interface SafeRunInstance {
 
 /** The part of `@intentius/chant/e2e-harness` the plywood bench calls. */
 export interface HarnessModule {
-  E2E_HARNESS_FLOOR: string;
   FLOCI_DIGEST: string;
   FLOCI_IMAGE: string;
   FLOCI_CHANGE_SET_DIGEST: string;

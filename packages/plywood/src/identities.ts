@@ -155,6 +155,8 @@ export interface ChantForgeCheck {
     repository: { host: string; path: string; defaultBranch: string; ownerId?: string; repoId?: string };
     pipelines: ChantContractPipeline[];
     words?: unknown;
+    /** The ref gate's status, required on the default branch (chant#4913). */
+    refGateStatus?: string;
   }): unknown;
   resolveCloudIdentity(decl: unknown, env: string, member?: string): unknown;
 }
@@ -267,25 +269,32 @@ export async function forgeCheck(args: string[], json: boolean, table: ExitTable
   const env = flags["--env"] ?? "production";
   const cloud = settings.ci.identity?.cloud;
   const pipelines = contractPipelines(fc, cloud, env, workspaceMembers(dirname(path)), settings.pipeline.runner, settings.pipeline.jobs);
+  // chant#4913, #4964: with evidence the pull request workflow renders the ref gate job, so the default branch requires its status.
+  const refGate = settings.pipeline.evidence ? await import("@intentius/chant/ref-gate-rules") : undefined;
   const result = await fc.forgeCheck(
     {
       target,
       words: PRODUCT_WORDS,
       file: path,
       ...(requireClouds ? { requireClouds: true } : {}),
-      contract: (live) =>
-        fc.pipelineContract({
+      contract: (live) => {
+        const defaultBranch = flags["--branch"] ?? live.defaultBranch ?? "main";
+        const gate = refGate?.refGateStatusFor(dirname(path), defaultBranch);
+        if (gate?.problem) io.err(`${PRODUCT} forge check: ${gate.problem}`);
+        return fc.pipelineContract({
           forge: target.kind,
           repository: {
             host: target.host,
             path: live.path ?? target.repo,
-            defaultBranch: flags["--branch"] ?? live.defaultBranch ?? "main",
+            defaultBranch,
             ...(live.ownerId ? { ownerId: live.ownerId } : {}),
             ...(live.repoId ? { repoId: live.repoId } : {}),
           },
           pipelines,
           words: PRODUCT_WORDS,
-        }),
+          ...(gate?.status ? { refGateStatus: gate.status } : {}),
+        });
+      },
     },
     { fetch: globalThis.fetch, env: io.env },
   );

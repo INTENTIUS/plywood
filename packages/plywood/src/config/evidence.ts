@@ -12,7 +12,9 @@
  * chant's `evidence` option goes on the productPipelineJobs call
  * (src/stages.ts `workflowPlan`) and into the waves spec's options
  * (src/waves-workflow.ts), so each deciding wave job signs `plan:<wave>` and
- * `policy:<wave>`. `plywood check` runs `chant ci check`, which signs each
+ * `policy:<wave>`. The pull request workflow (`chant build --pr-loop`,
+ * chant#4964) signs `plan:<member>` and `policy:<member>` in its note job,
+ * runs the check job and sets the ref gate's status. `plywood check` runs `chant ci check`, which signs each
  * check hook by its name when the job has `CHANT_RUNNER_KEY` or
  * `CHANT_RUNNER_IDENTITY=oidc`. `plywood init` writes `.chant/trust.json`
  * from the key (src/init/trust.ts). Without the key nothing changes.

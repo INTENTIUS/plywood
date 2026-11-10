@@ -75,12 +75,23 @@ describe("plywood.yml evidence: the config", () => {
     workflowPlan(chant, parseConfig("gate: always\n").doc, "github", "production", undefined);
     workflowPlan(chant, parseConfig("evidence: { runner_key_secret: RUNNER_PEM }\n").doc, "github", "production", undefined);
     expect("evidence" in seen[0]!).toBe(false);
-    expect(seen[1]!.evidence).toEqual({ runnerKeySecret: "RUNNER_PEM" });
+    expect("checkJob" in seen[0]! || "refGateStatus" in seen[0]!).toBe(false);
+    expect(seen[1]!).toMatchObject({ evidence: { runnerKeySecret: "RUNNER_PEM" }, checkJob: true, refGateStatus: true });
+  });
+
+  it("chant build --pr-loop gets the runner identity, the check job and the ref gate's status job only with the key (chant#4964)", () => {
+    const argv = (yml: string) => workflowPlan(fakeChant(() => tmpdir()), parseConfig(yml).doc, "github", "production", undefined).argv;
+    const plain = argv("gate: always\n");
+    for (const flag of ["--check-job", "--ref-gate-status", "--evidence-identity", "--evidence-runner-key-secret"]) expect(plain).not.toContain(flag);
+    expect(argv("evidence: { runner_key_secret: RUNNER_PEM }\n").slice(plain.length)).toEqual(["--evidence-runner-key-secret", "RUNNER_PEM", "--check-job", "--ref-gate-status"]);
+    expect(argv("evidence: { identity: oidc, audience: chant }\n").slice(plain.length)).toEqual(["--evidence-identity", "oidc", "--evidence-audience", "chant", "--check-job", "--ref-gate-status"]);
   });
 
   it("the ref gate's rule names the check hooks, plan and policy, and no hook that takes local evidence", () => {
     expect(refGateChecks(["pre-commit"], false).map((c) => c.check)).toEqual(["pre-commit", "plan", "policy"]);
     expect(refGateChecks(["pre-commit"], true).map((c) => c.check)).toEqual(["plan", "policy"]);
+    // A workspace member's pull request pipeline signs plan and policy under its name (chant#4964).
+    expect(refGateChecks(["pre-commit"], false, "shop").map((c) => c.check)).toEqual(["pre-commit", "plan:shop", "policy:shop"]);
   });
 });
 
@@ -181,8 +192,8 @@ describe("plywood init with plywood.yml evidence", () => {
           ref: "refs/heads/main",
           checks: [
             { check: "pre-commit", command: "plywood check" },
-            { check: "plan", command: "/plywood preview on the pull request" },
-            { check: "policy", command: "/plywood preview on the pull request" },
+            { check: "plan:shop", command: "/plywood preview on the pull request" },
+            { check: "policy:shop", command: "/plywood preview on the pull request" },
           ],
         },
       ],
@@ -195,6 +206,9 @@ describe("plywood init with plywood.yml evidence", () => {
     expect(r.todo.some((t) => t.includes("trusted_root.json"))).toBe(true);
     // A keyless identity is listed, so chant gives no runner key hint.
     expect(r.todo.some((t) => t.includes("no runner key or keyless identity"))).toBe(false);
+    // The ref gate's status decides the update, so it is the required one.
+    expect(r.todo).toContain("Make chant/ref-gate a required status on main");
+    expect(r.todo).not.toContain("Make plywood/preview a required status on main");
     // Run again: nothing changes.
     const again = await initIn(dir);
     expect(again.files.find((f) => f.file === TRUST_FILE)?.status).toBe("unchanged");
@@ -214,7 +228,7 @@ describe("plywood init with plywood.yml evidence", () => {
     await initIn(dir);
     const t = JSON.parse(readFileSync(join(dir, TRUST_FILE), "utf8"));
     expect(t.local).toEqual({ checks: [{ check: "pre-commit" }] });
-    expect(t.refs[0].checks.map((c: { check: string }) => c.check)).toEqual(["plan", "policy"]);
+    expect(t.refs[0].checks.map((c: { check: string }) => c.check)).toEqual(["plan:shop", "policy:shop"]);
   });
 
   it("runner_key_secret writes no identity and says where the key goes", async () => {
@@ -222,7 +236,7 @@ describe("plywood init with plywood.yml evidence", () => {
     const r = await initIn(dir);
     const t = JSON.parse(readFileSync(join(dir, TRUST_FILE), "utf8"));
     expect(t.keyless).toBeUndefined();
-    expect(t.refs[0].checks.map((c: { check: string }) => c.check)).toEqual(["plan", "policy"]);
+    expect(t.refs[0].checks.map((c: { check: string }) => c.check)).toEqual(["plan:shop", "policy:shop"]);
     expect(r.todo.some((l) => l.includes("CHANT_RUNNER_KEY_PEM secret"))).toBe(true);
   });
 
@@ -271,8 +285,10 @@ async function generated(forge: "github" | "forgejo" | "gitlab", yml: string | u
 
 /** The waves workflow files chant writes for the spec. */
 const WAVES_FILE = /pulumi-up(\.gitlab-ci)?\.ya?ml$/;
-/** The files the key may change: plywood.yml itself, the waves spec, the waves workflows, chant's record of the files it generated, and the trust file. */
-const KEYED = (f: string) => f === "plywood.yml" || f === TRUST_FILE || f === ".chant/generated.json" || f.startsWith(".chant/op-waves/") || WAVES_FILE.test(f);
+/** The pull request workflow, by forge. */
+const PR_FILE = { github: ".github/workflows/plywood.yml", gitlab: ".gitlab-ci.yml", forgejo: ".forgejo/workflows/plywood.yml" } as const;
+/** The files the key may change: plywood.yml itself, the waves spec, the waves workflows, the pull request workflow, chant's record of the files it generated, and the trust file. */
+const KEYED = (f: string) => f === "plywood.yml" || f === TRUST_FILE || f === ".chant/generated.json" || f.startsWith(".chant/op-waves/") || WAVES_FILE.test(f) || (Object.values(PR_FILE) as string[]).includes(f);
 
 describe.runIf(real !== undefined)("the pipelines chant generates with plywood.yml evidence", () => {
   const cases = [
@@ -292,6 +308,14 @@ describe.runIf(real !== undefined)("the pipelines chant generates with plywood.y
         expect(plain[f], f).not.toContain("CHANT_RUNNER_IDENTITY");
       }
       expect(JSON.parse(keyed[".chant/op-waves/pulumi-up.spec.json"]!).options.evidence).toEqual({ identity: "oidc" });
+      // chant#4964: the pull request workflow signs plan:shop and policy:shop, runs the check job and sets the ref gate's status.
+      const pr = keyed[PR_FILE[forge]]!;
+      expect(pr, PR_FILE[forge]).toContain("ci evidence sign");
+      expect(pr).toContain("--member shop");
+      expect(pr).toContain("ci check");
+      expect(pr).toContain("workspace ref-gate status");
+      expect(plain[PR_FILE[forge]]).not.toContain("workspace ref-gate status");
+      expect(plain[PR_FILE[forge]]).not.toContain("ci evidence sign");
       expect(Object.keys(keyed).filter((f) => !KEYED(f)).sort()).toEqual(Object.keys(plain).filter((f) => !KEYED(f)).sort());
       for (const f of Object.keys(plain).filter((f) => !KEYED(f))) expect(keyed[f], f).toBe(plain[f]);
     }, 120_000);

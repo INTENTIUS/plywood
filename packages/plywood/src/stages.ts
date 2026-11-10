@@ -408,7 +408,8 @@ export function workflowPlan(
     // chant#4785: GitLab starts no pipeline on a note, so a scheduled note-commands job answers the comments.
     ...(forge === "gitlab" ? { noteCommands: true } : {}),
     // chant#4870, #4869: plywood.yml evidence, the runner identity the plan and policy checks are signed with.
-    ...(pipeline.evidence ? { evidence: pipeline.evidence } : {}),
+    // chant#4964: with evidence, the check job signs the check hooks and the ref gate job sets chant/ref-gate.
+    ...(pipeline.evidence ? { evidence: pipeline.evidence, checkJob: true, refGateStatus: true } : {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(jobsWanted.filter((j) => j !== "apply"));
   const argv = [
@@ -423,6 +424,8 @@ export function workflowPlan(
     // Review stacks (plywood#15): chant's pr-env jobs.
     ...(doc.review_stacks !== undefined ? ["--pr-env"] : []),
     ...(opts.prJobs?.flags ?? []),
+    // chant#4964: a member's pull request pipeline signs plan:<member> and policy:<member> in its note job.
+    ...(pipeline.evidence ? evidenceBuildArgv(pipeline.evidence) : []),
     // chant#4772: the control repo, so the note job the build writes reads its records (plywood#28).
     ...(opts.control !== undefined ? controlBuildArgv(doc, (opts.control as { member: string }).member) : []),
     ...extra,
@@ -439,6 +442,14 @@ export function actionJobFor(doc: RawConfig, forge: ForgeKind, notes: string[]):
   if (!hasActions(doc)) return false;
   if (forge === "gitlab") return (notes.push(ACTIONS_NOT_ON_GITLAB), false);
   return true;
+}
+
+/** `chant build --pr-loop`'s runner identity, check job and ref gate status job for plywood.yml `evidence` (chant#4964). */
+export function evidenceBuildArgv(e: { runnerKeySecret?: string; identity?: "oidc"; audience?: string }): string[] {
+  const identity = e.identity === "oidc"
+    ? ["--evidence-identity", "oidc", ...(e.audience ? ["--evidence-audience", e.audience] : [])]
+    : ["--evidence-runner-key-secret", e.runnerKeySecret!];
+  return [...identity, "--check-job", "--ref-gate-status"];
 }
 
 /** `pr-apply --merge auto` and its token variable and method (chant#4636). */

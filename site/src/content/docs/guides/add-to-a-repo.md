@@ -40,7 +40,7 @@ The pipeline is chant's [pull request CI](https://intentius.io/chant/guide/pull-
 | GitLab | `.gitlab-ci.yml` | `plywood/preview` external status |
 | Forgejo | `.forgejo/workflows/plywood.yml` | `plywood/preview` commit status |
 
-Make `plywood/preview` a required status on the default branch. [plywood.yml](/plywood/reference/config/) lists every key.
+Make `plywood/preview` a required status on the default branch, or `chant/ref-gate` when `plywood.yml` has `evidence` ([Sign the checks](/plywood/guides/sign-checks/)). [plywood.yml](/plywood/reference/config/) lists every key.
 
 ## Comment commands on GitLab
 

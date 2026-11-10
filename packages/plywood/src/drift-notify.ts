@@ -6,7 +6,8 @@
  * `productSendOptions` on `@intentius/chant/ci-product` (chant#4610), and
  * `makeNotifyEvent` and `sendNotify` on `@intentius/chant/notify`. The
  * event names the drifted stacks, the ones whose read failed, and the run's
- * fingerprint (chant's `driftRunFingerprint` of the drifted stacks, chant#4896).
+ * fingerprint, which `driftNotifyFields` computes from the drifted stacks'
+ * records (chant#4896, #4944).
  *
  * A run whose finding is the last run's sends nothing. The last finding is
  * the drift issues: each drifted stack's issue carries its fingerprint, and
@@ -17,7 +18,7 @@
  *
  * A failed delivery is a line on stderr and never changes the exit code.
  */
-import { driftRunFingerprint, type DriftIssueRecord } from "@intentius/chant/drift-issue";
+import type { DriftIssueRecord } from "@intentius/chant/drift-issue";
 import type { ChantNotifyConfig } from "./config/observe";
 
 /** One stack's read, as the notice reads it. */
@@ -32,7 +33,10 @@ export interface DriftNoticeStack {
 
 /** The part of chant plywood calls to send the event. */
 export interface ChantDriftNotify {
-  driftNotifyFields(words: unknown, input: { changed: string[]; failed?: string[]; fingerprint?: string; project?: string; environment?: string }): unknown;
+  driftNotifyFields(
+    words: unknown,
+    input: { changed?: string[]; failed?: string[]; fingerprint?: string; stacks?: ReadonlyArray<{ stack: string; records: readonly DriftIssueRecord[] }>; project?: string; environment?: string },
+  ): { drift: { changed: string[]; fingerprint?: string } };
   productSendOptions(words: unknown, options?: Record<string, unknown>): Record<string, unknown>;
   makeNotifyEvent(fields: unknown, options?: { env?: NodeJS.ProcessEnv }): unknown;
   sendNotify(config: unknown, event: unknown, options?: Record<string, unknown>): Promise<Array<{ target: string; ok: boolean; detail: string }>>;
@@ -68,21 +72,20 @@ export async function sendDriftNotice(input: {
   if (!notifiesDrift(input.notify)) return undefined;
   const drifted = input.results.filter((r) => r.ok && r.drifted > 0);
   if (drifted.length === 0) return undefined;
-  const fingerprint = driftRunFingerprint(drifted);
-  if (drifted.every((r) => r.issue?.action === "unchanged")) {
-    return { sent: false, reason: "no drift event was sent: every drifted stack's finding is the one its issue already holds", fingerprint };
-  }
   const failed = input.results.filter((r) => !r.ok).map((r) => r.stack);
   const c = input.chant;
   const fields = c.driftNotifyFields(c.words, {
-    changed: drifted.map((r) => r.stack),
+    stacks: drifted,
     ...(failed.length ? { failed } : {}),
-    fingerprint,
     ...(input.environment ? { environment: input.environment } : {}),
   });
+  const fingerprint = fields.drift.fingerprint;
+  if (drifted.every((r) => r.issue?.action === "unchanged")) {
+    return { sent: false, reason: "no drift event was sent: every drifted stack's finding is the one its issue already holds", ...(fingerprint ? { fingerprint } : {}) };
+  }
   const event = c.makeNotifyEvent(fields, { env: input.env });
   const deliveries = await c.sendNotify(input.notify, event, c.productSendOptions(c.words, { env: input.env, log: input.log, ...(input.fetch ? { fetch: input.fetch } : {}) }));
-  return { sent: deliveries.some((d) => d.ok), fingerprint, deliveries, ...(deliveries.some((d) => d.ok) ? {} : { reason: "no drift event was delivered" }) };
+  return { sent: deliveries.some((d) => d.ok), ...(fingerprint ? { fingerprint } : {}), deliveries, ...(deliveries.some((d) => d.ok) ? {} : { reason: "no drift event was delivered" }) };
 }
 
 let loaded: Promise<Omit<ChantDriftNotify, "words">> | undefined;

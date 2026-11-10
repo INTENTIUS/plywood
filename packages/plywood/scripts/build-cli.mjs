@@ -5,14 +5,15 @@
 // pinned chant, and the chant a generated job runs is the same one. A subpath
 // the installed chant serves only as TypeScript is bundled.
 //   node scripts/build-cli.mjs     (npm run build, just build)
-// The metafile goes to the root's node_modules/.cache/plywood for
-// scripts/bundle-check.mjs, so it does not ship in the tarball.
+// The metafile goes to the root's node_modules/.cache/plywood for chant's
+// bundle check (`chant dev bundle-check`, package.json's chantBundleCheck), so
+// it does not ship in the tarball.
 import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { releaseImagePins, writeReleaseImagePins } from "@intentius/chant/lifecycle/release-images";
-import { chantPlugin } from "./chant-exports.mjs";
+import { chantExternalPlugin } from "@intentius/chant/bundle-check";
 import { build } from "esbuild";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,7 +61,7 @@ const result = await build({
     __PLYWOOD_CHANT__: JSON.stringify(builtChant),
     ...(digests ? { __PLYWOOD_IMAGE_DIGESTS__: JSON.stringify(digests) } : {}),
   },
-  plugins: [chantPlugin(external)],
+  plugins: [chantExternalPlugin(pkgDir, external)],
   logLevel: "warning",
 });
 chmodSync(outfile, 0o755);
@@ -77,7 +78,7 @@ console.log(`  dist/plywood.mjs ${(statSync(outfile).size / 1024).toFixed(1)} KB
 /** Each image's reference at this version, by engine, from src/images.ts. */
 async function imageReferences() {
   const bundled = join(root, "node_modules/.cache/plywood/images-refs.mjs");
-  await build({ entryPoints: [join(pkgDir, "src/images.ts")], outfile: bundled, bundle: true, platform: "node", format: "esm", target: "node22", plugins: [chantPlugin()], logLevel: "warning" });
+  await build({ entryPoints: [join(pkgDir, "src/images.ts")], outfile: bundled, bundle: true, platform: "node", format: "esm", target: "node22", plugins: [chantExternalPlugin(pkgDir)], logLevel: "warning" });
   const { imageFor, TOOL_VERSIONS } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);
   return Object.fromEntries(Object.keys(TOOL_VERSIONS).map((engine) => {
     const ref = imageFor(engine, {});

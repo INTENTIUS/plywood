@@ -30,8 +30,20 @@
     "build": "node scripts/build-cli.mjs",
     "schema": "node scripts/build-schema.mjs",
     "images": "node scripts/build-images.mjs",
-    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/build-images.mjs --check && node scripts/bundle-check.mjs",
+    "bundle-check": "node scripts/build-schema.mjs --check && node scripts/build-images.mjs --check && chant dev bundle-check .",
     "prepack": "node scripts/build-cli.mjs"
+  },
+  "chantBundleCheck": {
+    "bundle": "dist/plywood.mjs",
+    "maxPackBytes": 2097152,
+    "needs": [
+      "@intentius/chant",
+      "@intentius/chant-lexicon-pulumi",
+      "@intentius/chant-lexicon-forgejo",
+      "@intentius/chant-lexicon-github",
+      "@intentius/chant-lexicon-gitlab"
+    ],
+    "metafile": "../../node_modules/.cache/plywood/metafile.json"
   },
   "dependencies": {
     "@intentius/chant": "0.124.86",

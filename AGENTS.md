@@ -4,7 +4,7 @@
 - No module under `packages/plywood/src` runs pulumi, plunge or git. chant runs them in process with plywood's words (`src/words.ts`).
 - plywood owns no exit codes. It passes chant's through unchanged; `src/exit-codes.ts` is chant's table (`@intentius/chant/exit-codes`).
 - `@intentius/chant` and every chant lexicon are pinned to one exact version, the same in the root and package manifests (`just bundle-check` holds the pin). A chant feature newer than the pin comes with a move of the pin, not a feature-detect: plywood imports what the pinned chant has, and the build fails on a subpath it lacks. The bundle does not carry chant: an `@intentius/chant` import the installed chant serves as compiled JS stays external and runs the pinned package (chant#4591).
-- `just chant-local [<chant-dir>|--reset]` builds against a local chant. Go back to the pin with `--reset` before you commit a lock file.
+- `just chant-local <chant-dir>|--reset` builds against a local chant through `chant dev local`. Go back to the pin with `--reset` before you commit a lock file.
 - Before proposing a change, run `just typecheck`, `just bundle-check` and `just test`; for site changes, `just site-lint` and `just site`.
 - The CI workflow is declared in `ci/ci.ts`. Edit the TypeScript and run `just ci`; never edit `.github/workflows/ci.yml` by hand, since CI fails when it differs from the render. `pages.yml` deploys the site and stays hand-written.
 - Nobody runs `npm publish` or pushes an image by hand, apart from the maintainer's one-time first publish below. Releases go through `.github/workflows/publish.yml`, dispatched by hand with the version.

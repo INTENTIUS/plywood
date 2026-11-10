@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { chantPlugin } from "./chant-exports.mjs";
+import { chantExternalPlugin } from "@intentius/chant/bundle-check";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const root = join(pkgDir, "../..");
@@ -23,7 +23,7 @@ await build({
   format: "esm",
   target: "node22",
   // The installed chant runs as itself, as it does under the bin.
-  plugins: [chantPlugin()],
+  plugins: [chantExternalPlugin(pkgDir)],
   logLevel: "warning",
 });
 const { plywoodSchema } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);

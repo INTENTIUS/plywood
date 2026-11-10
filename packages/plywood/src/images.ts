@@ -3,8 +3,8 @@
  *
  * plywood pins one stock Pulumi release and one plunge release. The two
  * images, `plywood-pulumi` and `plywood-plunge`, each carry one engine at its
- * pin plus the plywood bundle; scripts/build-images.mjs renders their
- * Dockerfiles from this module into images/<name>/Dockerfile. A job runs in
+ * pin plus the plywood bundle; `chant dev render` of {@link dockerfiles}
+ * (npm run images) writes their Dockerfiles into images/<name>/Dockerfile. A job runs in
  * the image for its engine, by digest in a release's bundle (the digests
  * chant's release cut recorded, which scripts/build-cli.mjs bakes in), and
  * runs the install lines for any pin the image
@@ -157,7 +157,7 @@ export function imageReference(ref: ImageRef): string {
 export const DIGEST = /@sha256:[0-9a-f]{64}$/;
 
 // ---------------------------------------------------------------------------
-// The images' Dockerfiles, rendered by scripts/build-images.mjs.
+// The images' Dockerfiles, which `chant dev render src/images.ts dockerfiles` writes.
 
 /**
  * The AWS CLI release the images carry (plywood#22): chant uploads an
@@ -220,7 +220,7 @@ export function imageSpec(engine: EngineName): ProductImageSpec {
 
 /** The comment lines on top of each rendered Dockerfile. */
 const DOCKERFILE_HEADER = [
-  "Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.",
+  "Rendered from dockerfiles in packages/plywood/src/images.ts by chant dev render.",
   "Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root",
   `after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR}, with --build-arg ${RELEASE_LABEL_ARG}=<the packed version>`,
   "(just images passes the committed one; a release passes its label); nothing pushes it.",

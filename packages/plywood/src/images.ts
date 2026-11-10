@@ -15,7 +15,8 @@
  * `plunge-v<ver>-checksums.txt`, Pulumi's `pulumi-<ver>-checksums.txt`), and
  * for the pinned releases also that the file lists the sha256 plywood
  * recorded, so a tampered checksums file fails the install as a tampered
- * archive does.
+ * archive does. The recorded sums are chant's (`CI_TOOL_SHA256` in
+ * `@intentius/chant/ci-image`, chant#4784).
  *
  * Each engine lives in /opt/plywood/<engine>-<version>/ with its language
  * hosts beside it, the default one linked into /usr/local/bin. An install
@@ -30,7 +31,9 @@
  * download. A pin that is not linked passes `link: false`: the line then
  * checks only the versioned directory, which a step pinned with
  * `engineVersion` runs from, and leaves PATH alone (chant#4814). The images'
- * fetch stage runs chant's `ciFetchScript` with the same sums.
+ * Dockerfiles are chant's `productImageDockerfile` (chant#4784) from
+ * {@link imageSpec}: the fetch stage checks each engine and the AWS CLI
+ * against the same sums.
  *
  * plywood hands the lines to chant as `beforeScript`
  * ({@link chantPipelineOptions}). A stack pinned to a release that is not
@@ -44,7 +47,8 @@ import { version as PLYWOOD_VERSION } from "../package.json";
 /** The release's image digests by reference, baked in by scripts/build-cli.mjs from CHANT_RELEASE_DIGESTS; empty outside a release build. */
 declare const __PLYWOOD_IMAGE_DIGESTS__: Record<string, string> | undefined;
 const digests: Record<string, string> = typeof __PLYWOOD_IMAGE_DIGESTS__ !== "undefined" ? __PLYWOOD_IMAGE_DIGESTS__ : {};
-import { CI_DOCKER_ARCH, ciFetchScript, plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
+import { ciToolSha256, derivedImageDockerfile, productImageDockerfile, type ProductImageSpec } from "@intentius/chant/ci-image";
+import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
 export type EngineName = "pulumi" | "plunge";
@@ -72,22 +76,6 @@ export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
  */
 export const IMAGE_PLUGINS: readonly PluginPin[] = [{ kind: "resource", name: "command", version: "1.0.1" }];
 
-/** The archive's architecture word, as both projects name their Linux builds. */
-export type Arch = "x64" | "arm64";
-export const ARCHES: readonly Arch[] = ["x64", "arm64"];
-
-/**
- * The sha256 of each pinned Linux archive, copied from the release's
- * checksums file. A checksums file that lists another sum for one of these
- * fails the install.
- */
-export const PINNED_SHA256: Readonly<Record<string, string>> = {
-  "pulumi-v3.272.0-linux-x64.tar.gz": "58d545f2b98761051922008ebd381ecef95484d7f7a5ff7faa15d7a780ea84f6",
-  "pulumi-v3.272.0-linux-arm64.tar.gz": "4f0741901b8982c4326b702dabf483c63d2cf77c88ac42dd752b72541284a534",
-  "plunge-v0.2.0-linux-x64.tar.gz": "c9c73d05cca9ad214b7f44230a6162cdcb6ad64bbfc725bc94688b997b191495",
-  "plunge-v0.2.0-linux-arm64.tar.gz": "c176a82f038164085aa19c8ad6530d6022e560e124050e535dbe364ae0473357",
-};
-
 /** Where plywood's images and install lines keep each release: the `engineRoot` a pinned step names. */
 export const ENGINE_ROOT = "/opt/plywood";
 
@@ -101,37 +89,10 @@ export function engineBin(engine: EngineName, version: string): string {
   return `${engineDir(engine, version)}/${engine}`;
 }
 
-/** One release's download: the base URL, the archive per architecture, and its checksums file. */
-export interface Release {
-  base: string;
-  archive(arch: Arch): string;
-  checksums: string;
-}
-
-export function release(engine: EngineName, version: string): Release {
-  if (engine === "pulumi") {
-    return {
-      base: `https://github.com/pulumi/pulumi/releases/download/v${version}`,
-      archive: (arch) => `pulumi-v${version}-linux-${arch}.tar.gz`,
-      checksums: `pulumi-${version}-checksums.txt`,
-    };
-  }
-  return {
-    base: `https://github.com/INTENTIUS/plunge/releases/download/plunge-v${version}`,
-    archive: (arch) => `plunge-v${version}-linux-${arch}.tar.gz`,
-    checksums: `plunge-v${version}-checksums.txt`,
-  };
-}
-
-/** The pinned sums for `version`, by architecture, when plywood recorded them. */
-export function pinnedSums(engine: EngineName, version: string): Partial<Record<Arch, string>> {
-  const r = release(engine, version);
-  const out: Partial<Record<Arch, string>> = {};
-  for (const arch of ARCHES) {
-    const sum = PINNED_SHA256[r.archive(arch)];
-    if (sum) out[arch] = sum;
-  }
-  return out;
+/** chant's recorded sums for `version` (`ciToolSha256`), by the architecture word the pulumi lexicon's install lines take. */
+export function pinnedSums(engine: EngineName, version: string): Partial<Record<"x64" | "arm64", string>> {
+  const sums = ciToolSha256(engine, version);
+  return { ...(sums.amd64 ? { x64: sums.amd64 } : {}), ...(sums.arm64 ? { arm64: sums.arm64 } : {}) };
 }
 
 /**
@@ -205,47 +166,14 @@ export const DIGEST = /@sha256:[0-9a-f]{64}$/;
 // The images' Dockerfiles, rendered by scripts/build-images.mjs.
 
 /**
- * Base images by index digest, so a rebuild cannot change underneath a tag:
- * the same two terragucci's images use. NODE carries Node 22, which a
- * TypeScript Pulumi program's language host runs on.
+ * The AWS CLI release the images carry (plywood#22): chant uploads an
+ * `s3://` `reports.url` with `aws s3 cp`, which takes its credentials,
+ * region and endpoint from the job's environment. A release from 2.13 on
+ * reads `AWS_ENDPOINT_URL`, so a job pointed at an emulator stays on it;
+ * Debian bookworm's package (2.9) does not, which is why the images fetch
+ * AWS's own build, checked against chant's recorded sums, rather than apt's.
  */
-export const BASE_IMAGES = {
-  node: "node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392",
-  debian: "debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251",
-} as const;
-
-/**
- * The AWS CLI the images carry (plywood#22): chant uploads an `s3://`
- * `reports.url` with `aws s3 cp`, which takes its credentials, region and
- * endpoint from the job's environment. A release from 2.13 on reads
- * `AWS_ENDPOINT_URL`, so a job pointed at an emulator stays on it; Debian
- * bookworm's package (2.9) does not, which is why the images fetch AWS's own
- * build, checked against these sums, rather than apt's.
- */
-export const AWS_CLI = {
-  version: "2.22.0",
-  sha256: {
-    x86_64: "f315aa564190a12ae05a05bd8ab7b0645dd4a1ad71ce9e47dae4ff3dfeee8ceb",
-    aarch64: "c932ac00901ea3c430f3829140b8dc00fa6e9b8b99d6891929a4795947de7f3e",
-  },
-} as const;
-
-/** Where the images install the AWS CLI; `/usr/local/bin/aws` links into it. */
-export const AWS_CLI_DIR = "/opt/plywood/aws-cli";
-
-/** The fetch stage's line for the AWS CLI: download for the build's architecture, check the sum, install under {@link AWS_CLI_DIR}. */
-export function awsCliFetchLine(): string {
-  const { version, sha256 } = AWS_CLI;
-  return [
-    `a="$(case "$TARGETARCH" in (arm64) echo aarch64 ;; (*) echo x86_64 ;; esac)"`,
-    `case "$a" in (aarch64) want=${sha256.aarch64} ;; (*) want=${sha256.x86_64} ;; esac`,
-    `t="$(mktemp -d)"`,
-    `curl -fsSLo "$t/awscli.zip" "https://awscli.amazonaws.com/awscli-exe-linux-$a-${version}.zip"`,
-    `echo "$want  $t/awscli.zip" | sha256sum -c - >/dev/null`,
-    `unzip -q "$t/awscli.zip" -d "$t"`,
-    `"$t/aws/install" -i ${AWS_CLI_DIR} -b ${AWS_CLI_DIR}/bin`,
-  ].join(" && ");
-}
+export const AWS_CLI_VERSION = "2.22.0";
 
 /** Where the images keep Pulumi's home, so plugins a derived image installs serve every uid. */
 export const IMAGE_PULUMI_HOME = "/opt/plywood/pulumi-home";
@@ -263,55 +191,50 @@ export const RELEASE_LABEL_ARG = "CHANT_RELEASE_LABEL";
 const LABEL_REF = `\${${RELEASE_LABEL_ARG}}`;
 
 /**
- * One image's Dockerfile. The fetch stage downloads the engine and checks
- * it; the build argument `CHECKSUMS_URL` names another checksums file, which
- * is how a tampered one is shown to fail the build. curl never reaches the
- * final stage.
+ * One image in chant's terms (`ProductImageSpec`): the engine at its pin and
+ * the AWS CLI, each checked in the fetch stage, the engine's checksums file
+ * named by the build argument `CHECKSUMS_URL` (so a tampered one can be
+ * shown to fail the build), the Pulumi home every uid can use, the command
+ * provider, and the packed plywood package. curl never reaches the final
+ * stage.
  */
-export function dockerfile(engine: EngineName): string {
+export function imageSpec(engine: EngineName): ProductImageSpec {
   const version = TOOL_VERSIONS[engine];
-  const r = release(engine, version);
-  const dir = engineDir(engine, version);
-  const name = imageName(engine);
   const engineTitle = engine === "pulumi" ? `Pulumi ${version}` : `plunge ${version}`;
-  return [
-    `# Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.`,
-    `# Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root`,
-    `# after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR}, with --build-arg ${RELEASE_LABEL_ARG}=<the packed version>`,
-    `# (just images passes the committed one; a release passes its label); nothing pushes it.`,
-    `FROM ${BASE_IMAGES.debian} AS fetch`,
-    `ARG TARGETARCH`,
-    `ARG CHECKSUMS_URL=${r.base}/${r.checksums}`,
-    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*`,
-    `RUN set -e; ${ciFetchScript(engine, version, { dir: `/out${dir}`, arch: CI_DOCKER_ARCH, checksumsUrl: '"$CHECKSUMS_URL"', sha256: pinnedSums(engine, version) })}`,
-    // The AWS CLI chant uploads an s3:// reports.url with, checked against plywood's sums (AWS_CLI).
-    `RUN set -e; ${awsCliFetchLine()}`,
-    `FROM ${BASE_IMAGES.node}`,
-    // A forge may run the job as a uid with no passwd entry; Go then reads $USER and $HOME.
-    `ENV USER=plywood HOME=/tmp PULUMI_HOME=${IMAGE_PULUMI_HOME} PULUMI_SKIP_UPDATE_CHECK=true`,
-    `RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*`,
-    // A job often runs as another user than the one who owns its checkout.
-    `RUN git config --system --add safe.directory '*' && mkdir -p ${IMAGE_PULUMI_HOME} && chmod 1777 ${IMAGE_PULUMI_HOME}`,
-    `COPY --from=fetch /out/opt/plywood/ /opt/plywood/`,
-    `RUN ln -s ${dir}/${engine} /usr/local/bin/${engine} && ${engine} version`,
-    pluginInstallLine(engine, IMAGE_PLUGINS),
-    `COPY --from=fetch ${AWS_CLI_DIR}/ ${AWS_CLI_DIR}/`,
-    `RUN ln -s ${AWS_CLI_DIR}/v2/current/bin/aws /usr/local/bin/aws && aws --version`,
-    // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm
-    // fetches its exact-pinned runtime dependencies. The tarball is made by npm pack (just images).
-    // The release's label, which the release cut stamps as the package version (chant's release.version)
-    // and passes as a build argument; a build outside a release passes the committed version (just images).
-    `ARG ${RELEASE_LABEL_ARG}`,
-    `COPY ${PACK_DIR}/${packName(LABEL_REF)} /tmp/${packName(LABEL_REF)}`,
-    `RUN npm install -g --omit=dev --no-audit --no-fund /tmp/${packName(LABEL_REF)} && rm -f /tmp/${packName(LABEL_REF)} && npm cache clean --force && plywood --version`,
-    `LABEL org.opencontainers.image.title="${name}"`,
-    `LABEL org.opencontainers.image.description="${engineTitle}, the AWS CLI ${AWS_CLI.version} and the plywood CLI"`,
-    `LABEL org.opencontainers.image.version="${LABEL_REF}"`,
-    `LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"`,
-    `LABEL org.opencontainers.image.licenses="Apache-2.0"`,
-    `CMD ["bash"]`,
-    "",
-  ].join("\n");
+  const tarball = `${PACK_DIR}/${packName(LABEL_REF)}`;
+  return {
+    name: imageName(engine),
+    product: "plywood",
+    description: `${engineTitle}, the AWS CLI ${AWS_CLI_VERSION} and the plywood CLI`,
+    source: "https://github.com/INTENTIUS/plywood",
+    tools: [
+      { tool: engine, version, checksumsArg: "CHECKSUMS_URL" },
+      { tool: "aws-cli", version: AWS_CLI_VERSION },
+    ],
+    toolRoot: ENGINE_ROOT,
+    env: [`PULUMI_HOME=${IMAGE_PULUMI_HOME}`, "PULUMI_SKIP_UPDATE_CHECK=true"],
+    steps: [
+      { run: `mkdir -p ${IMAGE_PULUMI_HOME} && chmod 1777 ${IMAGE_PULUMI_HOME} && ${engine} version && aws --version` },
+      { run: pluginSteps(engine, IMAGE_PLUGINS) },
+    ],
+    // The bundle leaves @intentius/chant* external, so the image installs the packed package and npm fetches its
+    // exact-pinned runtime dependencies. The tarball is made by npm pack (just images), named by the release's label.
+    bundle: { tarball, check: "plywood --version" },
+    versionArg: RELEASE_LABEL_ARG,
+  };
+}
+
+/** The comment lines on top of each rendered Dockerfile. */
+const DOCKERFILE_HEADER = [
+  "Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.",
+  "Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root",
+  `after npm pack -w @intentius/plywood --pack-destination ${PACK_DIR}, with --build-arg ${RELEASE_LABEL_ARG}=<the packed version>`,
+  "(just images passes the committed one; a release passes its label); nothing pushes it.",
+];
+
+/** One image's Dockerfile: chant's `productImageDockerfile` of {@link imageSpec}. */
+export function dockerfile(engine: EngineName): string {
+  return productImageDockerfile(imageSpec(engine), DOCKERFILE_HEADER);
 }
 
 /** Each image's Dockerfile, by its path from the repository root. */
@@ -341,22 +264,20 @@ export function parsePlugin(s: string): PluginPin | undefined {
  * The Dockerfile of a prepared image: FROM plywood's image for `engine`,
  * with each plugin installed into the image's Pulumi home, so the job's
  * engine finds them without a download. The user builds and pushes it in
- * their own CI and names it in `image`.
+ * their own CI and names it in `image`. chant's `derivedImageDockerfile`
+ * writes it.
  */
 export function imageRecipe(engine: EngineName, plugins: readonly PluginPin[], from: ImageRef = imageFor(engine)): string {
-  return [
-    `# A prepared image for plywood's jobs: ${engine} and the plugins below, so a job downloads none.`,
-    `# Build and push it in your own CI, then name it by digest in plywood.yml's image.`,
-    `FROM ${imageReference(from)}`,
-    ...plugins.map((p) => `RUN ${engine} plugin install ${p.kind} ${p.name} ${p.version}`),
-    `RUN chmod -R a+rX ${IMAGE_PULUMI_HOME}`,
-    "",
-  ].join("\n");
+  return derivedImageDockerfile({
+    from: imageReference(from),
+    header: [`A prepared image for plywood's jobs: ${engine} and the plugins below, so a job downloads none.`, "Build and push it in your own CI, then name it by digest in plywood.yml's image."],
+    steps: [...plugins.map((p) => ({ run: `${engine} plugin install ${p.kind} ${p.name} ${p.version}` })), { run: `chmod -R a+rX ${IMAGE_PULUMI_HOME}` }],
+  });
 }
 
-/** The Dockerfile line that installs `plugins` into the image's Pulumi home, readable by every uid. */
-export function pluginInstallLine(engine: EngineName, plugins: readonly PluginPin[]): string {
-  return `RUN ${[...plugins.map((p) => `${engine} plugin install ${p.kind} ${p.name} ${p.version}`), `chmod -R a+rX ${IMAGE_PULUMI_HOME}`].join(" && ")}`;
+/** The command that installs `plugins` into the image's Pulumi home, readable by every uid. */
+function pluginSteps(engine: EngineName, plugins: readonly PluginPin[]): string {
+  return [...plugins.map((p) => `${engine} plugin install ${p.kind} ${p.name} ${p.version}`), `chmod -R a+rX ${IMAGE_PULUMI_HOME}`].join(" && ");
 }
 
 // ---------------------------------------------------------------------------

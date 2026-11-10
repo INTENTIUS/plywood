@@ -19,7 +19,6 @@ import {
   imageReference,
   installLine,
   parsePlugin,
-  pinnedSums,
   TOOL_VERSIONS,
 } from "../src/images";
 import { publishedImage } from "./published-image";
@@ -34,8 +33,8 @@ describe("engine pins", () => {
     expect(TOOL_VERSIONS).toEqual({ pulumi: "3.272.0", plunge: "0.2.0" });
     // chant records the sums of both pins (CI_TOOL_SHA256), for both architectures.
     for (const engine of ["pulumi", "plunge"] as const) {
-      const sums = pinnedSums(engine, TOOL_VERSIONS[engine]);
-      for (const arch of ["x64", "arm64"] as const) expect(sums[arch], `${engine} ${arch}`).toMatch(/^[0-9a-f]{64}$/);
+      const sums = ciToolSha256(engine, TOOL_VERSIONS[engine]);
+      for (const arch of ["amd64", "arm64"] as const) expect(sums[arch], `${engine} ${arch}`).toMatch(/^[0-9a-f]{64}$/);
     }
   });
 
@@ -45,7 +44,7 @@ describe("engine pins", () => {
     const line = s.pipeline.engineSetup![0];
     expect(line).toContain('[ -x "/opt/plywood/pulumi-3.272.0/pulumi" ] ||');
     expect(line).toContain("pulumi-3.272.0-checksums.txt");
-    expect(line).toContain(pinnedSums("pulumi", "3.272.0").x64!);
+    expect(line).toContain(ciToolSha256("pulumi", "3.272.0").amd64!);
     expect(line).toContain("sha256sum -c");
     // The release's own image, by digest, in a release's build (CHANT_RELEASE_DIGESTS); by tag in any other.
     expect(s.pipeline.image).toBe(publishedImage("pulumi"));
@@ -69,7 +68,7 @@ describe("engine pins", () => {
   it("checks a release with no recorded sum against its checksums file alone", () => {
     const line = installLine("pulumi", "3.250.0");
     expect(line).toContain("want=");
-    expect(line).not.toContain(pinnedSums("pulumi", "3.272.0").x64!);
+    expect(line).not.toContain(ciToolSha256("pulumi", "3.272.0").amd64!);
   });
 
   it("matches stack globs", () => {
@@ -146,10 +145,10 @@ describe("Dockerfiles", () => {
     }
   });
 
-  it("verify each archive against the release checksums and plywood's pinned sum", () => {
+  it("verify each archive against the release checksums and chant's recorded sum", () => {
     const text = dockerfile("plunge");
     expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.0/plunge-v0.2.0-checksums.txt");
-    expect(text).toContain(pinnedSums("plunge", "0.2.0").arm64!);
+    expect(text).toContain(ciToolSha256("plunge", "0.2.0").arm64!);
     expect(text).toMatch(/^FROM node:22-bookworm-slim@sha256:[0-9a-f]{64}$/m);
     // Each download is checked in the same RUN line, before the node stage copies it.
     for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");

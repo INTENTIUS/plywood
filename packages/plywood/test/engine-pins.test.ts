@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import { toChantSettings } from "../src/chant-config";
 import { parseConfig } from "../src/config/index";
-import { ENGINE_ROOT, installLine, installLines, pinnedSums } from "../src/images";
+import { ciToolSha256 } from "@intentius/chant/ci-image";
+import { ENGINE_ROOT, installLine, installLines } from "../src/images";
 import { initStacks } from "../src/init";
 import type { Detected } from "../src/init/detect";
 import { componentsFile, stepInput, wavesSpec } from "../src/init/render";
@@ -16,13 +17,10 @@ const detected = (keys: string[]): Detected => ({
 });
 
 describe("install lines", () => {
-  it("take chant's line for a linked release, with the root /opt/plywood and plywood's sums", () => {
-    expect(installLine("pulumi", "3.272.0")).toBe(pulumiInstallLine("3.272.0", { root: ENGINE_ROOT, sha256: pinnedSums("pulumi", "3.272.0") }));
-    expect(installLine("plunge", "0.2.0")).toBe(plungeInstallLine("0.2.0", { root: ENGINE_ROOT, sha256: pinnedSums("plunge", "0.2.0") }));
-  });
-
-  it("leave the sums to chant for a release plywood has not recorded", () => {
-    expect(installLine("pulumi", "3.280.0")).toBe(pulumiInstallLine("3.280.0", { root: ENGINE_ROOT }));
+  it("take chant's line for a linked release, with the root /opt/plywood and chant's sums", () => {
+    expect(installLine("pulumi", "3.272.0")).toBe(pulumiInstallLine("3.272.0", { root: ENGINE_ROOT }));
+    expect(installLine("plunge", "0.2.0")).toBe(plungeInstallLine("0.2.0", { root: ENGINE_ROOT }));
+    expect(installLine("pulumi", "3.272.0")).toContain(ciToolSha256("pulumi", "3.272.0").amd64!);
   });
 
   it("take chant's unlinked line for a pin that is not linked", () => {

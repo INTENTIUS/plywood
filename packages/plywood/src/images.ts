@@ -25,9 +25,9 @@
  *
  * chant's pulumi lexicon renders the same verified lines
  * (`@intentius/chant-lexicon-pulumi/ci-setup`, chant#4592):
- * `pulumiInstallLine` and `plungeInstallLine` take the version, the root,
- * the recorded sums and `link`. Every line is chant's, given the root
- * /opt/plywood and plywood's sums, so plywood's images still skip the
+ * `pulumiInstallLine` and `plungeInstallLine` take the version, the root
+ * and `link`, and check chant's recorded sums. Every line is chant's,
+ * given the root /opt/plywood, so plywood's images still skip the
  * download. A pin that is not linked passes `link: false`: the line then
  * checks only the versioned directory, which a step pinned with
  * `engineVersion` runs from, and leaves PATH alone (chant#4814). The images'
@@ -47,7 +47,7 @@ import { version as PLYWOOD_VERSION } from "../package.json";
 /** The release's image digests by reference, baked in by scripts/build-cli.mjs from CHANT_RELEASE_DIGESTS; empty outside a release build. */
 declare const __PLYWOOD_IMAGE_DIGESTS__: Record<string, string> | undefined;
 const digests: Record<string, string> = typeof __PLYWOOD_IMAGE_DIGESTS__ !== "undefined" ? __PLYWOOD_IMAGE_DIGESTS__ : {};
-import { ciToolSha256, derivedImageDockerfile, productImageDockerfile, type ProductImageSpec } from "@intentius/chant/ci-image";
+import { derivedImageDockerfile, productImageDockerfile, type ProductImageSpec } from "@intentius/chant/ci-image";
 import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
@@ -89,21 +89,15 @@ export function engineBin(engine: EngineName, version: string): string {
   return `${engineDir(engine, version)}/${engine}`;
 }
 
-/** chant's recorded sums for `version` (`ciToolSha256`), by the architecture word the pulumi lexicon's install lines take. */
-export function pinnedSums(engine: EngineName, version: string): Partial<Record<"x64" | "arm64", string>> {
-  const sums = ciToolSha256(engine, version);
-  return { ...(sums.amd64 ? { x64: sums.amd64 } : {}), ...(sums.arm64 ? { arm64: sums.arm64 } : {}) };
-}
-
 /**
  * The job line that installs `engine` at `version`, checked against the
- * release checksums. It skips when the binary is already in place, as in
- * plywood's image or one built FROM it. With `link`, the binary is also
- * linked into /usr/local/bin, as the stack's default engine.
+ * release checksums and, for a release chant records, its sum (chant's
+ * `PINNED_SHA256`, chant#4908). It skips when the binary is already in
+ * place, as in plywood's image or one built FROM it. With `link`, the
+ * binary is also linked into /usr/local/bin, as the stack's default engine.
  */
 export function installLine(engine: EngineName, version: string, link = true): string {
-  const sums = pinnedSums(engine, version);
-  const options = { root: ENGINE_ROOT, ...(Object.keys(sums).length ? { sha256: sums } : {}), link };
+  const options = { root: ENGINE_ROOT, link };
   return engine === "pulumi" ? pulumiInstallLine(version, options) : plungeInstallLine(version, options);
 }
 

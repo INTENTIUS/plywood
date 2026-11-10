@@ -42,10 +42,10 @@
  *
  * Nothing here runs pulumi, plunge or git: chant does.
  */
-import { createHash } from "node:crypto";
 import { resolveTargetCloudIdentity } from "@intentius/chant/ci-identity";
 import { ForgeFlagError, forgeTargetOptionsFromFlags, forgeTargetWith } from "@intentius/chant/forge-flags";
-import { forgeClient } from "@intentius/chant/pr-forge";
+import { forgeClient, type PrForge } from "@intentius/chant/pr-forge";
+import { keepDriftIssue, type DriftIssueRecord } from "@intentius/chant/drift-issue";
 import { chantAudit, type ChantAudit } from "./chant-next";
 import { globMatches } from "./config/images";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -67,18 +67,7 @@ import type { ExitTable } from "./exit-codes";
 import { chantPipelineOptions } from "./images";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { up } from "./up";
-import {
-  BIN,
-  driftClearedComment,
-  driftIssueBody,
-  driftIssueMarker,
-  driftIssueTitle,
-  driftOpName,
-  PRODUCT,
-  PRODUCT_WORDS,
-  type DriftRow,
-  type ProductWordsInput,
-} from "./words";
+import { BIN, DRIFT_ATTRIBUTION_HEADING, driftIssueWords, driftOpName, PRODUCT, PRODUCT_WORDS, type ProductWordsInput } from "./words";
 
 /** The Op file `plywood ci` writes; chant discovers `*.op.ts` beside chant.config.ts. */
 export const DRIFT_OP_FILE = "ops/plywood-drift.op.ts";
@@ -92,11 +81,21 @@ export const SNAPSHOTS_FETCH = `git fetch --no-tags origin '+${SNAPSHOTS_REF}:${
 /** The statuses that count as drift, as PulumiWatchOp's `drifted` counts them. */
 export const DRIFT_STATUSES = ["drifted", "missing"] as const;
 
+/** A record of chant's drift document, as plywood reads it; the stack's member fills in a missing `member`. */
+export type DriftDocRecord = Omit<DriftIssueRecord, "member"> & { member?: string };
+
 /** The parts of chant's drift document plywood reads (`@intentius/chant/drift-record`). */
 export interface DriftDoc {
-  records?: Array<{ address: string; status: string; observedAt?: string; attributes?: Array<{ path: string }>; unobserved?: { reason?: string; detail?: string } }>;
+  records?: DriftDocRecord[];
   counts?: Record<string, number>;
   error?: { code: string; message: string };
+}
+
+/** One drifted or missing resource, as `plywood drift` prints it. */
+export interface DriftRow {
+  urn: string;
+  status: string;
+  attributes: string[];
 }
 
 /** The drifted and missing resources in a drift document, sorted by URN. */
@@ -107,27 +106,14 @@ export function driftRows(doc: DriftDoc): DriftRow[] {
     .sort((a, b) => (a.urn < b.urn ? -1 : a.urn > b.urn ? 1 : 0));
 }
 
-/** A finding's fingerprint: the same rows give the same one, whenever they are read. */
-export function driftFingerprint(rows: readonly DriftRow[]): string {
-  const text = rows.map((r) => `${r.urn}\t${r.status}\t${r.attributes.join(",")}`).join("\n");
-  return createHash("sha256").update(text).digest("hex").slice(0, 16);
-}
-
 /** The latest observation time in the document, else now. */
 function observedAt(doc: DriftDoc): string {
   const times = (doc.records ?? []).map((r) => r.observedAt).filter((t): t is string => typeof t === "string").sort();
   return times[times.length - 1] ?? new Date().toISOString();
 }
 
-/** The part of chant's forge client (`PrForge`, `@intentius/chant/pr-forge`) `plywood drift` calls. */
-export interface DriftForge {
-  runUrl?: string;
-  trackIssue(
-    marker: string,
-    finding: { title: string; body: string } | null,
-    opts?: { closeOnClear?: boolean; clearComment?: string; sameWhen?: string },
-  ): Promise<{ action: string; number?: number; url?: string }>;
-}
+/** The part of chant's forge client `plywood drift` calls. */
+export type DriftForge = Pick<PrForge, "trackIssue" | "runUrl">;
 
 let forgeOverride: ((kind: ForgeKind, env: NodeJS.ProcessEnv) => Promise<DriftForge>) | undefined;
 
@@ -147,6 +133,8 @@ export interface StackDrift {
   ok: boolean;
   drifted: number;
   rows: DriftRow[];
+  /** chant's drift records for the stack, which the issue is kept from. Left out of the JSON output. */
+  records: DriftIssueRecord[];
   /** When chant read the stack, from the records. */
   observedAt?: string;
   error?: string;
@@ -265,7 +253,7 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
     const failed = results.some((r) => !r.ok) || upkeepFailed;
     const code = failed ? table.failed : upCode !== undefined && upCode !== table.done ? upCode : drifted.length ? table.drift : table.done;
     if (json) {
-      io.out(JSON.stringify({ command: "drift", ok: code === table.done, exitCode: code, respond, stacks: results, ...(notice ? { notify: notice } : {}) }));
+      io.out(JSON.stringify({ command: "drift", ok: code === table.done, exitCode: code, respond, stacks: results.map(({ records: _, ...r }) => r), ...(notice ? { notify: notice } : {}) }));
     } else {
       if (notice) io.err(`${PRODUCT} drift: ${notice.sent ? `sent the drift event, fingerprint ${notice.fingerprint}` : notice.reason}`);
       for (const r of results) {
@@ -289,7 +277,6 @@ async function driftNotice(chant: ChantProduct, doc: RawConfig, results: StackDr
   return sendDriftNotice({
     notify,
     results,
-    stackFingerprint: driftFingerprint,
     chant: { ...(await chantDriftNotify()), words: chant.assertProductWords(PRODUCT_WORDS) },
     env: io.env,
     ...(environment ? { environment } : {}),
@@ -347,21 +334,22 @@ async function readStack(chant: ChantProduct, stack: string, member: string, dir
   try {
     if (existsSync(file)) doc = JSON.parse(readFileSync(file, "utf8")) as DriftDoc;
   } catch (e) {
-    return { stack, ok: false, drifted: 0, rows: [], error: `chant wrote a drift document plywood cannot read: ${(e as Error).message}` };
+    return { stack, ok: false, drifted: 0, rows: [], records: [], error: `chant wrote a drift document plywood cannot read: ${(e as Error).message}` };
   }
   if (code !== 0 || !doc || doc.error) {
-    return { stack, ok: false, drifted: 0, rows: [], error: doc?.error ? `${doc.error.code}: ${doc.error.message}` : `chant workspace drift exited ${code}` };
+    return { stack, ok: false, drifted: 0, rows: [], records: [], error: doc?.error ? `${doc.error.code}: ${doc.error.message}` : `chant workspace drift exited ${code}` };
   }
   const rows = driftRows(doc);
+  const records = (doc.records ?? []).map((r) => ({ ...r, member: r.member ?? member }));
   // A resource chant could not read is not one that matches: with nothing drifted, the stack's state is unknown.
   const unread = (doc.records ?? []).filter((r) => r.status === "not-observed");
   if (rows.length === 0 && unread.length > 0) {
     const first = unread[0]!;
     const why = first.unobserved?.detail ?? first.unobserved?.reason ?? "no reason given";
-    return { stack, ok: false, drifted: 0, rows: [], error: `${unread.length} resource${unread.length === 1 ? "" : "s"} could not be read, so the stack's drift is unknown: ${first.address}: ${why}` };
+    return { stack, ok: false, drifted: 0, rows: [], records: [], error: `${unread.length} resource${unread.length === 1 ? "" : "s"} could not be read, so the stack's drift is unknown: ${first.address}: ${why}` };
   }
   const attribution = rows.length && opts.attribute ? await attributeStack(opts.attribute, stack, doc) : undefined;
-  return { stack, ok: true, drifted: rows.length, rows, observedAt: observedAt(doc), ...(attribution ? { attribution } : {}) };
+  return { stack, ok: true, drifted: rows.length, rows, records, observedAt: observedAt(doc), ...(attribution ? { attribution } : {}) };
 }
 
 /** Run `read` with PULUMI_BACKEND_URL set to `backend`, when there is one, and put it back after. */
@@ -419,14 +407,16 @@ export function specHasUpdate(cwd: string, op: string): boolean {
   }
 }
 
-/** Keep the stack's one issue in line with its read. */
+/** The issue's lines below the table: who changed each attribute, when drift.audit_log gives it. */
+export function driftIssueNotes(attribution: readonly string[] | undefined): string[] | undefined {
+  return attribution?.length ? [DRIFT_ATTRIBUTION_HEADING, "", ...attribution] : undefined;
+}
+
+/** Keep the stack's one issue in line with its read, through chant's keepDriftIssue. */
 async function keepIssue(client: DriftForge, r: StackDrift, respond: DriftResponse): Promise<{ action: string; number?: number; url?: string }> {
-  const at = r.observedAt ?? new Date().toISOString();
-  const marker = driftIssueMarker(r.stack);
-  if (r.drifted === 0) return client.trackIssue(marker, null, { closeOnClear: true, clearComment: driftClearedComment(r.stack, at) });
-  const fingerprint = driftFingerprint(r.rows);
-  const body = driftIssueBody({ stack: r.stack, rows: r.rows, observedAt: at, fingerprint, ...(client.runUrl ? { runUrl: client.runUrl } : {}), respond, ...(r.attribution?.length ? { attribution: r.attribution } : {}) });
-  return client.trackIssue(marker, { title: driftIssueTitle(r.stack), body }, { sameWhen: fingerprint });
+  const notes = driftIssueNotes(r.attribution);
+  const kept = await keepDriftIssue(client, { words: driftIssueWords(r.stack, respond), environment: r.stack, records: r.records, ...(client.runUrl ? { runUrl: client.runUrl } : {}), ...(notes ? { notes } : {}) });
+  return { action: kept.action, ...(kept.number !== undefined ? { number: kept.number } : {}), ...(kept.url ? { url: kept.url } : {}) };
 }
 
 /** The PulumiWatchOp file for the stacks, one Op per stack on `schedule`. */

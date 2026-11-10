@@ -3,6 +3,7 @@
  * statuses, comments and gates (chant#4550, rulings C, D and E). plywood
  * holds words only; chant runs every stage in process with them.
  */
+import type { DriftIssueWords } from "@intentius/chant/drift-issue";
 
 export const PRODUCT = "plywood";
 
@@ -214,55 +215,35 @@ export function driftOpName(stack: string): string {
   return DRIFT_OP_PREFIX + stack.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/** The hidden first line that finds a stack's drift issue again. */
-export function driftIssueMarker(stack: string): string {
-  return `<!-- plywood:drift ${stack} -->`;
-}
-
 export function driftIssueTitle(stack: string): string {
   return `plywood: ${stack} has drifted`;
 }
 
-/** One drifted or missing resource, as the issue lists it. */
-export interface DriftRow {
-  urn: string;
-  status: string;
-  attributes: string[];
-}
-
-/** A cell that keeps the table's shape. */
-function cell(s: string): string {
-  return s.replace(/\|/g, "\\|").replace(/\n/g, " ");
-}
-
 /**
- * The issue's body. `fingerprint` names the finding, so a run that finds the
- * same drift leaves the issue as it is (`sameWhen`).
+ * plywood's words for a stack's drift issue, which chant's keepDriftIssue
+ * (`@intentius/chant/drift-issue`) keeps: the marker is chant's default,
+ * `<!-- plywood:drift <stack> -->`, and the body and fingerprint are chant's.
+ * `respond` is respond.drift, which the advice names when it is up.
  */
-export function driftIssueBody(input: { stack: string; rows: readonly DriftRow[]; observedAt: string; fingerprint: string; runUrl?: string; respond?: string; attribution?: readonly string[] }): string {
-  const { stack, rows } = input;
-  const lines = [
-    driftIssueMarker(stack),
-    `plywood's drift check read ${stack} against the cloud at ${input.observedAt} and found ${rows.length} resource${rows.length === 1 ? "" : "s"} that differ from the stack's state.`,
-    "",
-    "| URN | Status | Attributes |",
-    "|---|---|---|",
-    ...rows.map((r) => `| \`${cell(r.urn)}\` | ${r.status} | ${r.attributes.length ? r.attributes.map((a) => `\`${cell(a)}\``).join(", ") : ""} |`),
-    "",
-    ...(input.attribution?.length ? ["Who changed each attribute, from the known writes and the audit log:", "", ...input.attribution, ""] : []),
-    `To put the cloud back to the program, merge a change to ${stack} or run \`${PRODUCT} up\`. To keep the cloud's values, change the program to match and let its preview show no changes.`,
-    ...(input.respond === "up" ? ["", `respond.drift is up, so this run also asked for an update of ${stack}'s wave; its gate decides.`] : []),
-    ...(input.runUrl ? ["", `Read by ${input.runUrl}.`] : []),
-    "",
-    `<!-- plywood:drift-fingerprint ${input.fingerprint} -->`,
-  ];
-  return lines.join("\n");
+export function driftIssueWords(stack: string, respond?: string): DriftIssueWords {
+  return {
+    product: PRODUCT,
+    title: () => driftIssueTitle(stack),
+    intro: ({ drifted, observedAt }) =>
+      `plywood's drift check read ${stack} against the cloud at ${observedAt} and found ${drifted.length} resource${drifted.length === 1 ? "" : "s"} that differ from the stack's state.`,
+    address: "URN",
+    advice: () =>
+      [
+        `To put the cloud back to the program, merge a change to ${stack} or run \`${PRODUCT} up\`. To keep the cloud's values, change the program to match and let its preview show no changes.`,
+        ...(respond === "up" ? ["", `respond.drift is up, so this run also asked for an update of ${stack}'s wave; its gate decides.`] : []),
+      ].join("\n"),
+    foundBy: (runUrl) => `Read by ${runUrl}.`,
+    cleared: ({ observedAt }) => `plywood's drift check at ${observedAt} found ${stack} matching its state, so this issue is closed.`,
+  };
 }
 
-/** Posted on the issue when a clean run closes it. */
-export function driftClearedComment(stack: string, observedAt: string): string {
-  return `plywood's drift check at ${observedAt} found ${stack} matching its state, so this issue is closed.`;
-}
+/** The lines above the attribution in the issue (chant#4632). */
+export const DRIFT_ATTRIBUTION_HEADING = "Who changed each attribute, from the known writes and the audit log:";
 
 /**
  * The engines in plywood's words (plywood#17): what each does at each stage,

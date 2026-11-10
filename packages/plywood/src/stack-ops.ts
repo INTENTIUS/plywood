@@ -3,7 +3,7 @@
  * `move` and `rollback`. plywood holds the verbs and the text; chant's
  * pulumi lexicon runs each one (chant#4578, #4542, #4562):
  *
- *   plywood export <stack> --out <file>
+ *   plywood export <stack> --out <file> [--version <n>]
  *       gatedStackExport: a gated request `stack-export` on the workspace
  *       ledger. Once a second person approves it, `stack export` runs and
  *       the file lands mode 600 at --out on the requester's machine. chant
@@ -39,13 +39,16 @@
  */
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { toChantSettings, type ChantMemberSettings, type ChantQuorumRule } from "./chant-config";
+import type { ForgeTargetOptions } from "@intentius/chant/pr-forge";
+import type * as PulumiLexicon from "@intentius/chant-lexicon-pulumi";
+import type { PulumiStackExportResult, PulumiStackMoveResult, PulumiStackOpOutcome } from "@intentius/chant-lexicon-pulumi";
+import { toChantSettings, type ChantMemberSettings } from "./chant-config";
 import { pulumiCloudOf } from "./config/identity";
 import { checkConfig, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
 import { stacksOf } from "./config/stacks";
 import type { ExitTable } from "./exit-codes";
 import { ADOPT_OP, ADOPT_OP_FILE } from "./init/adopt";
-import { environmentOf, slug } from "./init/detect";
+import { detectForge, environmentOf, slug } from "./init/detect";
 import { explainRefusal } from "./refusals";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
 import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./words";
@@ -53,50 +56,20 @@ import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./word
 /** chant's op the requests are recorded under (`PULUMI_STACK_OPS_OP`). */
 export const STACK_OPS_OP = "pulumi-stack-ops";
 
-/** How a gated request ended, as chant's lexicon answers (`PulumiStackOpOutcome`). */
-export type StackOpOutcome<T> =
-  | { status: "waiting"; digest: string; command: string }
-  | { status: "refused"; digest: string; by: string; reason: string; command: string }
-  | { status: "spent"; digest: string }
-  | { status: "done"; digest: string; result: T }
-  | { status: "failed"; digest: string; error: string };
-
-/** What every request takes (`PulumiStackOpCommon`); plywood leaves the runners to chant. */
-export interface StackOpCommon {
-  by: string;
-  rules: { mode: string; quorum?: ChantQuorumRule[] };
-  op?: string;
-  ledgerCwd?: string;
-  env?: Record<string, string | undefined>;
-}
-
-export interface ExportResult {
-  file: string;
-  sha256: string;
-  bytes: number;
-  resources: number;
-}
-
-export interface MoveResult {
-  engine: string;
-  moved: string[];
-}
+/** What every request takes: the part of `PulumiStackOpCommon` plywood sets; it leaves the runners to chant. */
+export type StackOpCommon = Pick<PulumiLexicon.PulumiStackOpCommon, "by" | "rules" | "op" | "ledgerCwd" | "env">;
 
 /** The part of chant's pulumi lexicon these verbs call (lexicons/pulumi/src/stack-ops.ts). */
-export interface ChantStackOps {
-  gatedStackExport(opts: StackOpCommon & { dir: string; stack: string; engine?: string; out: string }): Promise<StackOpOutcome<ExportResult>>;
-  gatedStackCancel(opts: StackOpCommon & { dir: string; stack: string; engine?: string; lockId: string; project?: string }): Promise<StackOpOutcome<{ lockChecked: boolean }>>;
-  gatedStackMove(opts: StackOpCommon & { source: { member: string; dir: string; stack: string }; dest: { member: string; dir: string; stack: string }; urns: string[]; engine?: string }): Promise<StackOpOutcome<MoveResult>>;
-}
+export type ChantStackOps = Pick<typeof PulumiLexicon, "gatedStackExport" | "gatedStackCancel" | "gatedStackMove" | "PulumiStackOpRefused">;
 
 /** chant's stack lock reader (`pulumiStackLockIds`, chant#4615): the lock ids a stack holds now, read from a `file://` backend. */
-export type ChantStackLockReader = (opts: { dir: string; stack: string; project?: string; engine?: string; env?: Record<string, string | undefined> }) => Promise<{ checked: boolean; backend?: string; ids: string[] }>;
+export type ChantStackLockReader = typeof PulumiLexicon.pulumiStackLockIds;
 
 let cachedLocks: Promise<ChantStackLockReader> | undefined;
 
 /** chant's lock reader; `cancel` uses it when no `--lock` is given. */
 export function chantStackLockReader(): Promise<ChantStackLockReader> {
-  cachedLocks ??= import("@intentius/chant-lexicon-pulumi").then((m) => m.pulumiStackLockIds as unknown as ChantStackLockReader);
+  cachedLocks ??= import("@intentius/chant-lexicon-pulumi").then((m) => m.pulumiStackLockIds);
   return cachedLocks;
 }
 
@@ -115,7 +88,7 @@ export async function lockToCancel(given: string | undefined, stack: { dir: stri
   const reader = await chantStackLockReader();
   let locks: Awaited<ReturnType<ChantStackLockReader>>;
   try {
-    locks = await reader({ dir: stack.dir, stack: stack.stack, ...(stack.project ? { project: stack.project } : {}), ...(stack.engine ? { engine: stack.engine } : {}), env });
+    locks = await reader({ dir: stack.dir, stack: stack.stack, ...(stack.project ? { project: stack.project } : {}), ...(stack.engine ? { engine: stack.engine as "pulumi" | "plunge" } : {}), env });
   } catch (e) {
     return { error: `${STACK_OP_WORDS.needsLock}. Reading the stack's lock failed: ${(e as Error).message}` };
   }
@@ -129,7 +102,7 @@ let cachedOps: Promise<ChantStackOps> | undefined;
 
 /** chant's gated stack operations (chant#4578). */
 export function chantStackOps(): Promise<ChantStackOps> {
-  cachedOps ??= import("@intentius/chant-lexicon-pulumi").then((m) => m as unknown as ChantStackOps);
+  cachedOps ??= import("@intentius/chant-lexicon-pulumi");
   return cachedOps;
 }
 
@@ -219,7 +192,7 @@ export function useBackend(stacks: ResolvedStack[], env: NodeJS.ProcessEnv): str
 /** Print what a request's outcome means, and return chant's code for it. */
 export function reportOutcome<T>(
   verb: StackOpVerb,
-  outcome: StackOpOutcome<T>,
+  outcome: PulumiStackOpOutcome<T>,
   gate: string,
   rules: StackOpCommon["rules"],
   done: (result: T) => string,
@@ -248,7 +221,8 @@ export function reportOutcome<T>(
       text = done(outcome.result);
       break;
     case "failed":
-      code = table.failed;
+      // chant#4808: a state that changed between the approval and the write is chant's moved, and nothing ran.
+      code = outcome.check === "moved" ? table.moved : table.failed;
       text = `${PRODUCT} ${verb}: ${outcome.error}`;
       break;
   }
@@ -257,23 +231,30 @@ export function reportOutcome<T>(
       command: verb, ok: code === table.done, exitCode: code, status: outcome.status, op: STACK_OPS_OP, gate, digest: outcome.digest,
       ...(approveLine ? { approve: approveLine } : {}),
       ...(outcome.status === "done" ? { result: outcome.result } : {}),
-      ...(outcome.status === "failed" ? { error: outcome.error } : {}),
+      ...(outcome.status === "failed" ? { error: outcome.error, ...(outcome.check ? { check: outcome.check } : {}) } : {}),
       ...(outcome.status === "refused" ? { refusedBy: outcome.by, reason: outcome.reason } : {}),
     }));
   } else (code === table.done ? io.out : io.err)(text);
   return code;
 }
 
-/** Run one request, turning a refusal chant throws before asking into chant's `failed`. */
+/**
+ * Run one request. A refusal chant throws before it acts is chant's
+ * `failed`, except a run that may hold the lock (`live-run`, or `held` after
+ * the approval, which stays unspent): that is chant's `held`, and the same
+ * command run again once the run ends carries it out.
+ */
 async function runRequest(verb: StackOpVerb, json: boolean, table: ExitTable, io: StageIo, call: (ops: ChantStackOps) => Promise<number>): Promise<number> {
   const ops = await chantStackOps();
   try {
     return await call(ops);
   } catch (e) {
     const message = (e as Error).message;
-    if (json) io.out(JSON.stringify({ command: verb, ok: false, exitCode: table.failed, error: message }));
+    const refusal = e instanceof ops.PulumiStackOpRefused ? e.code : undefined;
+    const code = refusal === "live-run" || refusal === "held" ? table.held : table.failed;
+    if (json) io.out(JSON.stringify({ command: verb, ok: false, exitCode: code, error: message, ...(refusal ? { refusal } : {}) }));
     else io.err(`${PRODUCT} ${verb}: ${message}`);
-    return table.failed;
+    return code;
   }
 }
 
@@ -286,15 +267,22 @@ export function commonFlags(args: string[]): { by?: string; dir?: string; rest: 
   return { by: by.value, dir: dir.value, rest: dir.rest };
 }
 
-/** `plywood export <stack> --out <file> [--by <name>] [--dir <path>] [--json]`. */
+/**
+ * `plywood export <stack> --out <file> [--version <n>] [--by <name>] [--dir
+ * <path>] [--json]`. `--version` is an update number on a backend that
+ * numbers its updates (Pulumi Cloud), else the `sha256:` digest of the
+ * export; chant's default is the version the stack holds now.
+ */
 export async function exportStack(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
   const common = commonFlags(args);
   if (common.missing) return usage(`${common.missing} takes a value`, table, io);
   const out = takeFlag(common.rest, "--out");
   if (out.missing) return usage("--out takes a file path outside the repository", table, io);
-  const extra = out.rest.filter((a) => a.startsWith("-"));
+  const version = takeFlag(out.rest, "--version");
+  if (version.missing) return usage("--version takes the update number, or the sha256: digest of an export, that the stack holds now", table, io);
+  const extra = version.rest.filter((a) => a.startsWith("-"));
   if (extra.length) return usage(`export does not take ${extra.join(" ")}`, table, io);
-  const named = positionals(out.rest);
+  const named = positionals(version.rest);
   if (named.length !== 1) return usage(`export takes one stack: ${STACK_OP_WORDS.usage.export}`, table, io);
   if (!out.value) return usage(`export needs --out <file>, a path on your machine outside every git working tree: ${STACK_OP_WORDS.usage.export}`, table, io);
   const read = readConfig(io.cwd);
@@ -307,10 +295,25 @@ export async function exportStack(args: string[], json: boolean, table: ExitTabl
   return runRequest("export", json, table, io, async (ops) => {
     const outcome = await ops.gatedStackExport({
       by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
-      dir: stack.dir, stack: stack.stack, out: outFile, ...(stack.engine ? { engine: stack.engine } : {}),
+      dir: stack.dir, stack: stack.stack, out: outFile, ...(version.value ? { version: version.value } : {}), ...(stack.engine ? { engine: stack.engine } : {}),
     });
-    return reportOutcome("export", outcome, stack.stack, rules, (r) => STACK_OP_WORDS.exported(stack.key, r), json, table, io);
+    return reportOutcome("export", outcome, stack.stack, rules, (r: PulumiStackExportResult) => STACK_OP_WORDS.exported(stack.key, r), json, table, io);
   });
+}
+
+/**
+ * The forge whose live runs chant reads before a cancel (chant#4808): its
+ * kind from plywood.yml's forge, else the one the origin remote names, and
+ * plywood.yml's forge.url. The repository and the token come from the
+ * environment, a job's own or one set by hand on a laptop; without them
+ * chant refuses the cancel.
+ */
+export function cancelForge(config: PlywoodConfig, root: string): ForgeTargetOptions & { url?: string } {
+  const f = toChantSettings(config).pipeline.forge;
+  const detected = f?.kind ? undefined : detectForge(root);
+  const kind = (f?.kind ?? detected?.kind) as ForgeTargetOptions["kind"];
+  const url = f?.url ?? detected?.url;
+  return { ...(kind ? { kind } : {}), ...(url ? { url } : {}) };
 }
 
 /** `plywood cancel <stack> --lock <id> [--by <name>] [--dir <path>] [--json]`. */
@@ -337,6 +340,7 @@ export async function cancelStack(args: string[], json: boolean, table: ExitTabl
     const outcome = await ops.gatedStackCancel({
       by: requesterOf(common.by, io.env), rules, op: STACK_OPS_OP, ledgerCwd: io.cwd, env: io.env,
       dir: stack.dir, stack: stack.stack, lockId: lockId.lockId, project: stack.project, ...(stack.engine ? { engine: stack.engine } : {}),
+      forge: cancelForge(read.config, dirname(read.path)),
     });
     return reportOutcome("cancel", outcome, stack.stack, rules, (r) => STACK_OP_WORDS.cancelled(stack.key, lockId.lockId, r.lockChecked), json, table, io);
   });
@@ -385,7 +389,7 @@ export async function moveStack(args: string[], json: boolean, table: ExitTable,
       urns,
       ...(engine ? { engine } : {}),
     });
-    return reportOutcome("move", outcome, `move:${source.stack}:${destName}`, rules, (r) => STACK_OP_WORDS.moved(source.key, dest.key, r), json, table, io);
+    return reportOutcome("move", outcome, `move:${source.stack}:${destName}`, rules, (r: PulumiStackMoveResult) => STACK_OP_WORDS.moved(source.key, dest.key, r), json, table, io);
   });
 }
 

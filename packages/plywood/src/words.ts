@@ -161,7 +161,7 @@ export type StackOpVerb = "export" | "cancel" | "move" | "action";
  */
 export const STACK_OP_WORDS = {
   usage: {
-    export: `${PRODUCT} export <project/stack> --out <file>`,
+    export: `${PRODUCT} export <project/stack> --out <file> [--version <n>]`,
     cancel: `${PRODUCT} cancel <project/stack> [--lock <id>]`,
     move: `${PRODUCT} move <urn>... --from <project/stack> --to <project/stack>, or ${PRODUCT} move <project/stack> --onto plunge`,
     rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback --release <name> --env <env>`,
@@ -179,8 +179,8 @@ export const STACK_OP_WORDS = {
     declared.length
       ? `${stack} has no action ${name} in plywood.yml; its actions are ${declared.join(", ")}`
       : `${stack} declares no actions in plywood.yml; add one under stacks.${stack}.actions with a name and the URN of a command resource`,
-  exported: (stack: string, r: { file: string; sha256: string; bytes: number; resources: number }): string =>
-    `Exported ${stack} to ${r.file} (${r.resources} resources, ${r.bytes} bytes, sha256 ${r.sha256}). The file is readable by you alone; the ledger keeps its digest and size, never its content.`,
+  exported: (stack: string, r: { file: string; sha256: string; bytes: number; resources: number; version: string }): string =>
+    `Exported version ${r.version} of ${stack} to ${r.file} (${r.resources} resources, ${r.bytes} bytes, sha256 ${r.sha256}). The file is readable by you alone; the ledger keeps its digest and size, never its content.`,
   cancelled: (stack: string, lock: string, checked: boolean): string =>
     `Released lock ${lock} on ${stack}.${checked ? "" : " The backend's lock could not be read, so it was not checked against the approved one first."}`,
   moved: (from: string, to: string, r: { engine: string; moved: string[] }): string =>

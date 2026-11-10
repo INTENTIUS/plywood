@@ -1,4 +1,4 @@
-# Rendered from packages/plywood/src/images.ts by packages/plywood/scripts/build-images.mjs.
+# Rendered from dockerfiles in packages/plywood/src/images.ts by chant dev render.
 # Edit the module, then run npm run images -w @intentius/plywood. Build from the repository root
 # after npm pack -w @intentius/plywood --pack-destination images/pack, with --build-arg CHANT_RELEASE_LABEL=<the packed version>
 # (just images passes the committed one; a release passes its label); nothing pushes it.

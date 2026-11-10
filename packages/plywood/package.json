@@ -28,8 +28,8 @@
   },
   "scripts": {
     "build": "node scripts/build-cli.mjs",
-    "schema": "node scripts/build-schema.mjs",
-    "images": "node scripts/build-images.mjs",
+    "schema": "chant dev render src/config/index.ts schemaFiles --output ../..",
+    "images": "chant dev render src/images.ts dockerfiles --output ../..",
     "bundle-check": "chant dev bundle-check .",
     "prepack": "node scripts/build-cli.mjs"
   },

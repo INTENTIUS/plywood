@@ -116,9 +116,14 @@ export function plywoodSchema(): JsonSchema {
     $id: "https://intentius.io/plywood/plywood.schema.json",
     title: "plywood.yml",
     description: "plywood's config. Each key wraps a chant setting; plywood sets chant's keys from it, so a ci. key is refused.",
-    $comment: "Generated from packages/plywood/src/config by scripts/build-schema.mjs; edit the group modules, then run npm run schema.",
+    $comment: "Generated from packages/plywood/src/config by schemaFiles in src/config/index.ts; edit the group modules, then run npm run schema.",
     type: "object",
     additionalProperties: false,
     properties,
   };
+}
+
+/** The schema's file by its path from the repository root, for `chant dev render` and generated-check (chant#4950). */
+export function schemaFiles(): Record<string, string> {
+  return { "packages/plywood/plywood.schema.json": `${JSON.stringify(plywoodSchema(), null, 2)}\n` };
 }

@@ -4,7 +4,7 @@
  * them. A unit that adds keys adds a group file and one line in the index.
  *
  * Each group owns its keys four ways: the JSON schema for them (composed into
- * plywood.schema.json by scripts/build-schema.mjs), the checks the schema
+ * plywood.schema.json by `schemaFiles` in src/config/index.ts), the checks the schema
  * cannot make, the defaults, and the translation into chant's settings
  * (src/chant-config.ts). plywood holds the words and the defaults; chant
  * runs every stage with the settings (CONTRIBUTING.md).

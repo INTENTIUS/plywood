@@ -40,7 +40,7 @@ generated-check:
 
 # Render every generated file in place: the workflows, the Dockerfiles and the schema.
 generate: ci images-render
-    npm run schema -w @intentius/plywood
+    npx chant dev render packages/plywood/src/config/index.ts schemaFiles
 
 # Build against a local chant instead of the pin, with chant's `chant dev
 # local`: `just chant-local <chant-dir>` packs that checkout, installs it, builds
@@ -52,9 +52,10 @@ chant-local +args:
 
 # Render images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
 # from packages/plywood/src/images.ts, which holds the engine pins and their
-# checksums. generated-check fails when a committed Dockerfile differs.
+# checksums, with `chant dev render` of the module's dockerfiles export.
+# generated-check fails when a committed Dockerfile differs.
 images-render:
-    npm run images -w @intentius/plywood
+    npx chant dev render packages/plywood/src/images.ts dockerfiles
 
 # Build the plywood-pulumi and plywood-plunge images into the local Docker
 # daemon for one platform (default: this machine's). Each checks its engine

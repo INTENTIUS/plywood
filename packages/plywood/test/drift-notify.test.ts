@@ -11,7 +11,8 @@ import { makeNotifyEvent, sendNotify, verifyWebhook } from "@intentius/chant/not
 import { parseConfig } from "../src/config/index";
 import { chantNotifyOf } from "../src/config/observe";
 import { driftNotifyVariables } from "../src/drift";
-import { notifiesDrift, runFingerprint, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
+import { driftRunFingerprint } from "@intentius/chant/drift-issue";
+import { notifiesDrift, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
 
 const KEY = "loopback-signing-key";
 const received: Array<{ headers: IncomingHttpHeaders; body: string }> = [];
@@ -54,7 +55,7 @@ describe("the drift event", () => {
   it("one signed event per run, in plywood's words, with the drifted stacks and the fingerprint", async () => {
     received.length = 0;
     const notice = await sendDriftNotice({ notify, results: results("edited"), chant, env: env(), log: () => {} });
-    expect(notice).toMatchObject({ sent: true, fingerprint: runFingerprint(results()) });
+    expect(notice).toMatchObject({ sent: true, fingerprint: driftRunFingerprint(results().slice(0, 1)) });
     expect(received).toHaveLength(1);
     const { headers, body } = received[0]!;
     expect(verifyWebhook({ body, headers: headers as Record<string, string>, key: KEY, prefix: "x-plywood" })).toMatchObject({ ok: true });
@@ -74,10 +75,6 @@ describe("the drift event", () => {
     const waves = chantNotifyOf(parseConfig("notify: { slack: { webhook: SLACK_URL }, on: [wave-waiting] }\n").doc);
     expect(notifiesDrift(waves)).toBe(false);
     expect(await sendDriftNotice({ notify: waves, results: results(), chant, env: env(), log: () => {} })).toBeUndefined();
-  });
-
-  it("the same findings give the same fingerprint, in any order", () => {
-    expect(runFingerprint([...results()].reverse())).toBe(runFingerprint(results()));
   });
 });
 

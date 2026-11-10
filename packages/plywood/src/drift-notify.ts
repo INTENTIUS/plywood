@@ -6,7 +6,7 @@
  * `productSendOptions` on `@intentius/chant/ci-product` (chant#4610), and
  * `makeNotifyEvent` and `sendNotify` on `@intentius/chant/notify`. The
  * event names the drifted stacks, the ones whose read failed, and the run's
- * fingerprint (each drifted stack's finding fingerprint, hashed together).
+ * fingerprint (chant's `driftRunFingerprint` of the drifted stacks, chant#4896).
  *
  * A run whose finding is the last run's sends nothing. The last finding is
  * the drift issues: each drifted stack's issue carries its fingerprint, and
@@ -17,8 +17,7 @@
  *
  * A failed delivery is a line on stderr and never changes the exit code.
  */
-import { createHash } from "node:crypto";
-import { driftIssueFingerprint, type DriftIssueRecord } from "@intentius/chant/drift-issue";
+import { driftRunFingerprint, type DriftIssueRecord } from "@intentius/chant/drift-issue";
 import type { ChantNotifyConfig } from "./config/observe";
 
 /** One stack's read, as the notice reads it. */
@@ -50,12 +49,6 @@ export interface DriftNotice {
   deliveries?: Array<{ target: string; ok: boolean; detail: string }>;
 }
 
-/** The run's fingerprint: each drifted stack and its finding's, sorted, hashed. */
-export function runFingerprint(results: readonly DriftNoticeStack[]): string {
-  const parts = results.filter((r) => r.ok && r.drifted > 0).map((r) => `${r.stack}\t${driftIssueFingerprint(r.records)}`).sort();
-  return createHash("sha256").update(parts.join("\n")).digest("hex").slice(0, 16);
-}
-
 /** Whether `notify` takes the drift event. */
 export function notifiesDrift(notify: ChantNotifyConfig | undefined): boolean {
   return notify !== undefined && (notify.events === undefined || notify.events.includes("drift"));
@@ -75,7 +68,7 @@ export async function sendDriftNotice(input: {
   if (!notifiesDrift(input.notify)) return undefined;
   const drifted = input.results.filter((r) => r.ok && r.drifted > 0);
   if (drifted.length === 0) return undefined;
-  const fingerprint = runFingerprint(input.results);
+  const fingerprint = driftRunFingerprint(drifted);
   if (drifted.every((r) => r.issue?.action === "unchanged")) {
     return { sent: false, reason: "no drift event was sent: every drifted stack's finding is the one its issue already holds", fingerprint };
   }

@@ -37,8 +37,8 @@ import {
   STACK_OPS_OP,
   useBackend,
   type StackOpCommon,
-  type StackOpOutcome,
 } from "./stack-ops";
+import type { PulumiStackOpOutcome } from "@intentius/chant-lexicon-pulumi";
 import { ACTION_COMMAND, PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS } from "./words";
 
 /** What a finished action returns (`PulumiStackActionResult`). */
@@ -53,7 +53,7 @@ export interface ActionResult {
 /** chant's `gatedStackAction` (lexicons/pulumi/src/stack-ops.ts, chant#4654). */
 export type ChantStackAction = (
   opts: StackOpCommon & { dir: string; stack: string; urn: string; name?: string; engine?: string; anew?: boolean },
-) => Promise<StackOpOutcome<ActionResult>>;
+) => Promise<PulumiStackOpOutcome<ActionResult>>;
 
 /** The approval subject chant asks an action under (`stackActionSubject`). */
 export const actionSubject = (stack: string, name: string): string => `action:${stack}:${name}`;

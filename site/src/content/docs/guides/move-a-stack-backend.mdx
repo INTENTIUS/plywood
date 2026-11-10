@@ -20,6 +20,8 @@ pulumi stack import --file prod.json
 
 `npx plywood export shop/prod --out ~/prod.json` takes the same export behind a gate. A second person approves the request with the `plywood approve <gate> --op pulumi-stack-ops --plan <digest>` line it prints, and you run the export again. The file then lands at `--out` on your machine alone, readable by you only. plywood refuses the export in CI and inside a git working tree. It never writes over a file that exists.
 
+The approval covers the version the stack held when you asked. If the stack updates before you run the export again, plywood asks again instead of writing the newer state. On Pulumi Cloud, `--version <n>` asks for update `n`.
+
 Then set the new backend in `plywood.yml`: `stacks.<project/stack>.backend` for the one stack, or `backend` for all of them. The stack keeps its resources and outputs. Update history and Insights stay with Pulumi Cloud.
 
 ## Onto plunge

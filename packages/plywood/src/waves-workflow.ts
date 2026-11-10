@@ -18,9 +18,9 @@
  *      Op. The wave jobs plan and apply through the spec's step, so the Op's
  *      own phases are what `chant run pulumi-up` does by hand: a preview of
  *      each stack in wave order, which changes nothing.
- *   2b. The spec file is `{ "waves": <spec>, "options": { image, beforeScript } }`
- *      when plywood.yml names an image or the engines need install lines
- *      (plywood#22), so the waves and plans workflows run in plywood's image
+ *   2b. The spec file is `{ "waves": <spec>, "options": { image, beforeScript, evidence } }`
+ *      when plywood.yml names an image, the engines need install lines
+ *      (plywood#22) or `evidence` names a runner identity (chant#4870), so the waves and plans workflows run in plywood's image
  *      with its install lines, as the pull request workflow does. chant's
  *      generator and its wave jobs read both forms (`parseOpWavesSpec`), and
  *      plywood's own readers unwrap it ({@link unwrapWavesSpec}).
@@ -34,6 +34,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ChantProduct, ForgeKind, ProductPipelineJobs } from "./chant-product";
+import type { PipelineEvidence } from "@intentius/chant/ci-evidence-jobs";
 import { chantPipelineOptions } from "./images";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
@@ -52,21 +53,23 @@ export type WaveJobs = NonNullable<ProductPipelineJobs["waves"]>;
 /** The Op the waves spec names, in the file chant's Op discovery reads (a `*.op.ts` beside chant.config.ts). */
 export const UP_OP_FILE = "ops/pulumi-up.op.ts";
 
-/** The image and the lines every waves job runs first: chant's `OpWavesPipelineOptions.image` and `beforeScript`. */
+/** The image and the lines every waves job runs first: chant's `OpWavesPipelineOptions.image` and `beforeScript`; and its `evidence` (chant#4870). */
 export interface WavesEngine {
   image?: string;
   beforeScript?: string[];
+  /** plywood.yml `evidence`: each deciding wave job signs `plan:<wave>` and `policy:<wave>`. */
+  evidence?: PipelineEvidence;
 }
 
 /** The waves jobs' image and lines from plywood's pipeline settings, as the review and drift jobs take them. */
-export function wavesEngine(pipeline: { image?: string; engineSetup?: string[] }): WavesEngine {
+export function wavesEngine(pipeline: { image?: string; engineSetup?: string[]; evidence?: PipelineEvidence }): WavesEngine {
   const o = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) });
-  return { ...(o.image ? { image: o.image } : {}), ...(o.beforeScript?.length ? { beforeScript: o.beforeScript } : {}) };
+  return { ...(o.image ? { image: o.image } : {}), ...(o.beforeScript?.length ? { beforeScript: o.beforeScript } : {}), ...(pipeline.evidence ? { evidence: pipeline.evidence } : {}) };
 }
 
-/** The spec file's text: the bare spec, or `{ waves, options }` when there is an image or a line to hand chant's generator. */
+/** The spec file's text: the bare spec, or `{ waves, options }` when there is an image, a line or a runner identity to hand chant's generator. */
 export function wavesSpecText(spec: unknown, engine: WavesEngine = {}): string {
-  const options = { ...(engine.image ? { image: engine.image } : {}), ...(engine.beforeScript?.length ? { beforeScript: engine.beforeScript } : {}) };
+  const options = { ...(engine.image ? { image: engine.image } : {}), ...(engine.beforeScript?.length ? { beforeScript: engine.beforeScript } : {}), ...(engine.evidence ? { evidence: engine.evidence } : {}) };
   return JSON.stringify(Object.keys(options).length ? { waves: spec, options } : spec, null, 2) + "\n";
 }
 

@@ -129,6 +129,8 @@ export interface ChantPipelineSettings {
   decide?: { backend: string; model: string };
   /** `apply.merge: auto` with its token variable and method (chant#4636 `applyMerge`). */
   applyMerge?: { tokenEnv: string; method?: "merge" | "squash" | "rebase" };
+  /** plywood.yml `evidence`: the runner identity the pipelines sign check evidence with (chant#4870, #4869 `PipelineEvidence`). */
+  evidence?: import("@intentius/chant/ci-evidence-jobs").PipelineEvidence;
 }
 
 /** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */

@@ -1,0 +1,58 @@
+---
+title: 'Sign the checks'
+description: 'The wave jobs sign their plan and policy checks keyless or with a runner key; plywood init writes the trust file that verifies them.'
+---
+
+plywood switches on chant's [check evidence](https://intentius.io/chant/cli/ci/) with one key in `plywood.yml`. Sign keyless, from each job's OIDC token:
+
+```yaml
+evidence:
+  identity: oidc
+```
+
+Or with a runner key kept in a secret (a CI/CD variable on GitLab):
+
+```yaml
+evidence:
+  runner_key_secret: CHANT_RUNNER_KEY_PEM
+```
+
+Run `plywood ci` (or `plywood init`) after you set it.
+
+## The signed checks
+
+Each wave job that decides a wave signs `plan:<wave>` once the wave is planned, and `policy:<wave>` when the wave's policy ran and denied nothing. The evidence is a git note under `refs/notes/chant/evidence`, bound to the commit's tree. For keyless evidence the job asks the forge for an OIDC token. On GitHub that is the `id-token: write` permission. GitLab jobs get an `id_tokens` entry; Forgejo jobs get `enable-openid-connect`. With `runner_key_secret` the job reads the key from the secret instead.
+
+`plywood check` runs chant's check stage. In a job with `CHANT_RUNNER_IDENTITY=oidc` or `CHANT_RUNNER_KEY` set, each check hook that passed gets evidence under the hook's name, such as `pre-commit`.
+
+The pull request workflow is the same file with or without the key, and its preview leaves no evidence.
+
+## The trust file
+
+When `plywood.yml` has the key, `plywood init` writes `.chant/trust.json`, which chant reads at the base commit:
+
+- For `identity: oidc` on GitHub or GitLab, the waves workflow's identity on the default branch, under `keyless.identities`, with its principal `ci` in `roles.runner`. Put sigstore's `trusted_root.json` at `.chant/trusted_root.json`, the path the file names. A Forgejo job's certificate comes from an authority you run; add its issuer and subject yourself.
+- For `runner_key_secret`, no identity. Add the runner key's public half under `runners`, and its PEM to the secret.
+- A rule for the default branch under `refs`, naming each check hook, `plan` and `policy`, with the ref gate's status `chant/ref-gate`.
+
+A trust file already there is merged into, and the entries it has stay as they are.
+
+## The ref gate
+
+`plywood init` prints the line that installs chant's [ref gate](https://intentius.io/chant/cli/workspace-ref-gate/) as a pre-push hook in a clone:
+
+```sh
+chant workspace ref-gate install --hook pre-push
+```
+
+The hook refuses a push to the default branch whose commit has no current evidence for a check the rule names, and names each missing check and the command that produces it. Wave evidence is signed after the merge, and the preview signs no `plan` or `policy` for a pull request's commit, so keep `plywood/preview` as the required status on the default branch.
+
+## Local evidence
+
+```yaml
+evidence:
+  identity: oidc
+  local: true
+```
+
+`local: true` has `plywood init` name each check hook under `local.checks`. The ref gate's rule then leaves the hooks out, since a hook CI skips has no runner evidence. A hook a person already proved on their machine for the same tree is then skipped in CI. Add each person's `ssh-ed25519` key under `local.keys`, and sign on the machine with the key in `CHANT_LOCAL_EVIDENCE_KEY` while `plywood check` runs. Without `local`, no check takes local evidence. `plan` and `policy` never do.

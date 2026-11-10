@@ -238,6 +238,22 @@ export function remoteHost(url: string): string | undefined {
   }
 }
 
+/** The repository path a remote URL names (`owner/repo`, or a GitLab group path), without `.git`. */
+export function repositoryOfRemote(url: string): string | undefined {
+  const scp = /^[^@/\s]+@[^:/\s]+:(.+)$/.exec(url);
+  let path: string;
+  if (scp && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) path = scp[1]!;
+  else {
+    try {
+      path = new URL(url).pathname;
+    } catch {
+      return undefined;
+    }
+  }
+  const out = path.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
+  return /^[^\s/]+(\/[^\s/]+)+$/.test(out) ? out : undefined;
+}
+
 /** The forge a remote URL names, from its host. */
 export function forgeOfRemote(url: string): DetectedForge | undefined {
   const host = remoteHost(url);

@@ -5,6 +5,10 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.9
+
+A new `plywood.yml` key, `evidence`, has the wave jobs sign their checks: `identity: oidc` signs keyless from each job's OIDC token, and `runner_key_secret` signs with a runner key kept in a secret. Each wave job that decides a wave signs `plan:<wave>`. It signs `policy:<wave>` when its policy ran and denied nothing. With the key, `plywood init` writes `.chant/trust.json` with the waves workflow's identity, a ref gate rule for the default branch naming the check hooks, `plan` and `policy`, and, with `local: true`, the check hooks that take local evidence. It also prints the line that installs the ref gate's pre-push hook. [Sign the checks](/plywood/guides/sign-checks/) has the details. A `plywood.yml` without the key gives the same files as before.
+
 ## In 0.3.8
 
 Chant and each lexicon plywood carries are at 0.124.87, and chant now keeps the drift issue `plywood drift` opens for each stack. The issue's table of resources is chant's, and resources that couldn't be read are listed under it. Each open drift issue is edited once on the first run after the upgrade, then only when the drift changes.

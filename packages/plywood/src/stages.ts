@@ -407,6 +407,8 @@ export function workflowPlan(
     ...(actionJob ? { actionJob: true } : {}),
     // chant#4785: GitLab starts no pipeline on a note, so a scheduled note-commands job answers the comments.
     ...(forge === "gitlab" ? { noteCommands: true } : {}),
+    // chant#4870, #4869: plywood.yml evidence, the runner identity the plan and policy checks are signed with.
+    ...(pipeline.evidence ? { evidence: pipeline.evidence } : {}),
   });
   const prWords = shape.applyBeforeMerge ? words : wordsForJobs(jobsWanted.filter((j) => j !== "apply"));
   const argv = [

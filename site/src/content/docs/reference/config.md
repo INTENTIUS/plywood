@@ -75,6 +75,10 @@ drift: { schedule: "0 6 * * *" }
 | `pass` | none | secrets the jobs read as variables, by name: a list of secret names, or a mapping of variable to secret; the workflow names the secret and never holds its value |
 | `parallelism` | a preview runs a wave's stacks at once, an update one at a time | the most stacks a preview or an update runs at once in a wave |
 | `environments` | none | stack glob to the forge deployment environment its up jobs run in, a name or a mapping with `name` and `url`; the first glob that matches wins, a wave whose stacks are in different environments runs one job per environment, and `plywood forge check` checks each up job against it (GitHub and GitLab) |
+| `evidence.identity` | off | `oidc`: the wave jobs sign their `plan` and `policy` checks keyless, from each job's OIDC token; `plywood init` writes the waves workflow's identity into `.chant/trust.json` ([Sign the checks](/plywood/guides/sign-checks/)) |
+| `evidence.audience` | `sigstore` | with `identity`, the OIDC token's audience |
+| `evidence.runner_key_secret` | off | in place of `identity`, the secret (a CI/CD variable on GitLab) holding the runner key the wave jobs sign with |
+| `evidence.local` | `false` | `true`: `plywood init` names the check hooks under `local.checks` in `.chant/trust.json`, so a hook proven on a person's machine is skipped in CI |
 | `control` | off | the control repo this repository tells after each update on merge: a project key or URL, or a mapping with `repo`, `op` (default `pulumi-up`), `member`, `forge`, `token_secret`, `read_token_secret`, `ref` and `api_base` |
 
 plywood turns each key into chant's workspace settings, so `plywood.yml` holds no chant key. A `ci` key there is refused with the name of the plywood key that sets it.

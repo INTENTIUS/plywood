@@ -69,6 +69,8 @@ export interface ProductPipelineOptions {
   actionJob?: boolean | { inputs?: { member?: string; action?: string } };
   /** GitLab only: the note-commands job a schedule starts with `CHANT_NOTE_COMMANDS=1`, which answers the comment commands (chant#4785). */
   noteCommands?: boolean;
+  /** The runner identity the plan job's plan and policy checks are signed with (chant#4870, #4869): `post.evidence`. */
+  evidence?: { runnerKeySecret?: string; identity?: "oidc"; audience?: string };
 }
 
 /** What an action job was asked for, as chant's `productActionFromEnv` reads it (chant#4654). */

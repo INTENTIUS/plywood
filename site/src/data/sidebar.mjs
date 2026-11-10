@@ -78,6 +78,7 @@ export const SIDEBAR = [
 			page('Order stacks by their references', 'guides/stack-references'),
 			page('Separate environments', 'guides/separate-environments'),
 			page('Scope state and cloud access', 'guides/scope-state-access'),
+			page('Sign the checks', 'guides/sign-checks'),
 		]),
 		group('Many repos and agents', [
 			page('Govern many repositories', 'guides/govern-many-repos'),

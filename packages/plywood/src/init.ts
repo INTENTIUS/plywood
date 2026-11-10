@@ -25,6 +25,8 @@
  *                         keeping the team's own jobs (src/init/workflow.ts)
  *   plywood.adopt.op.ts   with a plunge+ backend, chant's PulumiAdoptOp over
  *                         the stacks not adopted yet (src/init/adopt.ts)
+ *   .chant/trust.json     with plywood.yml's evidence, the runner identity, the
+ *                         local checks and the ref gate's rule (src/init/trust.ts)
  *
  * A `.pre-commit-config.yaml` becomes a check hook (chant#4556). An S3, GCS
  * or Azure backend gets chant's bucket check (chant#4558), and each missing
@@ -50,6 +52,7 @@ import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyP
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
 import { gateOf, previewOf } from "./config/approval";
 import { engineOf } from "./config/engine";
+import { evidenceOf } from "./config/evidence";
 import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
 import { FORGES } from "./config/routing";
@@ -61,7 +64,7 @@ import { GITLAB_READ_TOKEN, withWavePreview } from "./chant-next";
 import { prJobsFor, withJobSettings } from "./jobs";
 import { backendOf, bucketLines, bucketTarget, chantBucketCheck, isPulumiCloud, type BucketReport } from "./init/backend";
 import { ADOPT_OP_FILE, adoptLines, adoptOpFile, adoptPreviews, adoptTodo, chantAdopt, stacksToAdopt, type AdoptPreview } from "./init/adopt";
-import { detect, repoName, slug, type Detected } from "./init/detect";
+import { detect, originUrl, repoName, repositoryOfRemote, slug, type Detected } from "./init/detect";
 import { engineStep, INIT_ENGINES, type InitEngine } from "./init/engine";
 import { DEFAULT_PRESET, gateFlag, PRESETS, PRESET_NAMES, preCommitHook, presetByName, type PresetName } from "./init/presets";
 import {
@@ -405,6 +408,9 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   // The adopt preview for each stack on a plunge+ backend, and the Op that adopts them.
   adopt.push(...(await adoptStep(root, detected, doc, io.env, declaration.doc, opts.dryRun, files, notes, todo)));
 
+  // chant#4867 to #4870: with plywood.yml's evidence, the runner identity, the local checks and the ref rule.
+  if (evidenceOf(doc)) files.push(await trustStep(root, detected, doc, forge.kind, declaration.doc, opts.dryRun, todo));
+
   todo.push(...todoLines(detected, doc, forge.kind, io.env));
   // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
   if (forge.kind === "gitlab" && stacks.length > 0 && previewOf(doc)) {
@@ -467,6 +473,37 @@ function providersPresetStep(root: string, doc: RawConfig, dryRun: boolean, note
   const listed = policyPacksOf(doc).some((pack) => pack.dir === PROVIDERS_PACK_DIR);
   if (!listed) notes.push(`policy.providers: add { dir: ${PROVIDERS_PACK_DIR}, config: ${PROVIDERS_PACK_CONFIG} } to policy.packs to run the CrossGuard pack in each preview and update; it needs @pulumi/policy installed in ${PROVIDERS_PACK_DIR}`);
   return out;
+}
+
+/** `.chant/trust.json` for plywood.yml's evidence (src/init/trust.ts), with the check hooks the declaration names. */
+async function trustStep(root: string, detected: Detected, doc: RawConfig, forge: ForgeKind, declared: Record<string, unknown> | undefined, dryRun: boolean, todo: string[]): Promise<InitFile> {
+  const { checkHookName, checkHooksOf } = await import("@intentius/chant/components/check-hooks");
+  const { trustText, TRUST_FILE } = await import("./init/trust");
+  let declaration = declared;
+  try {
+    if (existsSync(join(root, DECLARATION_FILE))) declaration = JSON.parse(readFileSync(join(root, DECLARATION_FILE), "utf8")) as Record<string, unknown>;
+  } catch {
+    // init wrote the file or reported it; the declared doc stands in.
+  }
+  let hooks: string[] = [];
+  try {
+    hooks = declaration ? checkHooksOf(declaration as Parameters<typeof checkHooksOf>[0], null).map(checkHookName) : [];
+  } catch (e) {
+    return { file: TRUST_FILE, status: "failed", note: `the check hooks in ${DECLARATION_FILE}: ${(e as Error).message}` };
+  }
+  const file = join(root, TRUST_FILE);
+  const existing = existsSync(file) ? readFileSync(file, "utf8") : undefined;
+  const origin = originUrl(root);
+  const repository = origin ? repositoryOfRemote(origin) : undefined;
+  const server = isObject(doc.forge) && typeof doc.forge.url === "string" ? doc.forge.url : detected.forge?.url;
+  let result;
+  try {
+    result = trustText(existing, { forge, ...(repository ? { repository } : {}), ...(server ? { server } : {}), branch: detected.defaultBranch, evidence: evidenceOf(doc)!, hooks });
+  } catch (e) {
+    return { file: TRUST_FILE, status: "failed", note: (e as Error).message };
+  }
+  todo.push(...result.todo);
+  return put(root, TRUST_FILE, result.text, dryRun, "the runner identity, the local checks and the ref gate's rule, read at base");
 }
 
 /** `.pre-commit-config.yaml` as a check hook, so plywood check runs the team's hooks at the base commit. */

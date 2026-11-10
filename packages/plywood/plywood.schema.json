@@ -1161,6 +1161,34 @@
           }
         }
       ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The runner identity the generated pipelines sign check evidence with: identity oidc, or runner_key_secret. Absent: nothing is signed.",
+      "properties": {
+        "identity": {
+          "type": "string",
+          "enum": [
+            "oidc"
+          ],
+          "description": "oidc: sign keyless from each job's OIDC token, as .chant/trust.json lists the workflow under keyless.identities."
+        },
+        "audience": {
+          "type": "string",
+          "description": "With identity: the OIDC token's audience. Default chant's, sigstore."
+        },
+        "runner_key_secret": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The secret (GitHub, Forgejo) or CI/CD variable (GitLab) holding the runner key, whose public half .chant/trust.json lists under runners."
+        },
+        "local": {
+          "type": "boolean",
+          "default": false,
+          "description": "true: plywood init names the check hooks under local.checks in .chant/trust.json, so a hook proven on a person's machine is skipped in CI."
+        }
+      }
     }
   }
 }

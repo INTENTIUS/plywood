@@ -1,11 +1,12 @@
 // Writes images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
 // from src/images.ts, which holds the engine pins and their checksums.
-//   node scripts/build-images.mjs           (npm run images) writes the files
-//   node scripts/build-images.mjs --check   fails when a committed file differs
-//   node scripts/build-images.mjs --tags    prints `<engine> <ref>` for each image this version names,
-//                                           which the publish workflow pushes and the release records
+//   node scripts/build-images.mjs             (npm run images) writes the files
+//   node scripts/build-images.mjs --out <dir> writes them at the same paths below <dir>, for
+//                                             chant dev generated-check (chantGenerated in package.json)
+//   node scripts/build-images.mjs --tags      prints `<engine> <ref>` for each image this version names,
+//                                             which the publish workflow pushes and the release records
 // Building an image is `just images`; nothing here builds or pushes one.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -36,23 +37,12 @@ if (process.argv.includes("--tags")) {
     const ref = imageFor(engine, {});
     console.log(`${engine} ${ref.repository}:${ref.tag}`);
   }
-} else if (process.argv.includes("--check")) {
-  const differ = Object.entries(files).filter(([path, text]) => {
-    try {
-      return readFileSync(join(root, path), "utf8") !== text;
-    } catch {
-      return true;
-    }
-  });
-  if (differ.length) {
-    console.error(`${differ.map(([p]) => p).join(", ")} differ from src/images.ts; run npm run images -w @intentius/plywood`);
-    process.exit(1);
-  }
-  console.log("  images/*/Dockerfile match src/images.ts");
 } else {
+  const at = process.argv.indexOf("--out");
+  const outRoot = at >= 0 ? process.argv[at + 1] : root;
   for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), text);
+    mkdirSync(dirname(join(outRoot, path)), { recursive: true });
+    writeFileSync(join(outRoot, path), text);
     console.log(`  wrote ${path}`);
   }
 }

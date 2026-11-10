@@ -16,4 +16,4 @@ The rule and the issues behind it are on chant's [CI products on chant](https://
 
 ## Checks
 
-`.github/workflows/ci.yml`, rendered from `ci/ci.ts` with `just ci`, runs on every pull request and push to main. Its `package` job typechecks, builds, runs the unit tests (`npm test`), checks the bundle, and fails when a committed workflow differs from its declaration. Its `site` job lints the docs' prose and builds the site. Run `npm test` before you push. A change that breaks the suite doesn't merge.
+`.github/workflows/ci.yml`, rendered from `ci/ci.ts` with `just ci`, runs on every pull request and push to main. Its `package` job typechecks, builds, runs the unit tests (`npm test`), checks the bundle, and fails when a committed workflow, image Dockerfile or `plywood.schema.json` differs from its render (`just generated-check`, chant's `chant dev generated-check`). Its `site` job lints the docs' prose and builds the site. Run `npm test` before you push. A change that breaks the suite doesn't merge.

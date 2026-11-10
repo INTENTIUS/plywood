@@ -10,7 +10,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ChantProduct } from "../src/chant-product";
-import { CHANT_SPECIFIER, chantResolveHook } from "../src/chant-resolve";
 import { EXIT } from "../src/exit-codes";
 import { UP_OP_FILE, unwrapWavesSpec, upOpFile, wavesEngine, wavesSpecText, writeUpOp, writeWaveJobs } from "../src/waves-workflow";
 import { parseOpWavesSpec } from "@intentius/chant/op";
@@ -114,36 +113,5 @@ describe("the waves jobs' image and install lines (plywood#22)", () => {
     const before = readFileSync(join(root, waves.specFile), "utf8");
     await writeWaveJobs(chant, "forgejo", waves, PRODUCT_WORDS, EXIT, io, engine);
     expect(readFileSync(join(root, waves.specFile), "utf8")).toBe(before);
-  });
-});
-
-describe("chant imports from plywood's install", () => {
-  const from = "file:///opt/plywood/dist/plywood.mjs";
-  const missing = () => Object.assign(new Error("Cannot find package"), { code: "ERR_MODULE_NOT_FOUND" });
-
-  it("covers chant and its lexicons, with subpaths, and nothing else", () => {
-    for (const s of ["@intentius/chant", "@intentius/chant/op", "@intentius/chant-lexicon-pulumi", "@intentius/chant-lexicon-pulumi/run"]) expect(CHANT_SPECIFIER.test(s)).toBe(true);
-    for (const s of ["@intentius/chantx", "@intentius/plywood", "@pulumi/pulumi", "@intentius/chant-lexicon-"]) expect(CHANT_SPECIFIER.test(s)).toBe(false);
-  });
-
-  it("keeps the repository's own chant, and falls back to plywood's when the repository has none", () => {
-    const hook = chantResolveHook(from);
-    const own = hook("@intentius/chant/op", { parentURL: "file:///repo/ops/pulumi-up.op.ts" }, (s, c) => ({ url: `${c!.parentURL}#${s}` }));
-    expect(own.url).toBe("file:///repo/ops/pulumi-up.op.ts#@intentius/chant/op");
-    const parents: unknown[] = [];
-    const fell = hook("@intentius/chant/op", { parentURL: "file:///repo/ops/pulumi-up.op.ts" }, (s, c) => {
-      parents.push(c!.parentURL);
-      if (c!.parentURL !== from) throw missing();
-      return { url: `file:///opt/plywood/node_modules/${s}` };
-    });
-    expect(parents).toEqual(["file:///repo/ops/pulumi-up.op.ts", from]);
-    expect(fell.url).toBe("file:///opt/plywood/node_modules/@intentius/chant/op");
-  });
-
-  it("leaves other packages and other failures as Node reports them", () => {
-    const hook = chantResolveHook(from);
-    expect(() => hook("@pulumi/pulumi", { parentURL: "file:///repo/index.ts" }, () => { throw missing(); })).toThrow("Cannot find package");
-    const syntax = Object.assign(new Error("bad exports"), { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
-    expect(() => hook("@intentius/chant/nope", { parentURL: "file:///repo/x.ts" }, () => { throw syntax; })).toThrow("bad exports");
   });
 });

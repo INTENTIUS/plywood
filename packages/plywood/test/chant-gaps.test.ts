@@ -7,7 +7,8 @@
  * Cloud.
  */
 import { CHANT_DEFAULTS } from "./chant-defaults";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -95,6 +96,23 @@ describe("plywood forge check on chant#4608", () => {
       words: PRODUCT_WORDS,
     });
     expect(t.out).toEqual(["plywood forge check: 1 mismatch"]);
+    // Without evidence the pull request workflow has no ref gate job, so its status is not required.
+    expect("refGateStatus" in contract).toBe(false);
+  });
+
+  it("with evidence, requires the ref gate's status the policy at base names for the default branch (chant#4913, #4964)", async () => {
+    const trust = { schema: 1, refs: [{ ref: "refs/heads/trunk", checks: [{ check: "plan:shop", command: "/plywood preview on the pull request" }] }] };
+    const dir = repo({ "plywood.yml": `${IDENTITY_YML}evidence: { identity: oidc }\n` });
+    mkdirSync(join(dir, ".chant"));
+    writeFileSync(join(dir, ".chant", "trust.json"), JSON.stringify(trust));
+    const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { cwd: dir });
+    git("init", "-q", "-b", "trunk");
+    git("add", "-A");
+    git("commit", "-q", "-m", "policy");
+    const { fc, calls } = fakeForgeCheck();
+    setChantForgeCheckForTests(fc);
+    await forgeCheck(["check", "--forge", "github", "--repo", "acme/infra"], false, EXIT, io(dir).stageIo);
+    expect((calls.contract as { contract: Record<string, unknown> }).contract.refGateStatus).toBe("chant/ref-gate");
   });
 
   it("takes --branch over the forge's default branch, and prints chant's result with --json", async () => {

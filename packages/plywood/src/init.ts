@@ -412,7 +412,9 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   // chant#4867 to #4870, #4913: with plywood.yml's evidence, the runner identity, the local checks, and chant's ref gate pieces.
   if (evidenceOf(doc)) files.push(...await trustStep(root, detected, doc, forge.kind, declaration.doc, opts.dryRun, todo));
 
-  todo.push(...todoLines(detected, doc, forge.kind, io.env));
+  // chant#4964: with evidence, the ref gate's status decides the whole update, so it is the one to require.
+  const required = evidenceOf(doc) ? (await import("@intentius/chant/ref-gate-rules")).REF_GATE_STATUS : `${PRODUCT}/preview`;
+  todo.push(...todoLines(detected, doc, forge.kind, io.env, required));
   // With `preview: true` the waves apply what the pull request previewed, so the wave job reads the merged request: GitLab needs a token for that.
   if (forge.kind === "gitlab" && stacks.length > 0 && previewOf(doc)) {
     todo.push(`Add a ${GITLAB_READ_TOKEN} CI/CD variable (a project access token with the read_api scope, masked and protected) so a wave can read the merge request it applies; without it the wave refuses`);
@@ -505,16 +507,18 @@ async function trustStep(root: string, detected: Detected, doc: RawConfig, forge
   }
   todo.push(...result.todo);
   const trust = put(root, TRUST_FILE, result.text, dryRun, "the runner identity and the local checks, read at base");
-  return [trust, ...(await refGateStep(root, detected, doc, hooks, trust, dryRun, todo))];
+  return [trust, ...(await refGateStep(root, detected, doc, hooks, memberOfDir(declaration, "."), trust, dryRun, todo))];
 }
 
 /**
  * chant's ref gate pieces (`refGateInitPlan`, chant#4913): the `refs` rule
  * for the default branch in .chant/trust.json, the `pre-push` hook and the
  * runner key hint, planned after plywood's part of the trust file is in
- * place and written unless dry run.
+ * place and written unless dry run. `member` is the workspace member at the
+ * root, whose pull request pipeline signs `plan:<member>` and
+ * `policy:<member>` (chant#4964).
  */
-async function refGateStep(root: string, detected: Detected, doc: RawConfig, hooks: string[], trust: InitFile, dryRun: boolean, todo: string[]): Promise<InitFile[]> {
+async function refGateStep(root: string, detected: Detected, doc: RawConfig, hooks: string[], member: string | undefined, trust: InitFile, dryRun: boolean, todo: string[]): Promise<InitFile[]> {
   const { refGateInitPlan, writeRefGateInit } = await import("@intentius/chant/ref-gate-init");
   const { refGateChecks, TRUST_FILE } = await import("./init/trust");
   const e = evidenceOf(doc)!;
@@ -522,7 +526,7 @@ async function refGateStep(root: string, detected: Detected, doc: RawConfig, hoo
   try {
     plan = refGateInitPlan(root, {
       branch: detected.defaultBranch,
-      checks: refGateChecks(hooks, e.local),
+      checks: refGateChecks(hooks, e.local, member),
       chant: "npx chant",
       ...(e.chant.runnerKeySecret ? { runnerKeySecret: e.chant.runnerKeySecret } : {}),
     });
@@ -704,7 +708,7 @@ function keptPlungeLines(kept: string, detected: Detected, env: NodeJS.ProcessEn
 }
 
 /** The secrets and settings left for the person. */
-function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: NodeJS.ProcessEnv): string[] {
+function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: NodeJS.ProcessEnv, required: string): string[] {
   // The pulumi lexicon and the forge lexicons come with plywood: they are runtime dependencies at the chant pin (plywood#9 ruling A1, plywood#22).
   const out: string[] = [];
   const all = typeof doc.backend === "string" ? doc.backend : undefined;
@@ -718,7 +722,7 @@ function todoLines(detected: Detected, doc: RawConfig, forge: ForgeKind, env: No
   }
   if (traded.some((c) => c !== "pulumi")) out.push(`Let each role identity names trust this repository's OIDC tokens: the preview role for pull requests, the up role for ${detected.defaultBranch} only`);
   else if (!cloud) out.push("Give the preview job and the update job their cloud access, each its own role through OIDC (identity in plywood.yml); the backend bucket's read and write go with them");
-  out.push(`Make ${PRODUCT}/preview a required status on ${detected.defaultBranch}`);
+  out.push(`Make ${required} a required status on ${detected.defaultBranch}`);
   return out;
 }
 

@@ -25,7 +25,7 @@ Each wave job that decides a wave signs `plan:<wave>` once the wave is planned, 
 
 `plywood check` runs chant's check stage. In a job with `CHANT_RUNNER_IDENTITY=oidc` or `CHANT_RUNNER_KEY` set, each check hook that passed gets evidence under the hook's name, such as `pre-commit`.
 
-The pull request workflow is the same file with or without the key, and its preview leaves no evidence.
+With the key, the pull request workflow signs too. Its note job signs `plan:<member>` and `policy:<member>` for the pull request's commit, where `<member>` is the workspace member at the repository's root (`shop` for a project named `shop`). Another job runs the hooks through `chant ci check` on that commit and signs each one that passed under its name. A ref gate job then reads the evidence against the rule for the default branch and sets the `chant/ref-gate` status on the pull request.
 
 ## The trust file
 
@@ -33,7 +33,7 @@ When `plywood.yml` has the key, `plywood init` writes `.chant/trust.json`, which
 
 - For `identity: oidc` on GitHub or GitLab, the waves workflow's identity on the default branch, under `keyless.identities`, with its principal `ci` in `roles.runner`. Put sigstore's `trusted_root.json` at `.chant/trusted_root.json`, the path the file names. A Forgejo job's certificate comes from an authority you run; add its issuer and subject yourself.
 - For `runner_key_secret`, no identity. Add the runner key's public half under `runners`, and its PEM to the secret. `plywood init` prints chant's commands for making and listing the key.
-- A rule for the default branch under `refs`, naming each check hook, `plan` and `policy`. chant writes the rule (its `refGateInitPlan`), and the ref gate's status is chant's default, `chant/ref-gate`.
+- A rule for the default branch under `refs`, naming each check hook, `plan:<member>` and `policy:<member>`. chant writes the rule (its `refGateInitPlan`), and the ref gate's status is chant's default, `chant/ref-gate`.
 
 A trust file already there is merged into, and the entries it has stay as they are. A file that already has a rule for the default branch keeps it.
 
@@ -45,7 +45,7 @@ A trust file already there is merged into, and the entries it has stay as they a
 npx chant workspace ref-gate install --hook pre-push
 ```
 
-The hook refuses a push to the default branch whose commit has no current evidence for a check the rule names, and names each missing check and the command that produces it. Wave evidence is signed after the merge, and the preview signs no `plan` or `policy` for a pull request's commit, so keep `plywood/preview` as the required status on the default branch.
+The hook refuses a push to the default branch whose commit has no current evidence for a check the rule names, and names each missing check and the command that produces it. On a pull request the ref gate job sets `chant/ref-gate`, so make that the required status on the default branch, as `plywood init` reminds you. `plywood forge check` then expects the default branch to require it. A policy at base that does not read sets the status to failure.
 
 ## Local evidence
 

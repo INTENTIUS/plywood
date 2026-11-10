@@ -71,6 +71,10 @@ export interface ProductPipelineOptions {
   noteCommands?: boolean;
   /** The runner identity the plan job's plan and policy checks are signed with (chant#4870, #4869): `post.evidence`. */
   evidence?: { runnerKeySecret?: string; identity?: "oidc"; audience?: string };
+  /** The check job, `chant ci check` on the pull request's commit, signing each hook by its name (chant#4935, #4964). */
+  checkJob?: boolean;
+  /** The ref gate's status job, which sets `chant/ref-gate` (chant#4935, #4964). */
+  refGateStatus?: boolean;
 }
 
 /** What an action job was asked for, as chant's `productActionFromEnv` reads it (chant#4654). */

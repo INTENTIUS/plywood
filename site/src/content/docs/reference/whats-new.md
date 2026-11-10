@@ -5,6 +5,10 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.11
+
+On chant 0.124.89, a `plywood.yml` with `evidence` has the pull request workflow sign as well as the wave jobs. Its note job signs `plan:<member>` and `policy:<member>` for the pull request's commit, where `<member>` is the workspace member at the repository's root. A new job runs the hooks through `chant ci check` and signs each one that passed. One more job reads that evidence against the rule for the default branch and sets the `chant/ref-gate` status, which `plywood init` now asks you to require in place of `plywood/preview`, and which `plywood forge check` expects the default branch to require. The rule init writes names `plan:<member>` and `policy:<member>`. Init keeps a rule that is already there, so a trust file written by 0.3.10, whose rule names plain `plan` and `policy`, needs those two entries renamed by hand.
+
 ## In 0.3.10
 
 This release ships the code of the cut before it, whose package never reached npm because GitHub refused the push of its release record.

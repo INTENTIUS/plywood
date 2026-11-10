@@ -20,7 +20,7 @@
 import type { RefGateInitCheck } from "@intentius/chant/ref-gate-init";
 import { trustConfigSchema, type TrustConfig } from "@intentius/chant/workspace/trust/policy";
 import { ciRunnerIdentity, DEFAULT_TRUSTED_ROOT_PATH, withRunnerIdentity } from "@intentius/chant/workspace/trust/runner-identity";
-import type { PipelineEvidence } from "@intentius/chant/ci-evidence-jobs";
+import { memberEvidenceCheck, type PipelineEvidence } from "@intentius/chant/ci-evidence-jobs";
 import type { ForgeKind } from "../chant-product";
 import { WAVES_OUTPUT_DIR } from "../waves-workflow";
 import { OP_NAME, PRODUCT } from "../words";
@@ -33,15 +33,17 @@ export const PREVIEW_COMMAND = `/${PRODUCT} preview on the pull request`;
 
 /**
  * The checks the ref gate's rule for the default branch needs evidence for:
- * the check hooks, then `plan` and `policy`. A check local evidence stands in
- * for has no runner evidence after CI skips it, so with `local` the rule
- * names no hook.
+ * the check hooks, then `plan` and `policy` as the pull request's note job
+ * signs them: `plan:<member>` and `policy:<member>` for the workspace member
+ * at the repository's root (`memberEvidenceCheck`, chant#4964). A check
+ * local evidence stands in for has no runner evidence after CI skips it, so
+ * with `local` the rule names no hook.
  */
-export function refGateChecks(hooks: readonly string[], local: boolean): RefGateInitCheck[] {
+export function refGateChecks(hooks: readonly string[], local: boolean, member?: string): RefGateInitCheck[] {
   return [
     ...(local ? [] : hooks).map((check) => ({ check, command: CHECK_COMMAND })),
-    { check: "plan", command: PREVIEW_COMMAND },
-    { check: "policy", command: PREVIEW_COMMAND },
+    { check: memberEvidenceCheck("plan", member), command: PREVIEW_COMMAND },
+    { check: memberEvidenceCheck("policy", member), command: PREVIEW_COMMAND },
   ];
 }
 

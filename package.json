@@ -16,8 +16,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@intentius/chant": "0.124.86",
-    "@intentius/chant-lexicon-github": "0.124.86",
+    "@intentius/chant": "0.124.87",
+    "@intentius/chant-lexicon-github": "0.124.87",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
     "typescript": "^5.9.3",

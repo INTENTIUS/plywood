@@ -5,6 +5,16 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.8
+
+Chant and each lexicon plywood carries are at 0.124.87, and chant now keeps the drift issue `plywood drift` opens for each stack. The issue's table of resources is chant's, and resources that couldn't be read are listed under it. Each open drift issue is edited once on the first run after the upgrade, then only when the drift changes.
+
+`plywood export` takes `--version` for a numbered update on a backend that keeps history. A `plywood move` whose stack changed after it was approved stops with the moved exit code and moves nothing. `plywood cancel` checks for a run that may hold the stack's lock before it asks and again before it acts, and exits with the held code while one may; it reads the forge from plywood.yml or the repository's origin remote, and refuses when it can read neither.
+
+A `--forge` value plywood doesn't know is refused in chant's words.
+
+The images install the AWS CLI under `/opt/plywood/aws-cli-2.22.0`. Each engine in them is checked against its release's checksums file and against the sha256 chant records for it.
+
 ## In 0.3.7
 
 This release carries everything 0.3.6 would have, since 0.3.6 was cut and never published after GHCR refused some of its image uploads, which chant 0.124.84 now tries again.

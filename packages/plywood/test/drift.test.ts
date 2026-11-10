@@ -13,7 +13,6 @@ import {
   driftMember,
   DRIFT_OP_FILE,
   DRIFT_SPEC_FILE,
-  driftFingerprint,
   driftOpFile,
   driftOpSpec,
   driftRows,
@@ -27,7 +26,8 @@ import {
 import { EXIT } from "../src/exit-codes";
 import { installLine, TOOL_VERSIONS } from "../src/images";
 import type { StageIo } from "../src/stages";
-import { driftIssueMarker, driftOpName, PRODUCT_WORDS } from "../src/words";
+import { driftIssueMarker } from "@intentius/chant/drift-issue";
+import { driftOpName, PRODUCT_WORDS } from "../src/words";
 
 const URN = "urn:pulumi:dev::shop::aws:sqs/queue:Queue::orders";
 
@@ -84,6 +84,7 @@ function fakeForge() {
   const open = new Map<string, { number: number; title: string; body: string }>();
   let next = 1;
   const actions: string[] = [];
+  const comments: string[] = [];
   const forge: DriftForge = {
     runUrl: "http://127.0.0.1:3000/run/1",
     async trackIssue(marker, finding, opts) {
@@ -93,6 +94,7 @@ function fakeForge() {
         if (!opts?.closeOnClear) return { action: "left", number: mine.number };
         open.delete(marker);
         actions.push(`closed ${mine.number}`);
+        if (opts.clearComment) comments.push(opts.clearComment);
         return { action: "closed", number: mine.number };
       }
       if (!mine) {
@@ -101,13 +103,13 @@ function fakeForge() {
         actions.push(`opened ${n}`);
         return { action: "opened", number: n };
       }
-      if (opts?.sameWhen && mine.title === finding.title && mine.body.includes(opts.sameWhen)) return { action: "unchanged", number: mine.number };
+      if (opts?.sameWhen && mine.title === finding.title && typeof opts.sameWhen === "string" && mine.body.includes(opts.sameWhen)) return { action: "unchanged", number: mine.number };
       Object.assign(mine, finding);
       actions.push(`updated ${mine.number}`);
       return { action: "updated", number: mine.number };
     },
   };
-  return { forge, open, actions };
+  return { forge, open, actions, comments };
 }
 
 function io(cwd: string): StageIo & { stdout: string[]; stderr: string[] } {
@@ -169,9 +171,16 @@ describe("plywood drift", () => {
     setDriftForgeForTests(async () => f.forge);
     setChantProductForTests(fakeChant({ shop: DRIFTED }).api);
     expect(await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir))).toBe(EXIT.drift);
-    const issue = f.open.get(driftIssueMarker("shop/dev"))!;
+    const issue = f.open.get(driftIssueMarker("plywood", "shop/dev"))!;
     expect(issue.body).toContain(URN);
     expect(issue.body).toContain("visibilityTimeoutSeconds");
+    // chant's body in plywood's words: the marker plywood always wrote, the URN column, the run, the fingerprint.
+    expect(issue.title).toBe("plywood: shop/dev has drifted");
+    expect(issue.body.split("\n")[0]).toBe("<!-- plywood:drift shop/dev -->");
+    expect(issue.body).toContain("plywood's drift check read shop/dev against the cloud at 2026-10-27T06:00:00Z and found 1 resource that differ from the stack's state.");
+    expect(issue.body).toContain("| URN | Status | Attributes |");
+    expect(issue.body).toContain("Read by http://127.0.0.1:3000/run/1.");
+    expect(issue.body).toMatch(/<!-- plywood:drift-fingerprint [0-9a-f]{16} -->$/);
 
     // The same finding leaves it alone; a changed one edits it.
     await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir));
@@ -182,6 +191,7 @@ describe("plywood drift", () => {
     setChantProductForTests(fakeChant({ shop: CLEAN }).api);
     expect(await drift(["shop/dev", "--forge", "forgejo"], false, EXIT, io(dir))).toBe(EXIT.done);
     expect(f.actions).toEqual(["opened 1", "updated 1", "closed 1"]);
+    expect(f.comments).toEqual(["plywood's drift check at 2026-10-27T07:00:00Z found shop/dev matching its state, so this issue is closed."]);
   });
 
   it("exits failed when a read cannot run, and maps --op back to its stack", async () => {
@@ -293,11 +303,10 @@ describe.runIf(real !== undefined)("against the installed chant's workspace drif
   }, 60_000);
 });
 
-describe("drift rows and fingerprint", () => {
-  it("counts drifted and missing, and fingerprints the same finding the same way", () => {
+describe("drift rows", () => {
+  it("counts drifted and missing", () => {
     const rows = driftRows({ records: [...DRIFTED.records!, { address: "urn:x", status: "missing" }] });
     expect(rows.map((r) => r.status)).toEqual(["drifted", "missing"]);
-    expect(driftFingerprint(rows)).toBe(driftFingerprint(driftRows({ records: [...DRIFTED.records!, { address: "urn:x", status: "missing" }] })));
   });
 });
 

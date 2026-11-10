@@ -89,7 +89,7 @@ export function helpText(): string {
     "  override <stack> --rule <id>... --reason <text>     override a policy denial, spent once its update runs",
     "",
     "Stack operations (each waits for a second person's approval):",
-    "  export <stack> --out <file>                         the stack's export, to a file on your machine",
+    "  export <stack> --out <file> [--version <v>]         the stack's export, or one version of it, to a file on your machine",
     "  cancel <stack> [--lock <id>]                        release a stuck stack lock; on file:// it reads the id",
     "  move <urn>... --from <stack> --to <stack>           move resources; both stacks preview no change",
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",

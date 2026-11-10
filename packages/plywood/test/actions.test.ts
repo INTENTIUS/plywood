@@ -16,7 +16,7 @@ import { chantProduct, setChantProductForTests, type ChantProduct, type ProductA
 import { checkConfig, parseConfig } from "../src/config/index";
 import { plywoodMcpTools } from "../src/agents";
 import { EXIT } from "../src/exit-codes";
-import { setChantStackOpsForTests, type StackOpOutcome } from "../src/stack-ops";
+import { setChantStackOpsForTests } from "../src/stack-ops";
 import { ACTIONS_NOT_ON_GITLAB, ci, workflowPlan, type StageIo } from "../src/stages";
 import { PRODUCT_WORDS, wordsForJobs } from "../src/words";
 
@@ -53,7 +53,8 @@ function fakeLexicon(preview: Array<{ op: string; urn: string }> = [{ op: "repla
   const approvals = new Set<string>();
   const applied = new Set<string>();
   const digest = "sha256:" + "a".repeat(64);
-  const fn: ChantStackAction = async (opts) => {
+  // Its outcomes leave out the request chant reads back, which plywood does not use.
+  const fn = (async (opts: Parameters<ChantStackAction>[0]) => {
     calls.push(opts as unknown as Record<string, unknown>);
     if (!opts.urn.split("::")[2]!.startsWith("command:")) throw refused("action-type", `${opts.urn} is not a command resource`);
     const others = preview.filter((s) => s.urn !== opts.urn && s.op !== "same").map((s) => s.urn);
@@ -65,8 +66,8 @@ function fakeLexicon(preview: Array<{ op: string; urn: string }> = [{ op: "repla
     approvals.delete(subject);
     applied.add(subject);
     const result: ActionResult = { urn: opts.urn, engine: "pulumi", preview: digest, exit: 0, tail: "Resources: 1 replaced" };
-    return { status: "done", digest, result } as StackOpOutcome<ActionResult>;
-  };
+    return { status: "done", digest, result };
+  }) as unknown as ChantStackAction;
   return { fn, calls, digest, approve: (subject: string) => approvals.add(subject) };
 }
 

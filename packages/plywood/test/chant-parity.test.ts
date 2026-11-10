@@ -12,11 +12,12 @@ import { setChantAuditForTests, type ChantAudit } from "../src/chant-next";
 import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { toChantSettings } from "../src/chant-config";
-import { attributeStack, driftCloudFields, driftOpSpec, DRIFT_SPEC_FILE, specHasUpdate } from "../src/drift";
+import { driftIssueBody } from "@intentius/chant/drift-issue";
+import { attributeStack, driftCloudFields, driftIssueNotes, driftOpSpec, DRIFT_SPEC_FILE, specHasUpdate } from "../src/drift";
 import { EXIT } from "../src/exit-codes";
 import { DECIDE_LEFT_OFF, ci, preview, respondArgv, writtenNotes, type StageIo } from "../src/stages";
 import { up } from "../src/up";
-import { driftIssueBody, PRODUCT_WORDS } from "../src/words";
+import { driftIssueWords, PRODUCT_WORDS } from "../src/words";
 
 function fakeChant(extra: Partial<ChantProduct> = {}, file = "jobs:\n  plan:\n    steps:\n      - run: npx --no-install plywood components pr-plan\n") {
   const calls: string[][] = [];
@@ -245,7 +246,7 @@ describe("drift attribution (chant#4632)", () => {
     const lines = await attributeStack({ audit, logs: { "shop/*": "aws:eu-west-1" } }, "shop/dev", { records: [{ address: "urn:b", status: "drifted" }] });
     expect(lines).toEqual(['- human edit: `urn:b` `tags` (audit log: PutTags by alice in {"*":{"cloud":"aws","region":"eu-west-1"}})']);
     expect(await attributeStack({ audit, logs: { "web/*": "aws" } }, "shop/dev", { records: [] })).toBeUndefined();
-    const body = driftIssueBody({ stack: "shop/dev", rows: [], observedAt: "t", fingerprint: "f", attribution: lines! });
+    const body = driftIssueBody({ words: driftIssueWords("shop/dev"), environment: "shop/dev", records: [{ member: "shop", address: "urn:b", status: "drifted" }], notes: driftIssueNotes(lines)! });
     expect(body).toContain("Who changed each attribute");
     expect(body).toContain("PutTags by alice");
   });

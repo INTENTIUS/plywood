@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { makeNotifyEvent, sendNotify, verifyWebhook } from "@intentius/chant/notify";
 import { parseConfig } from "../src/config/index";
 import { chantNotifyOf } from "../src/config/observe";
-import { driftFingerprint, driftNotifyVariables } from "../src/drift";
+import { driftNotifyVariables } from "../src/drift";
 import { notifiesDrift, runFingerprint, sendDriftNotice, type ChantDriftNotify, type DriftNoticeStack } from "../src/drift-notify";
 
 const KEY = "loopback-signing-key";
@@ -42,10 +42,10 @@ const chant: ChantDriftNotify = {
   sendNotify: sendNotify as ChantDriftNotify["sendNotify"],
 };
 
-const row = { urn: "urn:pulumi:dev::shop::aws:s3/bucket:Bucket::assets", status: "drifted", attributes: ["tags"] };
+const record = { member: "shop", address: "urn:pulumi:dev::shop::aws:s3/bucket:Bucket::assets", status: "drifted" as const, attributes: [{ path: "tags" }] };
 const results = (issue?: string): DriftNoticeStack[] => [
-  { stack: "shop/dev", ok: true, drifted: 1, rows: [row], ...(issue ? { issue: { action: issue } } : {}) },
-  { stack: "shop/prod", ok: true, drifted: 0, rows: [] },
+  { stack: "shop/dev", ok: true, drifted: 1, records: [record], ...(issue ? { issue: { action: issue } } : {}) },
+  { stack: "shop/prod", ok: true, drifted: 0, records: [] },
 ];
 const notify = chantNotifyOf(parseConfig("notify: { webhook: { url: DRIFT_HOOK_URL, key: DRIFT_HOOK_KEY }, on: [drift] }\n").doc);
 const env = () => ({ DRIFT_HOOK_URL: url, DRIFT_HOOK_KEY: KEY });
@@ -53,8 +53,8 @@ const env = () => ({ DRIFT_HOOK_URL: url, DRIFT_HOOK_KEY: KEY });
 describe("the drift event", () => {
   it("one signed event per run, in plywood's words, with the drifted stacks and the fingerprint", async () => {
     received.length = 0;
-    const notice = await sendDriftNotice({ notify, results: results("edited"), stackFingerprint: driftFingerprint, chant, env: env(), log: () => {} });
-    expect(notice).toMatchObject({ sent: true, fingerprint: runFingerprint(results(), driftFingerprint) });
+    const notice = await sendDriftNotice({ notify, results: results("edited"), chant, env: env(), log: () => {} });
+    expect(notice).toMatchObject({ sent: true, fingerprint: runFingerprint(results()) });
     expect(received).toHaveLength(1);
     const { headers, body } = received[0]!;
     expect(verifyWebhook({ body, headers: headers as Record<string, string>, key: KEY, prefix: "x-plywood" })).toMatchObject({ ok: true });
@@ -64,20 +64,20 @@ describe("the drift event", () => {
 
   it("sends nothing when every drifted stack's issue already holds the finding", async () => {
     received.length = 0;
-    const notice = await sendDriftNotice({ notify, results: results("unchanged"), stackFingerprint: driftFingerprint, chant, env: env(), log: () => {} });
+    const notice = await sendDriftNotice({ notify, results: results("unchanged"), chant, env: env(), log: () => {} });
     expect(notice).toMatchObject({ sent: false, reason: expect.stringContaining("already holds") });
     expect(received).toEqual([]);
   });
 
   it("nothing to send with no drift, or when notify.on leaves drift out", async () => {
-    expect(await sendDriftNotice({ notify, results: [{ stack: "shop/dev", ok: true, drifted: 0, rows: [] }], stackFingerprint: driftFingerprint, chant, env: env(), log: () => {} })).toBeUndefined();
+    expect(await sendDriftNotice({ notify, results: [{ stack: "shop/dev", ok: true, drifted: 0, records: [] }], chant, env: env(), log: () => {} })).toBeUndefined();
     const waves = chantNotifyOf(parseConfig("notify: { slack: { webhook: SLACK_URL }, on: [wave-waiting] }\n").doc);
     expect(notifiesDrift(waves)).toBe(false);
-    expect(await sendDriftNotice({ notify: waves, results: results(), stackFingerprint: driftFingerprint, chant, env: env(), log: () => {} })).toBeUndefined();
+    expect(await sendDriftNotice({ notify: waves, results: results(), chant, env: env(), log: () => {} })).toBeUndefined();
   });
 
   it("the same findings give the same fingerprint, in any order", () => {
-    expect(runFingerprint([...results()].reverse(), driftFingerprint)).toBe(runFingerprint(results(), driftFingerprint));
+    expect(runFingerprint([...results()].reverse())).toBe(runFingerprint(results()));
   });
 });
 

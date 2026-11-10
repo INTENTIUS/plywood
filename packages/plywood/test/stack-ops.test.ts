@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,9 +19,10 @@ import {
   setChantStackLockReaderForTests,
   setChantStackOpsForTests,
   STACK_OPS_OP,
+  cancelForge,
   type ChantStackOps,
-  type StackOpOutcome,
 } from "../src/stack-ops";
+import { PulumiStackOpRefused } from "@intentius/chant-lexicon-pulumi";
 import type { StageIo } from "../src/stages";
 import { approveTarget } from "../src/up";
 
@@ -42,15 +43,15 @@ function repo(yml: string, files: Record<string, string> = {}): string {
 
 const YML = "stacks:\n  shop/dev: { dir: infra }\n  shop/prod: { dir: infra }\n  web/prod: { dir: web, backend: file:///srv/state }\napproval: sealed\n";
 
-/** A fake lexicon: records each call's options and answers with `outcome`. */
-function fakeOps(outcome: StackOpOutcome<unknown> | Error) {
+/** A fake lexicon: records each call's options and answers with `outcome` (a `PulumiStackOpOutcome`, or a throw). */
+function fakeOps(outcome: { status: string; digest: string; [k: string]: unknown } | Error) {
   const calls: Array<{ op: string; opts: Record<string, unknown> }> = [];
   const answer = (op: string) => async (opts: unknown) => {
     calls.push({ op, opts: opts as Record<string, unknown> });
     if (outcome instanceof Error) throw outcome;
     return outcome as never;
   };
-  const ops: ChantStackOps = { gatedStackExport: answer("export"), gatedStackCancel: answer("cancel"), gatedStackMove: answer("move") };
+  const ops: ChantStackOps = { gatedStackExport: answer("export"), gatedStackCancel: answer("cancel"), gatedStackMove: answer("move"), PulumiStackOpRefused };
   return { ops, calls };
 }
 
@@ -136,6 +137,17 @@ describe("plywood export", () => {
     expect(ci.stderr.join("\n")).toContain("requester's machine only");
   });
 
+  it("asks for the version --version names (chant#4808)", async () => {
+    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:e2", command: "" });
+    setChantStackOpsForTests(ops);
+    expect(await exportStack(["shop/dev", "--out", "/home/ana/dev.json", "--version", "42"], false, T, io(repo(YML)))).toBe(T.waiting);
+    expect(calls[0]!.opts).toMatchObject({ stack: "dev", version: "42" });
+    const none = fakeOps({ status: "waiting", digest: "sha256:e3", command: "" });
+    setChantStackOpsForTests(none.ops);
+    await exportStack(["shop/dev", "--out", "/home/ana/dev.json"], false, T, io(repo(YML)));
+    expect(none.calls[0]!.opts).not.toHaveProperty("version");
+  });
+
   it("needs --out, and says so when the installed lexicon lacks the operations", async () => {
     const dir = repo(YML);
     setChantStackOpsForTests(fakeOps({ status: "spent", digest: "x" }).ops);
@@ -163,6 +175,33 @@ describe("plywood cancel", () => {
     const out = io(repo(YML));
     expect(await cancelStack(["shop/dev"], false, T, out)).toBe(T.failed);
     expect(out.stderr.join("\n")).toContain("--lock <id>");
+  });
+
+  it("passes the forge plywood.yml names, else the one origin names, for chant's read of the live runs (chant#4808)", () => {
+    expect(cancelForge(parseConfig("forge: { kind: forgejo, url: https://code.acme.dev }\n"), mkdtempSync(join(tmpdir(), "plywood-stack-ops-")))).toEqual({ kind: "forgejo", url: "https://code.acme.dev" });
+    const dir = mkdtempSync(join(tmpdir(), "plywood-stack-ops-"));
+    mkdirSync(join(dir, ".git"));
+    writeFileSync(join(dir, ".git", "config"), '[remote "origin"]\n\turl = git@gitlab.acme.dev:infra/shop.git\n');
+    expect(cancelForge(parseConfig(""), dir)).toEqual({ kind: "gitlab", url: "https://gitlab.acme.dev" });
+    expect(cancelForge(parseConfig(""), mkdtempSync(join(tmpdir(), "plywood-stack-ops-")))).toEqual({});
+  });
+
+  it("sends that forge with the request", async () => {
+    const { ops, calls } = fakeOps({ status: "waiting", digest: "sha256:c", command: "" });
+    setChantStackOpsForTests(ops);
+    expect(await cancelStack(["shop/dev", "--lock", "l1"], false, T, io(repo(`${YML}forge: { kind: github }\n`)))).toBe(T.waiting);
+    expect(calls[0]!.opts).toMatchObject({ forge: { kind: "github" } });
+  });
+
+  it("is chant's held while a run that may hold the lock is alive, and failed for any other refusal", async () => {
+    setChantStackOpsForTests(fakeOps(new PulumiStackOpRefused("live-run", "run 12 started before the lock and is still running")).ops);
+    const live = io(repo(YML));
+    expect(await cancelStack(["shop/dev", "--lock", "l1"], true, T, live)).toBe(T.held);
+    expect(JSON.parse(live.stdout[0]!)).toMatchObject({ ok: false, exitCode: T.held, refusal: "live-run" });
+    setChantStackOpsForTests(fakeOps(new PulumiStackOpRefused("held", "run 12 came back before the release; the approval stands")).ops);
+    expect(await cancelStack(["shop/dev", "--lock", "l1"], false, T, io(repo(YML)))).toBe(T.held);
+    setChantStackOpsForTests(fakeOps(new PulumiStackOpRefused("lock-gone", "the stack no longer holds l1")).ops);
+    expect(await cancelStack(["shop/dev", "--lock", "l1"], false, T, io(repo(YML)))).toBe(T.failed);
   });
 
   it("keeps the approver's refusal as a wait for another approval", async () => {
@@ -221,6 +260,15 @@ describe("plywood move", () => {
     expect(await moveStack([URN, "--from", "shop/dev", "--to", "shop/prod"], true, T, out)).toBe(T.waiting);
     expect(calls[0]!.opts).toMatchObject({ source: { member: "shop/dev", stack: "dev" }, dest: { member: "shop/prod", stack: "prod" }, urns: [URN] });
     expect(JSON.parse(out.stdout[0]!)).toMatchObject({ gate: "move:dev:prod", approve: `plywood approve move:dev:prod --op ${STACK_OPS_OP} --plan sha256:m --sign` });
+  });
+
+  it("is chant's moved when a stack changed after the approval, and nothing was moved (chant#4808)", async () => {
+    setChantStackOpsForTests(fakeOps({ status: "failed", digest: "sha256:m", check: "moved", error: "the state of shop/dev changed since the plan, so nothing was moved" }).ops);
+    const out = io(repo(YML));
+    expect(await moveStack([URN, "--from", "shop/dev", "--to", "shop/prod"], true, T, out)).toBe(T.moved);
+    expect(JSON.parse(out.stdout[0]!)).toMatchObject({ status: "failed", check: "moved", exitCode: T.moved });
+    setChantStackOpsForTests(fakeOps({ status: "failed", digest: "sha256:m", error: "pulumi state move failed" }).ops);
+    expect(await moveStack([URN, "--from", "shop/dev", "--to", "shop/prod"], false, T, io(repo(YML)))).toBe(T.failed);
   });
 
   it("refuses a non-URN, one stack twice, and two backends", async () => {

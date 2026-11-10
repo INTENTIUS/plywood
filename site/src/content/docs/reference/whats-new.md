@@ -5,7 +5,9 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
-## In 0.3.9
+## In 0.3.10
+
+0.3.9 has a tag and no package: GitHub refused the push of its release record, so its publish job found no release to ship. 0.3.10 is the same code.
 
 A new `plywood.yml` key, `evidence`, has the wave jobs sign their checks: `identity: oidc` signs keyless from each job's OIDC token, and `runner_key_secret` signs with a runner key kept in a secret. Each wave job that decides a wave signs `plan:<wave>`. It signs `policy:<wave>` when its policy ran and denied nothing. With the key, `plywood init` writes `.chant/trust.json` with the waves workflow's identity, a ref gate rule for the default branch naming the check hooks, `plan` and `policy`, and, with `local: true`, the check hooks that take local evidence. It also installs the ref gate's pre-push hook in the clone it runs in. [Sign the checks](/plywood/guides/sign-checks/) has the details. A `plywood.yml` without the key gives the same files as before.
 

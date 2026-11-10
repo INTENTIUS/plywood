@@ -13,7 +13,18 @@
   "scripts": {
     "build": "npm run build -w @intentius/plywood",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generated-check": "chant dev generated-check"
+  },
+  "chantGenerated": {
+    "regenerate": "just generate",
+    "renders": [
+      { "name": "ci", "run": "npx chant build ci -o {out}/.github/workflows/ci.yml --format yaml", "files": [".github/workflows/ci.yml"] },
+      { "name": "publish", "run": "npx chant release workflow --forge github --output {out}/.github/workflows/publish.yml", "files": [".github/workflows/publish.yml"] },
+      { "name": "green", "run": "npx chant ci workflow --token-secret CI_GREEN_TOKEN --output {out}/.github/workflows/chant-ci-green.yml", "files": [".github/workflows/chant-ci-green.yml"] },
+      { "name": "images", "run": "node packages/plywood/scripts/build-images.mjs --out {out}", "files": ["images/plywood-pulumi/Dockerfile", "images/plywood-plunge/Dockerfile"] },
+      { "name": "schema", "run": "node packages/plywood/scripts/build-schema.mjs --out {out}", "files": ["packages/plywood/plywood.schema.json"] }
+    ]
   },
   "devDependencies": {
     "@intentius/chant": "0.124.88",

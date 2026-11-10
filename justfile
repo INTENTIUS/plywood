@@ -21,16 +21,26 @@ build:
 test:
     npm test
 
-# Build, then check the committed schema and Dockerfiles against a render, and
-# run chant's bundle check (`chant dev bundle-check`) with the package's
-# chantBundleCheck: runtime dependencies that are exactly what the bundle
-# imports plus its needs (@intentius/chant, the pulumi lexicon, and the forge
-# lexicon for each forge, which chant's generator loads for `plywood init` and
-# `plywood ci`), all at the chant pin, a bundle that imports only Node's own
+# Build, then run chant's bundle check (`chant dev bundle-check`) with the
+# package's chantBundleCheck: runtime dependencies that are exactly what the
+# bundle imports plus its needs (@intentius/chant, the pulumi lexicon, and the
+# forge lexicon for each forge, which chant's generator loads for `plywood init`
+# and `plywood ci`), all at the chant pin, a bundle that imports only Node's own
 # modules and subpaths of those that the installed packages serve as compiled
 # JS, and a packed tarball under 2048 KB.
 bundle-check: build
     npm run bundle-check -w @intentius/plywood
+
+# Check the committed workflows, Dockerfiles and schema against a render, with
+# chant's `chant dev generated-check` and the renders chantGenerated declares in
+# package.json. Each render writes below a temp directory, so nothing in the
+# checkout changes. `just generate` writes them in place.
+generated-check:
+    npm run generated-check
+
+# Render every generated file in place: the workflows, the Dockerfiles and the schema.
+generate: ci images-render
+    npm run schema -w @intentius/plywood
 
 # Build against a local chant instead of the pin, with chant's `chant dev
 # local`: `just chant-local <chant-dir>` packs that checkout, installs it, builds
@@ -42,7 +52,7 @@ chant-local +args:
 
 # Render images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
 # from packages/plywood/src/images.ts, which holds the engine pins and their
-# checksums. bundle-check fails when a committed Dockerfile differs.
+# checksums. generated-check fails when a committed Dockerfile differs.
 images-render:
     npm run images -w @intentius/plywood
 

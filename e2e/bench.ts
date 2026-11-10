@@ -159,7 +159,7 @@ export const JOB_IMAGE = "plywood-tutorial-job:local";
  * and their install lines link `/usr/local/bin/plunge` to
  * `/opt/plywood/plunge-<release>/plunge` when that file is there, so that
  * path names the local build too. `chantTarballs`, the files `just
- * chant-local` packed (under `chant-local/` in the build context), replace
+ * chant-local` (chant dev local) packed (under `chant-local/` in the build context), replace
  * the pinned chant packages under the global plywood, so the jobs run the
  * same chant as the host. It also takes git from trixie (plywood#49).
  */
@@ -171,7 +171,7 @@ export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string
   const chant = tarballs.length
     ? [
         `COPY ${tarballs.map((t) => `chant-local/${t}`).join(" ")} /tmp/chant-local/`,
-        // npm installs the local packages in place of the pinned ones under the global plywood; --legacy-peer-deps as chant-local.sh.
+        // npm installs the local packages in place of the pinned ones under the global plywood; --legacy-peer-deps as chant dev local.
         `RUN set -e; cd "$(npm root -g)/@intentius/plywood" && npm install --no-save --omit=dev --no-audit --no-fund --legacy-peer-deps ${tarballs.map((t) => `/tmp/chant-local/${t}`).join(" ")} && grep '"version"' node_modules/@intentius/chant/package.json && plywood --version`,
       ]
     : [];

@@ -21,22 +21,24 @@ build:
 test:
     npm test
 
-# Build, then hold the package to its shape: runtime dependencies that are
-# exactly the @intentius packages it loads at run time, all at the chant pin
-# (@intentius/chant, the pulumi lexicon, and the forge lexicon for each forge,
-# which chant's generator loads for `plywood init` and `plywood ci`), a bundle
-# that imports only Node's own modules and subpaths of those that the
-# installed packages serve as compiled JS, and a packed tarball under 2048 KB.
+# Build, then check the committed schema and Dockerfiles against a render, and
+# run chant's bundle check (`chant dev bundle-check`) with the package's
+# chantBundleCheck: runtime dependencies that are exactly what the bundle
+# imports plus its needs (@intentius/chant, the pulumi lexicon, and the forge
+# lexicon for each forge, which chant's generator loads for `plywood init` and
+# `plywood ci`), all at the chant pin, a bundle that imports only Node's own
+# modules and subpaths of those that the installed packages serve as compiled
+# JS, and a packed tarball under 2048 KB.
 bundle-check: build
     npm run bundle-check -w @intentius/plywood
 
-# Build against a local chant instead of the pin: `just chant-local` packs
-# chant's origin/main from a worktree next to the chant checkout, `just
-# chant-local <chant-dir>` packs that directory, and `just chant-local --reset`
-# goes back to the pin. Each installed chant package gets a chantLocal field
-# naming the chant commit.
-chant-local *args:
-    scripts/chant-local.sh {{args}}
+# Build against a local chant instead of the pin, with chant's `chant dev
+# local`: `just chant-local <chant-dir>` packs that checkout, installs it, builds
+# and runs the bundle check, and `just chant-local --reset` goes back to the pin.
+# Each installed chant package gets a chantLocal field naming the chant commit.
+# For chant's origin/main, make a worktree of it first.
+chant-local +args:
+    npx chant dev local {{args}} --build 'just build'
 
 # Render images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
 # from packages/plywood/src/images.ts, which holds the engine pins and their

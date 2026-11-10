@@ -24,12 +24,12 @@ Issues for plywood are on [its tracker](https://github.com/INTENTIUS/plywood/iss
 
 `@intentius/chant` and every chant lexicon are pinned to one exact version in `package.json` and `packages/plywood/package.json`, and `just bundle-check` holds the two together. [Versions and pins](/plywood/reference/versions-and-pins/) names the pinned release. A chant feature newer than the pin goes behind a feature-detect with a fallback; `packages/plywood/src/chant-next.ts` lists those from chant#4624 to chant#4636.
 
-To build plywood against chant from source:
+To build plywood against chant from source, `just chant-local` runs chant's `chant dev local` with `just build`. It packs the checkout you name, so for chant's origin/main make a worktree of it first:
 
 ```sh
-just chant-local              # packs chant's origin/main from a worktree next to the chant checkout
-just chant-local ../chant     # packs that chant directory
-just chant-local --reset      # back to the pin
+git -C ../chant worktree add --detach ../chant-local origin/main
+just chant-local ../chant-local   # packs that checkout, builds and runs the bundle check
+just chant-local --reset          # back to the pin
 ```
 
 Run `--reset` before committing a lock file.

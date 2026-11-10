@@ -44,6 +44,8 @@
  */
 import { createHash } from "node:crypto";
 import { resolveTargetCloudIdentity } from "@intentius/chant/ci-identity";
+import { ForgeFlagError, forgeTargetOptionsFromFlags, forgeTargetWith } from "@intentius/chant/forge-flags";
+import { forgeClient } from "@intentius/chant/pr-forge";
 import { chantAudit, type ChantAudit } from "./chant-next";
 import { globMatches } from "./config/images";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -61,7 +63,6 @@ import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/in
 import { stacksOf } from "./config/stacks";
 import { slug } from "./init/detect";
 import { memberOfDir } from "./init/render";
-import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { chantPipelineOptions } from "./images";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
@@ -138,11 +139,7 @@ export function setDriftForgeForTests(fake: ((kind: ForgeKind, env: NodeJS.Proce
 /** chant's forge client for the job's forge, from the job's own variables. */
 async function forgeFor(kind: ForgeKind, env: NodeJS.ProcessEnv): Promise<DriftForge> {
   if (forgeOverride) return forgeOverride(kind, env);
-  const m = (await import("@intentius/chant/pr-forge")) as unknown as {
-    forgeTargetFromEnv(env: Record<string, string | undefined>, opts: { kind: ForgeKind }): unknown;
-    forgeClient(target: unknown): DriftForge;
-  };
-  return m.forgeClient(m.forgeTargetFromEnv(env, { kind }));
+  return forgeClient(forgeTargetWith(env, { kind }));
 }
 
 export interface StackDrift {
@@ -177,7 +174,13 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
   }
   const unknown = stackFlag.rest.filter((a) => a.startsWith("-"));
   if (unknown.length) return usage(`drift does not take ${unknown.join(" ")}`, table, io);
-  if (forgeFlag.value !== undefined && !(FORGES as readonly string[]).includes(forgeFlag.value)) return usage(`--forge ${forgeFlag.value} is not one of ${FORGES.join(", ")}`, table, io);
+  let forge: ForgeKind | undefined;
+  try {
+    forge = forgeTargetOptionsFromFlags({ forge: forgeFlag.value }).kind;
+  } catch (e) {
+    if (e instanceof ForgeFlagError) return usage(e.message, table, io);
+    throw e;
+  }
   if (respondFlag.value !== undefined && !(DRIFT_RESPONSES as readonly string[]).includes(respondFlag.value)) return usage(`--respond takes one of ${DRIFT_RESPONSES.join(", ")}`, table, io);
 
   const path = findConfig(io.cwd);
@@ -202,7 +205,6 @@ export async function drift(args: string[], json: boolean, table: ExitTable, io:
   if (strangers.length) return usage(`${strangers.join(", ")} ${strangers.length === 1 ? "is" : "are"} not under stacks in ${path}`, table, io);
   if (resource.value !== undefined && stacks.length !== 1) return usage("--resource reads one resource of one stack; name the stack", table, io);
   const respond: DriftResponse = (respondFlag.value as DriftResponse | undefined) ?? driftResponseOf(doc);
-  const forge = forgeFlag.value as ForgeKind | undefined;
 
   return withChant(`${PRODUCT} drift`, table, io, async (chant) => {
     const dir = mkdtempSync(join(tmpdir(), "plywood-drift-"));

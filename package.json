@@ -27,8 +27,8 @@
     ]
   },
   "devDependencies": {
-    "@intentius/chant": "0.124.90",
-    "@intentius/chant-lexicon-github": "0.124.90",
+    "@intentius/chant": "0.124.91",
+    "@intentius/chant-lexicon-github": "0.124.91",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
     "typescript": "^5.9.3",

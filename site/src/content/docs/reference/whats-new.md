@@ -9,6 +9,8 @@ Each release lists its changes here, newest first.
 
 The chant pin moves to `0.124.91`, for the lexicons too, so the generated workflows run their stages on that version.
 
+With `agent.comment` set, the agent workflow now gets only the two commands its pipeline answers. Chant used to refuse the others there. `plywood ci` also writes `ops/plywood-agent.op.ts` next to the workflow, and the two files are committed together.
+
 ## In 0.3.11
 
 This release pins chant 0.124.90 for chant and for each lexicon plywood carries, and the workflows it writes run chant's stages from that release.

@@ -55,7 +55,8 @@ describe.runIf(real !== undefined)("approvals.preview is off when plywood.yml sa
       const files = await generated(forge, NO_PREVIEW);
       expect(files[".chant/op-waves/pulumi-up.spec.json"], forge).not.toContain('"preview"');
       const waves = files[forge === "github" ? ".github/workflows/pulumi-up.yml" : forge === "forgejo" ? ".forgejo/workflows/pulumi-up.yml" : "pulumi-up.gitlab-ci.yml"]!;
-      expect(waves, forge).not.toContain("GITHUB_TOKEN");
+      // chant's inline check-job script reads E.GITHUB_TOKEN; the env key is what plywood would write.
+      expect(waves, forge).not.toMatch(/GITHUB_TOKEN:/);
     }
   }, 120_000);
 });
@@ -84,6 +85,6 @@ describe.runIf(real !== undefined)("by default the waves workflows apply what th
     expect(waves).toContain("--record-plans");
     expect(files[".chant/op-waves/pulumi-up.spec.json"]).toContain('"preview": true');
     // The token is a CI/CD variable the project holds, not a line plywood writes into the file.
-    expect(waves).not.toContain("GITHUB_TOKEN");
+    expect(waves).not.toMatch(/GITHUB_TOKEN:/);
   }, 60_000);
 });

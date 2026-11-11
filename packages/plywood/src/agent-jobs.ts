@@ -5,8 +5,11 @@
  *
  *   agent.comment   true answers `/plywood agent <ask>`: productPipelineJobs
  *                   returns the agent's Op spec, written to
- *                   .chant/ops/plywood-agent.spec.json and generated with
- *                   `run --generate`, as the review and drift jobs are
+ *                   .chant/ops/plywood-agent.spec.json beside the Op file
+ *                   ops/plywood-agent.op.ts and generated with
+ *                   `run --generate`, as the review and drift jobs are.
+ *                   chant gets only the words the agent's pipeline answers
+ *                   (the preview and the agent commands)
  *   agent.drift     true, with respond.drift: pull-request, puts chant's
  *                   drift agent on each scheduled drift Op (src/drift.ts):
  *                   after a drift run, the agent opens or updates a pull
@@ -31,6 +34,41 @@ import { PRODUCT, PRODUCT_WORDS, type ProductWordsInput } from "./words";
 /** The agent's Op name: its workflow, its jobs and its runs on the ledger. */
 export const AGENT_OP = "plywood-agent";
 export const AGENT_SPEC_FILE = ".chant/ops/plywood-agent.spec.json";
+/** The Op file chant's generator discovers the agent's Op from. */
+export const AGENT_OP_FILE = "ops/plywood-agent.op.ts";
+
+/**
+ * The words the agent's pipeline takes. chant refuses a comment command
+ * the pipeline has no job for, and the agent's pipeline has the plan job
+ * and the agent job only, so `/plywood up` and `/plywood lock` stay with
+ * the pull request workflow.
+ */
+export function agentWords(words: ProductWordsInput): ProductWordsInput {
+  const commands = Object.fromEntries(Object.entries(words.commands).filter(([, c]) => c === "plan" || c === "agent"));
+  return { ...words, commands: { ...commands, agent: "agent" } };
+}
+
+/**
+ * The agent's Op file. The agent's workflow runs chant's agent jobs under
+ * this Op's name, and chant's generator needs the Op to exist.
+ */
+export function agentOpFile(): string {
+  return [
+    `// Written by '${PRODUCT} ci' from plywood.yml's agent key, and written again on each run: edit plywood.yml, not this file.`,
+    `// The agent's workflow answers /${PRODUCT} agent <ask> under this Op's name and records its runs under ${AGENT_OP}.`,
+    `// chant's generator needs the Op to exist. The agent's jobs are chant's and do not run this phase.`,
+    `import { Op, phase, shell } from "@intentius/chant/op";`,
+    "",
+    "export default Op({",
+    `  name: ${JSON.stringify(AGENT_OP)},`,
+    `  overview: "A model answers /${PRODUCT} agent <ask> on a pull request with one commit",`,
+    "  phases: [",
+    `    phase("Agent", [shell(${JSON.stringify(`echo "${AGENT_OP} runs from its workflow, on /${PRODUCT} agent <ask>"`)})]),`,
+    "  ],",
+    "});",
+    "",
+  ].join("\n");
+}
 
 /** A stage's runner from plywood's `runners`: one for all, or the stage's over the default. */
 export function stageRunner(runner: ChantRunner | undefined, stage: "preview" | "up" | "drift"): ChantRunnerSpec | undefined {
@@ -105,10 +143,10 @@ function writeIfChanged(cwd: string, file: string, text: string): boolean {
 export async function writeAgentJobs(chant: ChantProduct, forge: ForgeKind, env: string, doc: RawConfig, words: ProductWordsInput, table: ExitTable, io: StageIo): Promise<number> {
   const a = agentOf(doc);
   if (!a?.comment) return table.done;
-  const agentWords: ProductWordsInput = { ...words, commands: { ...words.commands, agent: "agent" } };
+  const forAgent = agentWords(words);
   let spec: Record<string, unknown> | undefined;
   try {
-    spec = chant.productPipelineJobs(forge, env, { words: agentWords, agent: { name: AGENT_OP, ...chantAgentOptions(a, doc) } }).agent?.spec;
+    spec = chant.productPipelineJobs(forge, env, { words: forAgent, agent: { name: AGENT_OP, ...chantAgentOptions(a, doc) } }).agent?.spec;
   } catch (e) {
     io.err(`${PRODUCT} ci: agent: ${(e as Error).message}`);
     return table.failed;
@@ -117,9 +155,10 @@ export async function writeAgentJobs(chant: ChantProduct, forge: ForgeKind, env:
     io.err(`${PRODUCT} ci: chant returned no agent spec for /${PRODUCT} agent, so no agent job was written`);
     return table.done;
   }
+  if (writeIfChanged(io.cwd, AGENT_OP_FILE, agentOpFile())) io.err(`${PRODUCT} ci: wrote ${AGENT_OP_FILE}; commit it with the workflow`);
   if (writeIfChanged(io.cwd, AGENT_SPEC_FILE, JSON.stringify(agentOpSpec(spec, doc), null, 2) + "\n")) io.err(`${PRODUCT} ci: wrote ${AGENT_SPEC_FILE}`);
   const outDir = OP_OUTPUT_DIR[forge];
-  const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", AGENT_SPEC_FILE, "--output", outDir], agentWords);
+  const code = await chant.runChantInProcess(["run", "--generate", forge, "--spec", AGENT_SPEC_FILE, "--output", outDir], forAgent);
   if (code !== table.done) return code;
   const dir = join(io.cwd, outDir);
   const files = existsSync(dir)

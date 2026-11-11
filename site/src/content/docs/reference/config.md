@@ -60,7 +60,7 @@ drift: { schedule: "0 6 * * *" }
 | `drift.stacks` | every stack | the stacks the drift job reads, by name or `project/*` glob |
 | `respond.drift` | `issue` | `issue`, `pull-request` (the issue and the drift agent's pull request), `up` (the issue and a gated update) or `none` |
 | `review` | off | `true`, or a mapping with `instructions` (default `.chant/review.md`), `command`, `key_env` (default `ANTHROPIC_API_KEY`) and `timeout` |
-| `agent.comment` | `false` | answer `/plywood agent <ask>` on a pull request |
+| `agent.comment` | `false` | answer `/plywood agent <ask>` on a pull request; `plywood ci` writes the agent's workflow, `.chant/ops/plywood-agent.spec.json` and `ops/plywood-agent.op.ts`, the Op the workflow runs under; commit them together |
 | `agent.drift` | `false` | open a pull request that fixes a drifted stack |
 | `agent.command`, `agent.key_env`, `agent.timeout` | as for `review` | the model command, its key's variable and its minutes |
 | `agent.max_runs` | none | the most agent runs per day |

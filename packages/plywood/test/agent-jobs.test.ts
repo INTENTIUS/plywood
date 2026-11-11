@@ -1,9 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { CHANT_DEFAULTS } from "./chant-defaults";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_OP, AGENT_SPEC_FILE, agentGuarded, chantAgentOptions, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
+import { AGENT_OP, AGENT_OP_FILE, AGENT_SPEC_FILE, agentGuarded, agentOpFile, agentWords, chantAgentOptions, driftOpFields, stageRunner, writeAgentJobs } from "../src/agent-jobs";
+import { chantProduct, setChantProductForTests } from "../src/chant-product";
 import { agentOf } from "../src/config/agents";
 import type { ChantProduct, ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
@@ -62,6 +64,18 @@ describe("the comment agent on chant's agent job", () => {
     expect(chant.calls[0]!.argv).toEqual(["run", "--generate", "github", "--spec", AGENT_SPEC_FILE, "--output", ".github/workflows"]);
   });
 
+  it("hands chant only the words the agent's pipeline answers, and writes the Op file before the generator runs", async () => {
+    const chant = fakeChant();
+    const dir = repo();
+    const err = io(dir);
+    expect(await writeAgentJobs(chant.api, "github", "production", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, err)).toBe(EXIT.done);
+    expect(chant.options[0]!.words.commands).toEqual({ preview: "plan", agent: "agent" });
+    expect(agentWords(PRODUCT_WORDS).commands).toEqual({ preview: "plan", agent: "agent" });
+    expect(readFileSync(join(dir, AGENT_OP_FILE), "utf8")).toBe(agentOpFile());
+    expect(agentOpFile()).toContain(`  name: "${AGENT_OP}",`);
+    expect(err.stderr).toContain(`plywood ci: wrote ${AGENT_OP_FILE}; commit it with the workflow`);
+  });
+
   it("keeps the policy directory out of the agent's reach", () => {
     expect(agentGuarded(parseConfig("policy: { rego: policy/rego }\n").doc)).toEqual(expect.arrayContaining(["plywood.yml"]));
   });
@@ -70,6 +84,29 @@ describe("the comment agent on chant's agent job", () => {
     const warnings = checkConfig(parseConfig("agent: { comment: true, max_runs: 2 }\n")).filter((p) => p.key === "agent");
     expect(warnings).toEqual([]);
   });
+});
+
+describe("the comment agent against the installed chant (plywood#43)", () => {
+  it("writes the agent's workflow with no refused words and no unknown Op", async () => {
+    setChantProductForTests("reset");
+    const real = await chantProduct();
+    const dir = mkdtempSync(join(tmpdir(), "plywood-agent-real-"));
+    execFileSync("git", ["init", "-q", dir]);
+    const doc = parseConfig("stacks: { shop/dev: { dir: infra } }\nagent: { comment: true, max_runs: 3 }\n").doc;
+    const was = process.cwd();
+    process.chdir(dir);
+    const out = io(dir);
+    try {
+      const code = await writeAgentJobs(real, "github", "production", doc, PRODUCT_WORDS, EXIT, out);
+      const said = out.stderr.join("\n");
+      expect(said).not.toContain("refused");
+      expect(said).not.toContain("Unknown Op");
+      expect(code).toBe(EXIT.done);
+      expect(said).toContain("agent jobs at .github/workflows/");
+    } finally {
+      process.chdir(was);
+    }
+  }, 60_000);
 });
 
 describe("the drift agent and the drift runner", () => {

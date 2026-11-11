@@ -5,6 +5,10 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.12
+
+The chant pin moves to `0.124.91`, for the lexicons too, so the generated workflows run their stages on that version.
+
 ## In 0.3.11
 
 This release pins chant 0.124.90 for chant and for each lexicon plywood carries, and the workflows it writes run chant's stages from that release.

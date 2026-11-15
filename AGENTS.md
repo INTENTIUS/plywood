@@ -11,7 +11,6 @@ Working in the INTENTIUS workspace, `../agents/shared.md` applies too. This file
 - `ci/ci.ts` renders ci.yml. publish.yml is chant's, written by `chant release workflow --forge github` from the `release` block in `chant.config.ts`, and `chant-ci-green.yml` comes from `chant.workspace.json`'s `ci.green`. `just ci` renders all three; `just generate` renders every generated file. `pages.yml` is hand-written. Releasing is in CONTRIBUTING.md.
 - Checks run on local builds, fakes, loopback servers or the floci emulator. Pulumi backends are `file://`, `plunge+file://` or S3 on floci, never a real cloud or Pulumi Cloud.
 - `e2e/` is the bench on chant's e2e harness and `stack/` the tutorial bench. Neither is part of the package, and both are person-started.
-- The tagline is "Pulumi ops and governance.", word for word.
 - The one site page that may carry repo notes and issue links is `site/src/content/docs/reference/development.mdx`. A guide for a feature that needs a newer chant or plunge than the pin stays a draft (`draft: true` with `needs:`).
 
 Merging: no merge queue yet. Open the pull request with the local gate passing and stop; the orchestrator merges.

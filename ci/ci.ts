@@ -21,6 +21,7 @@ export const workflow = new Workflow({
   on: {
     push: { branches: ["main"] },
     pull_request: {},
+    merge_group: {},
   },
   permissions: { contents: "read" },
   concurrency: { group: "ci-${{ github.ref }}", "cancel-in-progress": "${{ github.ref != 'refs/heads/main' }}" },

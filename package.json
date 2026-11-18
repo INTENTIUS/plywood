@@ -21,16 +21,16 @@
     "renders": [
       { "name": "ci", "run": "npx chant build ci -o {out}/.github/workflows/ci.yml --format yaml", "files": [".github/workflows/ci.yml"] },
       { "name": "publish", "run": "npx chant release workflow --forge github", "files": [".github/workflows/publish.yml"] },
-      { "name": "green", "run": "npx chant ci workflow --token-secret CI_GREEN_TOKEN", "files": [".github/workflows/chant-ci-green.yml"] },
       { "name": "images", "module": "packages/plywood/src/images.ts", "export": "dockerfiles", "files": ["images/plywood-pulumi/Dockerfile", "images/plywood-plunge/Dockerfile"] },
       { "name": "schema", "module": "packages/plywood/src/config/index.ts", "export": "schemaFiles", "files": ["packages/plywood/plywood.schema.json"] }
     ]
   },
   "devDependencies": {
-    "@intentius/chant": "0.124.91",
-    "@intentius/chant-lexicon-github": "0.124.91",
+    "@intentius/chant": "0.124.106",
+    "@intentius/chant-lexicon-github": "0.124.101",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }

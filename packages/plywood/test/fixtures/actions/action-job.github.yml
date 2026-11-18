@@ -46,7 +46,7 @@ jobs:
           CHANT_ACTION: '${{ github.event.inputs.action }}'
           PR_NUMBER: '${{ github.event.issue.number }}'
           GITHUB_TOKEN: '${{ github.token }}'
-        run: |
+        run: |-
           set +e
           npx --no-install plywood action --from-event
           code="$?"

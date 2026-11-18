@@ -3,13 +3,14 @@
  * (plywood#23): moves a repository to another plywood release in one change
  * for one pull request.
  *
- * It reads the release from npm (the latest when no version is given) and the
- * chant that release pins, then:
+ * It reads the release from npm (the latest when no version is given), the
+ * chant that release pins and the lexicon versions it depends on, then:
  *
- *   package.json          @intentius/plywood to the release, and every
- *                         @intentius/chant and @intentius/chant-lexicon-*
- *                         dependency to its chant, keeping a ^ or ~ in front
- *   chant.workspace.json  each @intentius/chant* entry of `pins` to that chant
+ *   package.json          @intentius/plywood to the release, @intentius/chant
+ *                         to its chant, and each @intentius/chant-lexicon-*
+ *                         dependency to the version the release itself
+ *                         depends on for that lexicon, keeping a ^ or ~ in front
+ *   chant.workspace.json  each @intentius/chant* entry of `pins` the same way
  *   npm install           so the lock file and node_modules hold both
  *   plywood ci            run from the new install, so the workflow names the
  *                         new release's image and the jobs its commands
@@ -18,6 +19,10 @@
  * request with the files it lists. `--no-install` stops after the two files
  * and prints the commands left to run; `--dry-run` prints the moves and
  * writes and runs nothing but `npm view`.
+ *
+ * Lexicons version independently of chant, so a lexicon never moves to the
+ * chant version. One the release does not depend on is left where it is, with
+ * a note: npm has no version of it that the release vouches for.
  *
  * No step runs pulumi, plunge or git. npm and the new plywood run as child
  * processes through `UpgradeIo.exec`, which the tests replace.
@@ -34,6 +39,7 @@ import { PRODUCT } from "./words";
 export const PLYWOOD_PACKAGE = "@intentius/plywood";
 export const CHANT_PACKAGE = "@intentius/chant";
 const CHANT_FAMILY = /^@intentius\/chant(?:-lexicon-[a-z0-9-]+)?$/;
+const LEXICON = /^@intentius\/chant-lexicon-[a-z0-9-]+$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const DEP_FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
@@ -57,10 +63,11 @@ export interface PinMove {
   to: string;
 }
 
-/** The release `npm view` describes: its version and the chant it pins. */
+/** The release `npm view` describes: its version, the chant it pins and the version of each lexicon it depends on. */
 export interface ReleaseManifest {
   version: string;
   chant: string;
+  lexicons: Record<string, string>;
 }
 
 export interface UpgradeOptions {
@@ -123,8 +130,8 @@ export function movedRange(range: string, version: string): string | undefined {
   return `${m[1]}${version}`;
 }
 
-/** package.json with plywood and the chant family moved; the moves, and the ranges it left alone. */
-export function movePackagePins(text: string, file: string, plywood: string, chant: string): { text: string; moves: PinMove[]; left: string[] } {
+/** package.json with plywood, chant and the lexicons the release carries moved; the moves, and what it left alone. */
+export function movePackagePins(text: string, file: string, plywood: string, chant: string, lexicons: Record<string, string>): { text: string; moves: PinMove[]; left: string[] } {
   const pkg = JSON.parse(text) as Record<string, unknown>;
   const moves: PinMove[] = [];
   const left: string[] = [];
@@ -133,7 +140,16 @@ export function movePackagePins(text: string, file: string, plywood: string, cha
     if (!isObject(deps)) continue;
     for (const [name, range] of Object.entries(deps)) {
       if (typeof range !== "string") continue;
-      const target = name === PLYWOOD_PACKAGE ? plywood : CHANT_FAMILY.test(name) ? chant : undefined;
+      let target: string | undefined;
+      if (name === PLYWOOD_PACKAGE) target = plywood;
+      else if (name === CHANT_PACKAGE) target = chant;
+      else if (LEXICON.test(name)) {
+        target = lexicons[name];
+        if (target === undefined) {
+          left.push(`${field}.${name} is '${range}'; this plywood release does not depend on it, so it is left as it is`);
+          continue;
+        }
+      }
       if (target === undefined) continue;
       const next = movedRange(range, target);
       if (next === undefined) {
@@ -148,18 +164,24 @@ export function movePackagePins(text: string, file: string, plywood: string, cha
   return { text: moves.length ? jsonText(pkg, text) : text, moves, left };
 }
 
-/** chant.workspace.json with each @intentius/chant* pin moved to `chant`. */
-export function moveDeclarationPins(text: string, file: string, chant: string): { text: string; moves: PinMove[] } {
+/** chant.workspace.json with each @intentius/chant* pin moved: chant to `chant`, a lexicon to the release's version of it. */
+export function moveDeclarationPins(text: string, file: string, chant: string, lexicons: Record<string, string>): { text: string; moves: PinMove[]; left: string[] } {
   const doc = JSON.parse(text) as Record<string, unknown>;
   const moves: PinMove[] = [];
+  const left: string[] = [];
   const pins = Array.isArray(doc.pins) ? (doc.pins as Array<Record<string, unknown>>) : [];
   for (const pin of pins) {
     if (typeof pin.package !== "string" || !CHANT_FAMILY.test(pin.package) || typeof pin.version !== "string") continue;
-    if (pin.version === chant) continue;
-    moves.push({ file, name: pin.package, from: pin.version, to: chant });
-    pin.version = chant;
+    const target = pin.package === CHANT_PACKAGE ? chant : lexicons[pin.package];
+    if (target === undefined) {
+      left.push(`${file} pins ${pin.package} at ${pin.version}; this plywood release does not depend on it, so it is left as it is`);
+      continue;
+    }
+    if (pin.version === target) continue;
+    moves.push({ file, name: pin.package, from: pin.version, to: target });
+    pin.version = target;
   }
-  return { text: moves.length ? jsonText(doc, text) : text, moves };
+  return { text: moves.length ? jsonText(doc, text) : text, moves, left };
 }
 
 /** plywood.yml's `image` when it names one of plywood's own images: the release that image carries is not moved here. */
@@ -192,7 +214,11 @@ export async function viewRelease(exec: Exec, cwd: string, env: NodeJS.ProcessEn
   const deps = isObject(doc.dependencies) ? doc.dependencies : {};
   const chant = deps[CHANT_PACKAGE];
   if (typeof chant !== "string" || !VERSION.test(chant)) return { error: `${PLYWOOD_PACKAGE}@${doc.version} pins no exact ${CHANT_PACKAGE}` };
-  return { version: doc.version, chant };
+  const lexicons: Record<string, string> = {};
+  for (const [name, range] of Object.entries(deps)) {
+    if (LEXICON.test(name) && typeof range === "string" && VERSION.test(range)) lexicons[name] = range;
+  }
+  return { version: doc.version, chant, lexicons };
 }
 
 /** `plywood upgrade`. */
@@ -218,19 +244,19 @@ export async function upgrade(args: string[], json: boolean, table: ExitTable, i
   const chant = opts.chant ?? release.chant;
 
   const pkgText = readFileSync(pkgFile, "utf8");
-  const pkgMove = movePackagePins(pkgText, rel(pkgFile), release.version, chant);
+  const pkgMove = movePackagePins(pkgText, rel(pkgFile), release.version, chant, release.lexicons);
   const declFile = join(configDir, "chant.workspace.json");
   const declText = existsSync(declFile) ? readFileSync(declFile, "utf8") : undefined;
-  let declMove: { text: string; moves: PinMove[] } | undefined;
+  let declMove: { text: string; moves: PinMove[]; left: string[] } | undefined;
   if (declText !== undefined) {
     try {
-      declMove = moveDeclarationPins(declText, rel(declFile), chant);
+      declMove = moveDeclarationPins(declText, rel(declFile), chant, release.lexicons);
     } catch (e) {
       return fail(`${rel(declFile)} is not JSON upgrade can move pins in (${(e as Error).message})`);
     }
   }
-  const notes = [...pkgMove.left];
-  if (existsSync(join(configDir, "chant.workspace.jsonc"))) notes.push(`chant.workspace.jsonc is yours: move its @intentius/chant* pins to ${chant} by hand`);
+  const notes = [...pkgMove.left, ...(declMove?.left ?? [])];
+  if (existsSync(join(configDir, "chant.workspace.jsonc"))) notes.push(`chant.workspace.jsonc is yours: move its @intentius/chant* pins by hand (chant to ${chant}, each lexicon to the version plywood ${release.version} depends on)`);
   if (configFile) {
     try {
       const note = imageNote(loadConfig(configFile).doc as Record<string, unknown>, release.version);

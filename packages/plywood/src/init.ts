@@ -139,12 +139,18 @@ export const CHANT_CONFIG_FILE = "chant.config.ts";
 export const COMPONENTS_FILE = "plywood.component.ts";
 export const WAVES_SPEC_FILE = `.chant/op-waves/${OP_NAME}.spec.json`;
 
-/** The chant pin plywood ships with: the pulumi lexicon is pinned to the same release. */
-export const CHANT_PIN: string = chantPin();
+/** The chant pin plywood ships with. */
+export const CHANT_PIN: string = dependencyPin("@intentius/chant");
 
-function chantPin(): string {
-  const pin = (PLYWOOD_DEPENDENCIES as Record<string, string | undefined>)["@intentius/chant"];
-  if (!pin) throw new Error("packages/plywood/package.json has no @intentius/chant dependency");
+/**
+ * The pulumi lexicon's pin plywood ships with, which init writes into a project's `pins`. Lexicons are released on
+ * their own versions, so this is the lexicon's own entry in plywood's dependencies, not CHANT_PIN.
+ */
+export const PULUMI_LEXICON_PIN: string = dependencyPin(PULUMI_LEXICON);
+
+function dependencyPin(name: string): string {
+  const pin = (PLYWOOD_DEPENDENCIES as Record<string, string | undefined>)[name];
+  if (!pin) throw new Error(`packages/plywood/package.json has no ${name} dependency`);
   return pin;
 }
 
@@ -434,7 +440,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
 /** chant.workspace.json: written when absent, merged when there, left alone as .jsonc (it is the person's). */
 function declarationStep(root: string, detected: Detected, settings: ChantSettings, dryRun: boolean): { file: InitFile; doc?: Record<string, unknown> } {
   if (existsSync(join(root, "chant.workspace.jsonc"))) {
-    return { file: { file: "chant.workspace.jsonc", status: "kept", note: `add a member of kind pulumi for each of ${detected.projects.map((p) => p.dir).join(", ")}, and pin ${PULUMI_LEXICON}@${CHANT_PIN}` } };
+    return { file: { file: "chant.workspace.jsonc", status: "kept", note: `add a member of kind pulumi for each of ${detected.projects.map((p) => p.dir).join(", ")}, and pin ${PULUMI_LEXICON}@${PULUMI_LEXICON_PIN}` } };
   }
   let existing: Record<string, unknown> | undefined;
   const file = join(root, DECLARATION_FILE);
@@ -447,7 +453,7 @@ function declarationStep(root: string, detected: Detected, settings: ChantSettin
       return { file: { file: DECLARATION_FILE, status: "failed", note: `is not JSON init can merge into (${(e as Error).message})` } };
     }
   }
-  const doc = workspaceDeclaration(existing, { name: repoName(root), projects: detected.projects, ci: settings.ci, lexiconVersion: CHANT_PIN });
+  const doc = workspaceDeclaration(existing, { name: repoName(root), projects: detected.projects, ci: settings.ci, lexiconVersion: PULUMI_LEXICON_PIN });
   if (existing && JSON.stringify(existing) === JSON.stringify(doc)) return { file: { file: DECLARATION_FILE, status: "unchanged" }, doc };
   return { file: put(root, DECLARATION_FILE, jsonText(doc), dryRun), doc };
 }

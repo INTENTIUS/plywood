@@ -8,6 +8,8 @@ export default defineConfig({
   esbuild: { tsconfigRaw: readFileSync(new URL("./tsconfig.json", import.meta.url), "utf8") },
   test: {
     globalSetup: ["./scripts/clean-tree-guard.mjs"],
+    // The in-process runs of plywood init resolve chant as bin.ts has them do.
+    setupFiles: ["./packages/plywood/test/chant-resolve.setup.ts"],
     include: ["packages/*/test/**/*.test.ts", "e2e/test/**/*.test.ts"],
   },
 });

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setChantProductForTests, type ChantProduct, type ProductPipelineOptions } from "../src/chant-product";
 import { checkConfig, parseConfig } from "../src/config/index";
 import { EXIT } from "../src/exit-codes";
-import { initLines, parseInitArgs, runInit, type InitIo, type InitOptions } from "../src/init";
+import { CHANT_PIN, initLines, parseInitArgs, PULUMI_LEXICON_PIN, runInit, type InitIo, type InitOptions } from "../src/init";
 import { bucketTarget, setBucketCheckForTests, type BucketReport } from "../src/init/backend";
 import { detect, environmentOf, forgeOfRemote, stackNames } from "../src/init/detect";
 import { jobBlocks, keepOwnJobs, OWN_JOBS_LINE } from "@intentius/chant/ci-own-jobs";
@@ -193,6 +193,17 @@ describe("detection", () => {
 
 const TOKEN = { GITHUB_TOKEN: "${{ github.token }}" };
 
+describe("the pins init writes", () => {
+  // Lexicons are released on their own versions, so the pulumi lexicon's pin is its own, not chant's.
+  it("pins the pulumi lexicon at plywood's own dependency on it, which is the installed release", () => {
+    const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(PULUMI_LEXICON_PIN).toBe(pkg.dependencies["@intentius/chant-lexicon-pulumi"]);
+    expect(CHANT_PIN).toBe(pkg.dependencies["@intentius/chant"]);
+    const installed = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "..", "node_modules", "@intentius", "chant-lexicon-pulumi", "package.json"), "utf8")) as { version: string };
+    expect(installed.version).toBe(PULUMI_LEXICON_PIN);
+  });
+});
+
 describe("golden files", () => {
   it("one project with three stacks: an empty plywood.yml, a wave per environment, a component per stack", async () => {
     const chant = fakeChant();
@@ -231,7 +242,7 @@ describe("golden files", () => {
       name: expect.any(String),
       schema: 1,
       members: [{ name: "shop", dir: "infra", kind: "pulumi" }],
-      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.91" }],
+      pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.102" }],
       ci: { workflow: "trunk-curated+apply-on-merge", locks: "plan" },
     });
     const components = readFileSync(join(root, "plywood.component.ts"), "utf8");

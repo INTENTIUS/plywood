@@ -18,9 +18,7 @@ const CHANGES = "site/src/content/docs/reference/whats-new.md";
 export default {
   lexicons: ["github"],
 
-  // chant.workspace.json declares no members; it is there for ci.green (the
-  // ci/green tags chant-ci-green.yml writes, which the release gate reads), so
-  // chant build and lint keep building this root project alone.
+  // chant.workspace.json declares no members, so chant build and lint build this root project alone.
   rootOnly: true,
 
   // The declarations chant builds from this root when no directory is named: the release cut's compile reads them.
@@ -36,13 +34,16 @@ export default {
   release: {
     // The committed packages/plywood/package.json keeps its version; the release build alone carries the label.
     version: { packages: ["packages/plywood"] },
+    // The cut tags v<version>. Releases through 0.3.12 were tagged release/<version>, and chant still reads those.
+    tag: "v{version}",
+    legacyTags: ["release/"],
+    // The cut releases a commit whose GitHub checks passed, the ruleset's required `package` and `site` among them.
+    green: "forge-checks",
     // .github/workflows/publish.yml, from `chant release workflow`: one run, started by hand with
-    // the version. The gate names the newest green commit at or below the dispatched one, the cut
-    // builds the images and the bundle that pins them, and the publish job checks the cut's image
+    // the version. The cut checks the dispatched commit's checks on GitHub, builds the images and the bundle that pins them, and the publish job checks the cut's image
     // archives against its digests and publishes. npm's trusted publisher is configured for publish.yml.
     workflow: {
       trigger: "dispatch",
-      gate: "last-green",
       install: "npm ci",
       build: "npm run build",
       chant: "npx chant",

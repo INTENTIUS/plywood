@@ -99,9 +99,8 @@ describe("the mcp client", () => {
   });
 
   it("refuses every tool chant keeps off a read-only server", async () => {
-    // A path in a variable: tsc stays out of chant's sources, which vitest loads as they are.
-    const file = join(import.meta.dirname, "..", "..", "node_modules", "@intentius", "chant", "src", "cli", "mcp", "read-only.ts");
-    const { MUTATING_CORE_TOOLS } = (await import(file)) as { MUTATING_CORE_TOOLS: ReadonlySet<string> };
+    // chant's package serves the compiled module under its "./*" export.
+    const { MUTATING_CORE_TOOLS } = await import("@intentius/chant/cli/mcp/read-only");
     expect([...MUTATING_CORE_TOOLS].filter((t) => !(WRITE_TOOLS as readonly string[]).includes(t))).toEqual([]);
   });
 });

@@ -5,6 +5,14 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.3.13
+
+The chant pin moves to `0.124.106`. The lexicons now each pin their own release, since they version apart from chant: forgejo, github and gitlab at `0.124.101`, pulumi at `0.124.102`. `plywood init` pins the pulumi lexicon in `chant.workspace.json` at that release, where it used to write chant's version. In the workflows `plywood ci` writes, a multi-line `run:` block is now `run: |-`, so the first `plywood ci` after the upgrade rewrites those lines.
+
+`plywood upgrade` moves each `@intentius/chant-lexicon-*` pin to the version the release depends on for it. It used to write the release's chant version into every lexicon pin, which named versions npm does not have. A lexicon the release does not depend on stays where it is, and the summary says so.
+
+Release tags are `v<version>` from this release on. Releases through 0.3.12 were tagged `release/<version>`.
+
 ## In 0.3.12
 
 The chant pin moves to `0.124.91`, for the lexicons too, so the generated workflows run their stages on that version.

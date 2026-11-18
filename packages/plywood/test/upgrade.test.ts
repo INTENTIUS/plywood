@@ -22,6 +22,7 @@ const PKG = {
     "@intentius/plywood": "0.1.0",
     "@intentius/chant": "0.124.54",
     "@intentius/chant-lexicon-pulumi": "^0.124.54",
+    "@intentius/chant-lexicon-aws": "^0.124.54",
     "@pulumi/aws": "^7.0.0",
   },
 };
@@ -29,7 +30,10 @@ const DECL = {
   name: "shop",
   schema: 1,
   members: [{ name: "shop", dir: ".", kind: "pulumi" }],
-  pins: [{ package: "@intentius/chant-lexicon-pulumi", version: "0.124.54" }],
+  pins: [
+    { package: "@intentius/chant-lexicon-pulumi", version: "0.124.54" },
+    { package: "@intentius/chant-lexicon-aws", version: "0.124.54" },
+  ],
 };
 
 /** A repository plywood init has set up: package.json, chant.workspace.json, plywood.yml and a lock file. */
@@ -50,7 +54,7 @@ function fakeExec(releases: Record<string, { version: string; chant: string }>, 
       const spec = args[1].replace("@intentius/plywood@", "");
       const r = releases[spec];
       if (!r) return { code: 1, stdout: "", stderr: "npm error code E404" };
-      return { code: 0, stdout: JSON.stringify({ version: r.version, dependencies: { "@intentius/chant": r.chant, "@intentius/chant-lexicon-pulumi": r.chant } }), stderr: "" };
+      return { code: 0, stdout: JSON.stringify({ version: r.version, dependencies: { "@intentius/chant": r.chant, "@intentius/chant-lexicon-pulumi": LEXICON_PULUMI, "@intentius/chant-lexicon-github": LEXICON_GITHUB } }), stderr: "" };
     }
     if (bin === "npm" && args[0] === "install") {
       const want = JSON.parse(readFileSync(join(opts.cwd, "package.json"), "utf8")).devDependencies["@intentius/plywood"];
@@ -67,6 +71,10 @@ function io(cwd: string, exec: Exec, out: string[] = [], err: string[] = []): Up
   return { cwd, env: {}, out: (s) => out.push(s), err: (s) => err.push(s), exec };
 }
 
+/** Lexicons version on their own: neither equals the release's chant. */
+const LEXICON_PULUMI = "0.125.2";
+const LEXICON_GITHUB = "0.125.1";
+const LEXICONS = { "@intentius/chant-lexicon-pulumi": LEXICON_PULUMI, "@intentius/chant-lexicon-github": LEXICON_GITHUB };
 const RELEASES = { latest: { version: "0.2.0", chant: "0.125.0" }, "0.2.0": { version: "0.2.0", chant: "0.125.0" } };
 
 describe("plywood upgrade's pieces", () => {
@@ -87,24 +95,35 @@ describe("plywood upgrade's pieces", () => {
     expect(movedRange("file:../plywood", "0.2.0")).toBeUndefined();
   });
 
-  it("moves plywood and every chant package in package.json, and nothing else", () => {
-    const r = movePackagePins(JSON.stringify(PKG, null, 2), "package.json", "0.2.0", "0.125.0");
+  it("moves plywood, chant and each lexicon the release carries to its own version, and leaves the rest", () => {
+    const r = movePackagePins(JSON.stringify(PKG, null, 2), "package.json", "0.2.0", "0.125.0", LEXICONS);
     const pkg = JSON.parse(r.text);
-    expect(pkg.devDependencies).toEqual({ "@intentius/plywood": "0.2.0", "@intentius/chant": "0.125.0", "@intentius/chant-lexicon-pulumi": "^0.125.0", "@pulumi/aws": "^7.0.0" });
+    expect(pkg.devDependencies).toEqual({
+      "@intentius/plywood": "0.2.0",
+      "@intentius/chant": "0.125.0",
+      "@intentius/chant-lexicon-pulumi": `^${LEXICON_PULUMI}`,
+      "@intentius/chant-lexicon-aws": "^0.124.54",
+      "@pulumi/aws": "^7.0.0",
+    });
     expect(r.moves.map((m) => m.name)).toEqual(["@intentius/plywood", "@intentius/chant", "@intentius/chant-lexicon-pulumi"]);
-    expect(r.left).toEqual([]);
+    expect(r.left).toHaveLength(1);
+    expect(r.left[0]).toMatch(/chant-lexicon-aws.*does not depend on it/);
   });
 
   it("names a range it cannot move", () => {
-    const r = movePackagePins(JSON.stringify({ devDependencies: { "@intentius/plywood": "next" } }), "package.json", "0.2.0", "0.125.0");
+    const r = movePackagePins(JSON.stringify({ devDependencies: { "@intentius/plywood": "next" } }), "package.json", "0.2.0", "0.125.0", LEXICONS);
     expect(r.moves).toEqual([]);
     expect(r.left[0]).toMatch(/'next'.*by hand/);
   });
 
-  it("moves chant.workspace.json's chant pins", () => {
-    const r = moveDeclarationPins(JSON.stringify(DECL, null, 2), "chant.workspace.json", "0.125.0");
-    expect(JSON.parse(r.text).pins).toEqual([{ package: "@intentius/chant-lexicon-pulumi", version: "0.125.0" }]);
-    expect(r.moves).toEqual([{ file: "chant.workspace.json", name: "@intentius/chant-lexicon-pulumi", from: "0.124.54", to: "0.125.0" }]);
+  it("moves chant.workspace.json's lexicon pins to the release's versions, and leaves one it does not carry", () => {
+    const r = moveDeclarationPins(JSON.stringify(DECL, null, 2), "chant.workspace.json", "0.125.0", LEXICONS);
+    expect(JSON.parse(r.text).pins).toEqual([
+      { package: "@intentius/chant-lexicon-pulumi", version: LEXICON_PULUMI },
+      { package: "@intentius/chant-lexicon-aws", version: "0.124.54" },
+    ]);
+    expect(r.moves).toEqual([{ file: "chant.workspace.json", name: "@intentius/chant-lexicon-pulumi", from: "0.124.54", to: LEXICON_PULUMI }]);
+    expect(r.left[0]).toMatch(/chant-lexicon-aws at 0\.124\.54.*does not depend on it/);
   });
 
   it("notes an image key the upgrade does not move", () => {
@@ -116,7 +135,7 @@ describe("plywood upgrade's pieces", () => {
 
   it("reads the release and its chant from npm view, and says when npm has none", async () => {
     const calls: string[] = [];
-    expect(await viewRelease(fakeExec(RELEASES, calls), "/", {})).toEqual({ version: "0.2.0", chant: "0.125.0" });
+    expect(await viewRelease(fakeExec(RELEASES, calls), "/", {})).toEqual({ version: "0.2.0", chant: "0.125.0", lexicons: LEXICONS });
     expect(calls).toEqual(["npm view @intentius/plywood@latest version dependencies --json"]);
     expect(await viewRelease(fakeExec(RELEASES, []), "/", {}, "9.9.9")).toEqual({ error: "npm has no @intentius/plywood@9.9.9" });
   });
@@ -129,7 +148,15 @@ describe("plywood upgrade on a fixture repository", () => {
     const err: string[] = [];
     expect(await upgrade([], false, EXIT, io(root, fakeExec(RELEASES, calls), [], err))).toBe(EXIT.done);
     expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).devDependencies["@intentius/plywood"]).toBe("0.2.0");
-    expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8")).pins[0].version).toBe("0.125.0");
+    expect(JSON.parse(readFileSync(join(root, "chant.workspace.json"), "utf8")).pins).toEqual([
+      { package: "@intentius/chant-lexicon-pulumi", version: LEXICON_PULUMI },
+      { package: "@intentius/chant-lexicon-aws", version: "0.124.54" },
+    ]);
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).devDependencies;
+    expect(pkg["@intentius/chant"]).toBe("0.125.0");
+    expect(pkg["@intentius/chant-lexicon-pulumi"]).toBe(`^${LEXICON_PULUMI}`);
+    expect(pkg["@intentius/chant-lexicon-aws"]).toBe("^0.124.54");
+    expect(err.join("\n")).toMatch(/chant-lexicon-aws.*does not depend on it/);
     expect(calls).toEqual([
       "npm view @intentius/plywood@latest version dependencies --json",
       "npm install --no-audit --no-fund",
@@ -159,6 +186,7 @@ describe("plywood upgrade on a fixture repository", () => {
     const doc = JSON.parse(out[0]);
     expect(doc.dryRun).toBe(true);
     expect(doc.moves).toHaveLength(4);
+    expect(doc.notes.join("\n")).toMatch(/chant-lexicon-aws/);
     expect(doc.steps.ci.command).toBe("npx --no-install plywood ci");
   });
 

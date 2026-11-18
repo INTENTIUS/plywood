@@ -13,4 +13,4 @@ Working in the INTENTIUS workspace, `../agents/shared.md` applies too. This file
 - `e2e/` is the bench on chant's e2e harness and `stack/` the tutorial bench. Neither is part of the package, and both are person-started.
 - The one site page that may carry repo notes and issue links is `site/src/content/docs/reference/development.mdx`. A guide for a feature that needs a newer chant or plunge than the pin stays a draft (`draft: true` with `needs:`).
 
-Merging: no merge queue yet. Open the pull request with the local gate passing and stop; the orchestrator merges.
+Merging: main has a merge queue. Run the local gate, push, open the pull request with `Closes #N`, queue it with `gh pr merge <n> --auto --squash`, and stop. The queue tests it on top of main and merges it; do not watch CI or use `--admin`.

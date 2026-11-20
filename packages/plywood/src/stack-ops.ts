@@ -23,7 +23,7 @@
  *       writes it (plywood.adopt.op.ts): `chant run plywood-adopt`, which
  *       stops at each stack's gate.
  *   plywood rollback <stack> [--digest <sha256:...>]
- *   plywood rollback --release <name> --env <env>
+ *   plywood rollback <env> --release <name>   (--env <env> is its alias)
  *       chant components rollback (chant#4542): the release's recorded
  *       program previews against the stack, the release gate binds that
  *       preview, and the update runs once it is approved.
@@ -391,7 +391,8 @@ async function moveOntoPlunge(engine: string, args: string[], json: boolean, tab
 
 /**
  * `plywood rollback <stack> [--digest <sha256:...>] [--env <env>]` or
- * `plywood rollback --release <name> --env <env>`, each with `[--dry-run]
+ * `plywood rollback <env> --release <name>` (or `--release <name> --env
+ * <env>`, its alias), each with `[--dry-run]
  * [--actor <name>] [--events-json] [--json]`: chant components rollback
  * (chant#4542) with plywood's words.
  */
@@ -412,12 +413,17 @@ export async function rollbackStack(args: string[], json: boolean, table: ExitTa
 
   let argv: string[];
   if (release.value !== undefined) {
-    if (named.length) return usage(STACK_OP_WORDS.releaseIsEnvWide(named[0]!, environmentOf(named[0]!)), table, io);
+    // With --release the positional is the environment (chant's `components rollback <env>`); --env is its alias.
+    const positional = named[0];
+    if (positional !== undefined && positional.includes("/")) return usage(STACK_OP_WORDS.releaseIsEnvWide(positional, environmentOf(positional)), table, io);
     if (digest.value !== undefined) return usage("--release takes no --digest: the release names what each stack goes back to", table, io);
-    if (!env.value) return usage(`rollback --release needs --env <env>, the environment whose stacks go back: ${STACK_OP_WORDS.usage.rollback}`, table, io);
-    argv = ["components", "rollback", env.value, "--release", release.value];
+    if (positional !== undefined && env.value !== undefined && positional !== env.value) return usage(STACK_OP_WORDS.twoEnvironments(positional, env.value), table, io);
+    const target = positional ?? env.value;
+    if (!target) return usage(`rollback --release needs the environment whose stacks go back: ${STACK_OP_WORDS.usage.rollback}`, table, io);
+    argv = ["components", "rollback", target, "--release", release.value];
   } else {
-    if (named.length !== 1) return usage(`rollback takes a stack, or --release <name> --env <env>: ${STACK_OP_WORDS.usage.rollback}`, table, io);
+    if (named.length !== 1) return usage(`rollback takes a stack, or an environment with --release <name>: ${STACK_OP_WORDS.usage.rollback}`, table, io);
+    if (!named[0]!.includes("/")) return usage(STACK_OP_WORDS.envNeedsRelease(named[0]!), table, io);
     const read = readConfig(io.cwd);
     if ("error" in read) return usage(read.error, table, io);
     const stack = resolveStack(read.config, read.path, named[0]!, undefined);

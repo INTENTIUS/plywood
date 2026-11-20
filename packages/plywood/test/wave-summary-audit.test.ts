@@ -18,7 +18,7 @@ import { setChantProductForTests, type ProductPipelineOptions } from "../src/cha
 import { checkConfig, parseConfig } from "../src/config/index";
 import { estate, setChantEstateForTests } from "../src/estate";
 import { EXIT } from "../src/exit-codes";
-import { ci, respondArgv, respondOptions, type StageIo } from "../src/stages";
+import { ci, respondArgv, respondOptions, waveSummaryArgv, type StageIo } from "../src/stages";
 import { CHANT_DEFAULTS } from "./chant-defaults";
 
 const problems = (yml: string) => checkConfig(parseConfig(yml)).map((p) => `${p.severity} ${p.key}`);
@@ -106,13 +106,19 @@ describe("respond.wave_refused: summary and agent.wave-refused", () => {
     expect(seen[0]!.respond).toEqual({ "wave-refused": "summary" });
     expect(seen[0]!.waveSummary).toEqual({ keyEnv: "SUMMARY_KEY", maxRuns: 4 });
     expect(calls[0]).toEqual(expect.arrayContaining(["--respond", "wave-refused=summary"]));
+    // chant#5399: the pull request apply job gets the same settings on the build line.
+    const build = calls[0]!;
+    expect(build.filter((a, i) => build[i - 1] === "--wave-summary")).toEqual(["keyEnv=SUMMARY_KEY", "maxRuns=4"]);
     // chant's job variables for those settings.
     expect(waveSummaryJobEnv("github", "summary", seen[0]!.waveSummary)).toMatchObject({ SUMMARY_KEY: "${{ secrets.SUMMARY_KEY }}", CHANT_WAVE_SUMMARY_MAX_RUNS: "4" });
     expect(waveSummaryJobEnv("github", "diff", seen[0]!.waveSummary)).toEqual({});
   });
 
-  it("puts nothing on the build line at the defaults", () => {
+  it("puts nothing on the build line at the defaults, and names the default key when only the mode is set", () => {
     expect(respondArgv({ "wave-refused": "diff" }, undefined)).toEqual([]);
+    expect(respondOptions(toChantSettings(parseConfig("respond:\n  wave_refused: diff\n")).pipeline, []).argv).toEqual([]);
+    expect(respondOptions(toChantSettings(parseConfig(SUMMARY)).pipeline, []).argv).toEqual(["--respond", "wave-refused=summary", "--wave-summary", "keyEnv=ANTHROPIC_API_KEY"]);
+    expect(waveSummaryArgv(undefined)).toEqual([]);
   });
 });
 

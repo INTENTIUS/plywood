@@ -22,7 +22,8 @@ import { ci, respondArgv, respondOptions, waveSummaryArgv, type StageIo } from "
 import { CHANT_DEFAULTS } from "./chant-defaults";
 
 const problems = (yml: string) => checkConfig(parseConfig(yml)).map((p) => `${p.severity} ${p.key}`);
-const SUMMARY = "respond:\n  wave_refused: summary\n";
+// The vocabulary's spelling of the key; plywood.yml reads wave_refused too.
+const SUMMARY = "respond:\n  wave-refused: summary\n";
 
 function dir(files: Record<string, string> = {}): string {
   const d = mkdtempSync(join(tmpdir(), "plywood-summary-"));

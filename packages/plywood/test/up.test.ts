@@ -465,8 +465,8 @@ describe("wave jobs on chant#4607 (plywood#26)", () => {
 
 describe("records", () => {
   it("plywood makes no git writes: no module runs git or spawns a process", () => {
-    // plywood upgrade spawns npm and npx (plywood#23); control prints the push for the person to run.
-    const SPAWNS = new Set(["upgrade.ts"]);
+    // plywood upgrade spawns npm and npx (plywood#23), plywood view npx and the browser opener; control prints the push for the person to run.
+    const SPAWNS = new Set(["upgrade.ts", "view.ts"]);
     const HINT = "  push it: git push origin chant/lifecycle";
     const src = fileURLToPath(new URL("../src", import.meta.url));
     const files: string[] = [];

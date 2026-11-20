@@ -10,6 +10,8 @@ export default defineConfig({
     globalSetup: ["./scripts/clean-tree-guard.mjs"],
     // The in-process runs of plywood init resolve chant as bin.ts has them do.
     setupFiles: ["./packages/plywood/test/chant-resolve.setup.ts"],
+    // The in-process runs of init take several seconds when the suite runs files in parallel.
+    testTimeout: 30_000,
     include: ["packages/*/test/**/*.test.ts", "e2e/test/**/*.test.ts"],
   },
 });

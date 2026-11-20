@@ -65,7 +65,7 @@ describe("exit codes", () => {
 
 describe("placement", () => {
   // plywood holds words; chant runs pulumi, plunge and git (CONTRIBUTING.md).
-  // plywood upgrade (plywood#23) alone spawns, and only npm and npx.
+  // plywood upgrade (plywood#23) spawns npm and npx, and plywood view starts behold with npx.
   it("no module under src runs pulumi, plunge or git", () => {
     const src = join(import.meta.dirname, "../src");
     const files = readdirSync(src, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts"));
@@ -74,6 +74,11 @@ describe("placement", () => {
       const text = readFileSync(join(src, f), "utf8");
       if (f === "upgrade.ts") {
         expect([...text.matchAll(/\bexec\("([^"]+)"/g)].map((m) => m[1])).toEqual(["npm", "npm", "npx"]);
+        continue;
+      }
+      if (f === "view.ts") {
+        expect(text, f).not.toMatch(/spawn(Sync)?\(\s*["'](git|pulumi|plunge)["']|\bexeca\b|Bun\.spawn/);
+        expect([...text.matchAll(/deps\.spawn\("([^"]+)"/g)].map((m) => m[1])).toEqual(["npx"]);
         continue;
       }
       expect(text, f).not.toMatch(/node:child_process|["']child_process["']|\bexeca\b|Bun\.spawn/);

@@ -31,6 +31,7 @@ import { CHANT_PASSTHROUGH, check, ci, passthrough, preview, type StageIo } from
 import { tipById, tipLines, TIPS } from "./tips";
 import { approve, override, resume, up } from "./up";
 import { upgrade } from "./upgrade";
+import { viewCommand } from "./view";
 import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
@@ -121,6 +122,9 @@ export function helpText(): string {
     "  guard check <command line>                          whether the agent guard refuses a command",
     "  guard install [--dir <d>]                           the Claude Code hook and the pulumi and plunge wrappers",
     "",
+    "View:",
+    "  view [--export <dir>] [--port <n>] [--no-open]      the stacks as one graph in behold, at the version this plywood pins",
+    "",
     "Config:",
     "  config check [--file <path>]  check plywood.yml and print the settings in force",
     "  config identities [--file <path>] [--env <env>]",
@@ -156,7 +160,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   }
   const stageIo: StageIo = { out: io.out, err: io.err, cwd: process.cwd(), env: process.env };
   // plywood.yml's telemetry as chant's OTEL_* variables, before the first call into chant (plywood#20).
-  if (verb !== "config" && verb !== "init" && verb !== "tips" && verb !== "upgrade") await applyTelemetry(stageIo.cwd, stageIo.env);
+  if (verb !== "config" && verb !== "init" && verb !== "tips" && verb !== "upgrade" && verb !== "view") await applyTelemetry(stageIo.cwd, stageIo.env);
   if (verb === "audit") return audit(args.slice(1), json, table, stageIo);
   if (verb === "config" && args[1] === "identities") return configIdentities(args.slice(2), json, table, stageIo);
   if (verb === "config") return config(args.slice(1), table, emit);
@@ -169,6 +173,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     const initIo: InitIo = interactive ? { ...stageIo, ask: askOnTerminal } : stageIo;
     return init(args.slice(1), json, table, initIo);
   }
+  if (verb === "view") return viewCommand(args.slice(1), stageIo.cwd, io.err);
   if (verb === "upgrade") return upgrade(args.slice(1), json, table, stageIo);
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);

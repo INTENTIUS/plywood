@@ -17,9 +17,13 @@
  *                    CloudTrail `plywood drift` reads to name who changed
  *                    each drifted attribute (chant#4632's ci-audit)
  *
- *   respond.wave_refused  diff (default) or off: a wave refused because its
- *                         preview moved, a hold or a decline posts the diff
- *                         against the approved preview (chant#4629)
+ *   respond.wave_refused  diff (default), summary or off: a wave refused because
+ *                         its preview moved, a hold or a decline posts the diff
+ *                         against the approved preview (chant#4629); summary
+ *                         puts a model's summary above the diff (chant#5335,
+ *                         the model set under agent.wave-refused). Also
+ *                         spelled respond.wave-refused, as chant's
+ *                         vocabulary does
  *   respond.apply_failed  triage (default) or off: a failed update posts the
  *                         stacks and resources that failed, with the error
  *   respond.description   off (default) or check: a pull request whose
@@ -46,13 +50,20 @@ export const DEFAULT_DRIFT_RESPONSE: DriftResponse = "issue";
 
 /** The pipeline events plywood.yml's respond names beside drift, plywood's key to chant's event and its modes, default first (chant `CI_RESPONSES`). */
 export const EVENT_RESPONSES = {
-  wave_refused: { event: "wave-refused", modes: ["diff", "off"] },
+  wave_refused: { event: "wave-refused", modes: ["diff", "summary", "off"] },
   apply_failed: { event: "apply-failed", modes: ["triage", "off"] },
   description: { event: "description", modes: ["off", "check"] },
 } as const;
 export type EventKey = keyof typeof EVENT_RESPONSES;
 const EVENT_KEYS = Object.keys(EVENT_RESPONSES) as EventKey[];
-export const RESPOND_KEYS = ["drift", ...EVENT_KEYS] as const;
+/** The vocabulary's spelling of `respond.wave_refused` (the key a chant event is named by). */
+export const WAVE_REFUSED_VOCABULARY_KEY = "wave-refused";
+export const RESPOND_KEYS = ["drift", ...EVENT_KEYS, WAVE_REFUSED_VOCABULARY_KEY] as const;
+
+/** The value of `respond.<key>`; `wave_refused` is read under either spelling. */
+function respondValue(r: Record<string, unknown>, k: EventKey): unknown {
+  return k === "wave_refused" ? r.wave_refused ?? r[WAVE_REFUSED_VOCABULARY_KEY] : r[k];
+}
 export const DECIDE_KEYS = ["backend", "model"] as const;
 
 /** The responses plywood.yml sets, by chant's event name; an event left out takes chant's default. */
@@ -60,7 +71,7 @@ export function eventResponsesOf(doc: RawConfig): Record<string, string> {
   const r = isObject(doc.respond) ? doc.respond : {};
   const out: Record<string, string> = {};
   for (const k of EVENT_KEYS) {
-    const v = r[k];
+    const v = respondValue(r, k);
     if (typeof v === "string" && (EVENT_RESPONSES[k].modes as readonly string[]).includes(v)) out[EVENT_RESPONSES[k].event] = v;
   }
   return out;
@@ -158,7 +169,8 @@ export const drift: ConfigGroup = {
           default: DEFAULT_DRIFT_RESPONSE,
           description: "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only.",
         },
-        wave_refused: { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], default: "diff", description: "diff: a refused wave posts the diff against the approved preview; off: nothing." },
+        wave_refused: { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], default: "diff", description: "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing." },
+        "wave-refused": { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], description: "The vocabulary's spelling of wave_refused." },
         apply_failed: { type: "string", enum: [...EVENT_RESPONSES.apply_failed.modes], default: "triage", description: "triage: a failed update posts the stacks and resources that failed, with the error; off: nothing." },
         description: { type: "string", enum: [...EVENT_RESPONSES.description.modes], default: "off", description: "check: flag a pull request whose description leaves out what its preview deletes or replaces. Needs decide." },
       },
@@ -196,7 +208,8 @@ export const drift: ConfigGroup = {
       if (!isObject(doc.respond)) out.push(error("respond", "must be a mapping, such as respond: { drift: issue }"));
       else {
         out.push(...onlyKeys(doc.respond, RESPOND_KEYS, "respond"), ...oneOf(doc.respond.drift, DRIFT_RESPONSES, "respond.drift"));
-        for (const k of EVENT_KEYS) out.push(...oneOf(doc.respond[k], EVENT_RESPONSES[k].modes, `respond.${k}`));
+        for (const k of EVENT_KEYS) out.push(...oneOf(respondValue(doc.respond, k), EVENT_RESPONSES[k].modes, `respond.${k}`));
+        if (doc.respond.wave_refused !== undefined && doc.respond[WAVE_REFUSED_VOCABULARY_KEY] !== undefined) out.push(error("respond.wave-refused", "is set beside respond.wave_refused; set one of them"));
         if (doc.respond.description === "check" && !decideOf(doc)) out.push(error("respond.description", "is check, which asks a decide service; set decide.backend and decide.model"));
         if (doc.respond.drift === "up" && doc.gate === "never") {
           out.push(warning("respond.drift", "is up and gate is never, so a drifted stack updates with nobody approving"));

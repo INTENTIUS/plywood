@@ -21,7 +21,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
-import { toChantSettings } from "./chant-config";
+import { toChantSettings, type ChantWaveSummary } from "./chant-config";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -481,9 +481,9 @@ export const DECIDE_LEFT_OFF = "decide is set and respond.description is not che
  * config check warns.
  */
 export function respondOptions(
-  pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string } },
+  pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string }; waveSummary?: ChantWaveSummary },
   notes: string[],
-): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string } }; argv: string[] } {
+): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string }; waveSummary?: ChantWaveSummary }; argv: string[] } {
   const r = pipeline.respond;
   if (pipeline.decide && r?.description !== "check") notes.push(DECIDE_LEFT_OFF);
   if (!r || Object.keys(r).length === 0) return { options: {}, argv: [] };
@@ -496,7 +496,9 @@ export function respondOptions(
     delete responses.description;
     notes.push("respond.description is check and decide names no backend and model, so the description check is left off");
   }
-  const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}) };
+  // chant#5335: with `summary` the waves' jobs carry the model's settings and key; chant fills what is left out.
+  const summary = responses["wave-refused"] === "summary" ? { waveSummary: { ...(pipeline.waveSummary ?? {}) } } : {};
+  const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}), ...summary };
   return { options, argv: respondArgv(responses, decide) };
 }
 

@@ -27,8 +27,12 @@
  *        the job already sets wins. Span attributes carry the `plywood.`
  *        prefix from plywood's words.
  *
- *   reports.url            ci.reportUrl: s3://, gs://, az:// or file://, where
- *                          chant keeps each run's HTML report (chant#4554)
+ *   reports.bucket         ci.reportUrl: s3://, gs://, az:// or file://, where
+ *                          chant keeps each run's HTML report (chant#4554) and
+ *                          where `plywood estate` writes estate.json, dora.json
+ *                          and audit.jsonl in chant's formats (chant#5336).
+ *                          Also spelled reports.url, the spelling before
+ *                          chant's vocabulary named the key
  *
  * Every secret is named by its variable, never written in plywood.yml.
  */
@@ -139,9 +143,12 @@ export const observe: ConfigGroup = {
     reports: {
       type: "object",
       additionalProperties: false,
-      required: ["url"],
-      description: "Where each run's HTML report is kept.",
-      properties: { url: { type: "string", description: "s3://<bucket>/<prefix>, gs://<bucket>/<prefix>, az://<account>/<container>/<prefix> or file://<dir>." } },
+      oneOf: [{ required: ["bucket"] }, { required: ["url"] }],
+      description: "The reports bucket: where each run's HTML report is kept and where plywood estate writes the estate, the delivery metrics and the audit record.",
+      properties: {
+        bucket: { type: "string", description: "s3://<bucket>/<prefix>, gs://<bucket>/<prefix>, az://<account>/<container>/<prefix> or file://<dir>." },
+        url: { type: "string", description: "The same as bucket, under the spelling plywood.yml used before." },
+      },
     },
   },
   check(doc) {
@@ -190,11 +197,14 @@ export const observe: ConfigGroup = {
     }
     const r = doc.reports;
     if (r !== undefined) {
-      if (!isObject(r)) out.push(error("reports", "is { url }"));
+      if (!isObject(r)) out.push(error("reports", "is { bucket }"));
       else {
-        out.push(...onlyKeys(r, ["url"], "reports"));
-        const scheme = typeof r.url === "string" ? /^([a-z0-9]+):\/\/\S+$/.exec(r.url)?.[1] : undefined;
-        if (!scheme || !(REPORT_SCHEMES as readonly string[]).includes(scheme)) out.push(error("reports.url", `is a ${REPORT_SCHEMES.map((s) => `${s}://`).join(", ")} URL`));
+        out.push(...onlyKeys(r, ["bucket", "url"], "reports"));
+        if (r.bucket !== undefined && r.url !== undefined) out.push(error("reports.url", "is set beside reports.bucket; set reports.bucket"));
+        const key = r.bucket !== undefined ? "bucket" : "url";
+        const value = r[key];
+        const scheme = typeof value === "string" ? /^([a-z0-9]+):\/\/\S+$/.exec(value)?.[1] : undefined;
+        if (!scheme || !(REPORT_SCHEMES as readonly string[]).includes(scheme)) out.push(error(`reports.${key}`, `is a ${REPORT_SCHEMES.map((s) => `${s}://`).join(", ")} URL`));
       }
     }
     return out;
@@ -202,6 +212,7 @@ export const observe: ConfigGroup = {
   translate(doc, out) {
     const notify = chantNotifyOf(doc);
     if (notify) out.pipeline.notify = notify;
-    if (isObject(doc.reports) && typeof doc.reports.url === "string") out.ci.reportUrl = doc.reports.url;
+    const bucket = isObject(doc.reports) ? (doc.reports.bucket ?? doc.reports.url) : undefined;
+    if (typeof bucket === "string") out.ci.reportUrl = bucket;
   },
 };

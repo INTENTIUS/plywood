@@ -7,16 +7,19 @@
  * schedules to judge (one `plywood-drift-<stack>` Op per stack on
  * `drift.schedule`).
  *
- * With a report URL (`--report-url`, else plywood.yml's `reports.url`, chant's
+ * With a report URL (`--report-url`, else plywood.yml's `reports.bucket`, chant's
  * `ci.reportUrl`) chant writes `estate.json`, `estate.html` and `dora.json`
  * under `<prefix>/` (default `estate`) through the report store
- * (chant#4554), and sends the delivery gauges (`plywood_dora_*`) when an OTLP
+ * (chant#4554), under the neutral schema ids `chant.estate/v1` and
+ * `chant.dora/v1` with `product: "plywood"` (chant#5336), and `audit.jsonl`
+ * at the top of the bucket (src/audit-record.ts). It sends the delivery gauges (`plywood_dora_*`) when an OTLP
  * metrics endpoint is set. Without one it prints the estate and writes
  * nothing.
  *
  * The subpath is imported on first use.
  */
-import { dirname } from "node:path";
+import { basename, dirname, resolve } from "node:path";
+import { auditLinesOf, chantReportStore, gateOpsOf } from "./audit-record";
 import { chantProduct } from "./chant-product";
 import { toChantSettings } from "./chant-config";
 import { checkConfig, ConfigError, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
@@ -40,10 +43,11 @@ export interface ChantLedgerEstate {
 /** What plywood calls from `@intentius/chant/ci-estate` and the report store. */
 export interface ChantEstate {
   readEstateLedger(cwd: string, members?: readonly string[]): Promise<unknown>;
-  buildLedgerEstate(input: { load: unknown; words?: unknown; schedules?: readonly EstateSchedule[]; driftOps?: readonly string[] }): ChantLedgerEstate;
+  buildLedgerEstate(input: { load: unknown; words?: unknown; schemas?: "neutral" | "product"; schedules?: readonly EstateSchedule[]; driftOps?: readonly string[] }): ChantLedgerEstate;
   writeEstate(e: ChantLedgerEstate, options: { put: unknown; prefix?: string; words?: unknown; env?: NodeJS.ProcessEnv }): Promise<{ keys: string[]; metrics?: unknown }>;
   parseReportUrl(raw: string, name?: string): unknown;
   reportPut(target: unknown): unknown;
+  reportGet(target: unknown): unknown;
 }
 
 let estateModule: Promise<ChantEstate> | undefined;
@@ -53,7 +57,7 @@ export function chantEstate(): Promise<ChantEstate> {
   estateModule ??= (async () => {
     const m = await import("@intentius/chant/ci-estate");
     const r = await import("@intentius/chant/pr-report-url");
-    return { readEstateLedger: m.readEstateLedger, buildLedgerEstate: m.buildLedgerEstate, writeEstate: m.writeEstate, parseReportUrl: r.parseReportUrl, reportPut: r.reportPut } as unknown as ChantEstate;
+    return { readEstateLedger: m.readEstateLedger, buildLedgerEstate: m.buildLedgerEstate, writeEstate: m.writeEstate, parseReportUrl: r.parseReportUrl, reportPut: r.reportPut, reportGet: r.reportGet } as unknown as ChantEstate;
   })();
   return estateModule;
 }
@@ -103,25 +107,30 @@ export async function estate(args: string[], json: boolean, table: ExitTable, io
   const words = (await chantProduct()).assertProductWords(PRODUCT_WORDS);
   const root = path ? dirname(path) : io.cwd;
   const load = await chant.readEstateLedger(root);
-  const built = chant.buildLedgerEstate({ load, words, schedules, ...(driftOps.length ? { driftOps } : {}) });
+  const built = chant.buildLedgerEstate({ load, words, schemas: "neutral", schedules, ...(driftOps.length ? { driftOps } : {}) });
 
   const url = flags["--report-url"] ?? (config ? toChantSettings(config).ci.reportUrl : undefined);
   let written: { keys: string[]; metrics?: unknown } | undefined;
+  let audit: { key: string; added: number } | undefined;
   if (url) {
-    const target = chant.parseReportUrl(url, flags["--report-url"] ? "--report-url" : "reports.url");
+    const target = chant.parseReportUrl(url, flags["--report-url"] ? "--report-url" : "reports.bucket");
     if (target && typeof target === "object" && "error" in target) return usage(String((target as { error: unknown }).error), table, io);
     written = await chant.writeEstate(built, { put: chant.reportPut(target), words, env: io.env, ...(flags["--prefix"] ? { prefix: flags["--prefix"] } : {}) });
+    // The audit record: every approval, override and update on the gate ledger, as chant.audit/v1 lines.
+    const lines = await auditLinesOf(resolve(root), gateOpsOf(load), basename(resolve(root)));
+    audit = await (await chantReportStore()).writeAuditRecord(lines, { put: chant.reportPut(target), get: chant.reportGet(target) });
   }
 
   const code = failOverdue && built.overdue.length > 0 ? table.failed : table.done;
   if (json) {
-    io.out(JSON.stringify({ command: "estate", ok: code === table.done, exitCode: code, estate: built.estate, dora: built.dora, overdue: built.overdue, ...(written ? { written } : {}) }));
+    io.out(JSON.stringify({ command: "estate", ok: code === table.done, exitCode: code, estate: built.estate, dora: built.dora, overdue: built.overdue, ...(written ? { written } : {}), ...(audit ? { audit } : {}) }));
     return code;
   }
   const totals = built.estate.totals ?? {};
   io.out(`${PRODUCT} estate: ${Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") || "nothing on the ledger yet"}`);
   for (const o of built.overdue) io.out(`  ${o.message}`);
   if (written) io.out(`  wrote ${written.keys.join(", ")} under ${url}`);
-  else io.out(`  no report URL (reports.url or --report-url), so nothing was written`);
+  if (audit) io.out(`  ${audit.added} new line${audit.added === 1 ? "" : "s"} in ${audit.key}`);
+  if (!written) io.out(`  no report URL (reports.bucket or --report-url), so nothing was written`);
   return code;
 }

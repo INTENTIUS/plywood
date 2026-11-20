@@ -21,3 +21,12 @@ npx plywood audit approvals --where gate=wave-2
 Any other chant ledger table name passes as written.
 
 The ledger keeps rows per project, so `--stack shop/prod-east` reads the rows of the `shop` project. `--json` prints the rows exactly as `chant ledger` prints them, and `plywood query "<sql>"` runs SQL over the same tables.
+
+## The audit record in the reports bucket
+
+`plywood estate` appends each approval request, approval, override, revocation and update on the ledger to `audit.jsonl` at the top of the reports bucket (`reports.bucket`), one `chant.audit/v1` line each, and writes `estate.json` and `dora.json` under `chant.estate/v1` and `chant.dora/v1`. A line already in the record stays as it is.
+
+```sh
+npx plywood estate
+npx plywood audit record --since 2026-11-01 --json
+```

@@ -15,11 +15,22 @@
  *   runs           runs: each wave's run record
  *   review-stacks  pr_envs: each review stack made and removed
  *
+ *   record         the audit record in the reports bucket: `audit.jsonl`,
+ *                  one `chant.audit/v1` line per approval, override and
+ *                  update, which `plywood estate` writes. It reads
+ *                  `reports.bucket` (or `--bucket <url>`) and takes
+ *                  `--since <time>` and `--json`. A line another format wrote
+ *                  is read as chant.audit/v1.
+ *
  * Any other chant table name (`deploys`, `snapshots`, `resources`) passes as
  * written. `--stack shop/prod-east` reads the stack's project member, the
  * workspace member `plywood init` names after the project, since the ledger
  * keeps rows per member.
  */
+import { chantReportStore, readAuditText, type AuditLineView } from "./audit-record";
+import { toChantSettings } from "./chant-config";
+import { checkConfig, ConfigError, findConfig, loadConfig } from "./config/index";
+import { chantEstate } from "./estate";
 import type { ExitTable } from "./exit-codes";
 import { slug } from "./init/detect";
 import { takeFlag, usage, withChant, type StageIo } from "./stages";
@@ -77,7 +88,54 @@ export function auditArgv(args: string[], json: boolean): string[] | { error: st
   ];
 }
 
+/** The word that reads the reports bucket's record. */
+export const AUDIT_RECORD_WORD = "record";
+
+/** `plywood audit record`: `audit.jsonl` from the reports bucket, as `chant.audit/v1` lines. */
+export async function auditRecord(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
+  const bucket = takeFlag(args, "--bucket");
+  const since = takeFlag(bucket.rest, "--since");
+  const file = takeFlag(since.rest, "--file");
+  for (const [flag, f] of [["--bucket", bucket], ["--since", since], ["--file", file]] as const) if (f.missing) return usage(`${flag} takes a value`, table, io);
+  if (file.rest.length) return usage(`audit ${AUDIT_RECORD_WORD} does not take ${file.rest.join(" ")}`, table, io);
+  let url = bucket.value;
+  if (!url) {
+    const path = file.value ?? findConfig(io.cwd);
+    if (path) {
+      try {
+        const config = loadConfig(path);
+        if (checkConfig(config).some((p) => p.severity === "error")) return usage(`${path} has errors; run '${PRODUCT} check'`, table, io);
+        url = toChantSettings(config).ci.reportUrl;
+      } catch (e) {
+        return usage(e instanceof ConfigError ? e.message : `${path}: ${(e as Error).message}`, table, io);
+      }
+    }
+  }
+  if (!url) return usage("audit record reads the reports bucket: set reports.bucket in plywood.yml or pass --bucket <url>", table, io);
+  const chant = await chantEstate();
+  const target = chant.parseReportUrl(url, bucket.value ? "--bucket" : "reports.bucket");
+  if (target && typeof target === "object" && "error" in target) return usage(String((target as { error: unknown }).error), table, io);
+  const { AUDIT_RECORD_FILE } = await chantReportStore();
+  const text = await (chant.reportGet(target) as (key: string) => Promise<string | null>)(AUDIT_RECORD_FILE);
+  if (text === null) {
+    io.err(`${PRODUCT} audit ${AUDIT_RECORD_WORD}: ${url} holds no ${AUDIT_RECORD_FILE}; '${PRODUCT} estate' writes it`);
+    return table.failed;
+  }
+  const read = await readAuditText(text);
+  const from = since.value ? Date.parse(since.value) : undefined;
+  if (since.value && Number.isNaN(from)) return usage(`--since takes a time, such as 2026-11-01T00:00:00Z`, table, io);
+  const lines: AuditLineView[] = read.lines.filter((l) => from === undefined || Date.parse(l.at) >= from);
+  if (json) {
+    for (const l of lines) io.out(JSON.stringify(l));
+    return table.done;
+  }
+  for (const l of lines) io.out(`${l.at}  ${l.kind}  ${l.what}  ${l.who ?? "-"}  ${l.result}${l.digest ? `  ${l.digest.slice(0, 12)}` : ""}`);
+  if (read.unreadable.length) io.err(`${PRODUCT} audit ${AUDIT_RECORD_WORD}: ${read.unreadable.length} line${read.unreadable.length === 1 ? "" : "s"} could not be read (line ${read.unreadable.join(", ")})`);
+  return table.done;
+}
+
 export async function audit(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
+  if (args[0] === AUDIT_RECORD_WORD) return auditRecord(args.slice(1), json, table, io);
   const argv = auditArgv(args, json);
   if ("error" in argv) return usage(argv.error, table, io);
   return withChant(`${PRODUCT} audit`, table, io, (chant) => chant.runChantInProcess(argv, PRODUCT_WORDS));

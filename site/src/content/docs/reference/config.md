@@ -55,9 +55,11 @@ drift: { schedule: "0 6 * * *" }
 | `telemetry.headers_env` | none | the variable holding the OTLP headers |
 | `telemetry.service_name` | `plywood` | the trace's `service.name` |
 | `telemetry.traces` | `true` | `false` turns traces off |
-| `reports.url` | none | where each run's report is kept: `s3://`, `gs://`, `az://` or `file://` |
+| `reports.bucket` | none | the reports bucket, where each run's report is kept and `plywood estate` writes `estate.json`, `dora.json` and `audit.jsonl`: `s3://`, `gs://`, `az://` or `file://`; `reports.url` is read as the same key |
 | `drift.schedule` | off | a five-field cron line the drift job runs on |
 | `drift.stacks` | every stack | the stacks the drift job reads, by name or `project/*` glob |
+| `respond.wave_refused` | `diff` | `diff`, `summary` (the diff with a model's summary above it) or `off`; also written `respond.wave-refused` |
+| `agent.wave-refused` | chant's defaults | the model run behind `summary`: `command`, `key_secret`, `timeout`, `max_runs` and `max_cost_usd`, each optional |
 | `respond.drift` | `issue` | `issue`, `pull-request` (the issue and the drift agent's pull request), `up` (the issue and a gated update) or `none` |
 | `review` | off | `true`, or a mapping with `instructions` (default `.chant/review.md`), `command`, `key_env` (default `ANTHROPIC_API_KEY`) and `timeout` |
 | `agent.comment` | `false` | answer `/plywood agent <ask>` on a pull request; `plywood ci` writes the agent's workflow, `.chant/ops/plywood-agent.spec.json` and `ops/plywood-agent.op.ts`, the Op the workflow runs under; commit them together |

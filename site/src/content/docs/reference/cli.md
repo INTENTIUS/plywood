@@ -54,8 +54,9 @@ Each one is a request on the workspace ledger and runs once a second person appr
 | Command | Does |
 |---|---|
 | `plywood audit [approvals\|updates\|runs\|review-stacks] [--stack <s>] [--since <t>] [--where <f>=<v>]...` | prints the workspace ledger's rows |
+| `plywood audit record [--bucket <url>] [--since <t>]` | prints the `chant.audit/v1` lines of `audit.jsonl` in the reports bucket |
 | `plywood query "<sql>"` | runs SQL over the ledger's tables |
-| `plywood estate [--report-url <url>] [--prefix <p>] [--fail-overdue]` | writes the estate page, with overdue drift checks and delivery metrics |
+| `plywood estate [--report-url <url>] [--prefix <p>] [--fail-overdue]` | writes the estate page, with overdue drift checks and delivery metrics, and appends new ledger events to `audit.jsonl` in the reports bucket |
 | `plywood notify relay` | receives Approve clicks from Slack and Teams and records them |
 
 ## Control repo

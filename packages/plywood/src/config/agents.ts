@@ -30,12 +30,16 @@
  *        `plywood ci` writes the comment agent's jobs and puts the drift
  *        agent on each scheduled drift Op
  */
+import type { ChantWaveSummary } from "../chant-config";
+import { eventResponsesOf } from "./drift";
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 
 export const DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY";
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const REVIEW_KEYS = ["instructions", "command", "key_env", "timeout"] as const;
-const AGENT_KEYS = ["comment", "drift", "command", "key_env", "timeout", "max_runs", "token_env"] as const;
+const AGENT_KEYS = ["comment", "drift", "command", "key_env", "timeout", "max_runs", "token_env", "wave-refused"] as const;
+/** The refused-wave summary's keys, `agent.wave-refused.*` in chant's vocabulary. */
+export const WAVE_REFUSED_AGENT_KEYS = ["command", "key_secret", "timeout", "max_runs", "max_cost_usd"] as const;
 
 /** What the review Op's step takes (chant `ReviewAgentArgs`). */
 export interface ReviewSettings {
@@ -83,6 +87,37 @@ export function agentOf(doc: RawConfig): AgentSettings | undefined {
   };
 }
 
+/**
+ * chant's `waveSummary` for the refused-wave summary: set only when
+ * `respond.wave_refused` is `summary`, with each `agent.wave-refused.*` key
+ * renamed to chant's field. A key left out takes chant's default.
+ */
+export function waveSummaryOf(doc: RawConfig): ChantWaveSummary | undefined {
+  if (eventResponsesOf(doc)["wave-refused"] !== "summary") return undefined;
+  const a = isObject(doc.agent) ? doc.agent : {};
+  const s = isObject(a["wave-refused"]) ? a["wave-refused"] : {};
+  return {
+    ...(typeof s.command === "string" ? { command: s.command } : {}),
+    ...(typeof s.key_secret === "string" ? { keyEnv: s.key_secret } : {}),
+    ...(typeof s.timeout === "number" ? { timeout: s.timeout } : {}),
+    ...(typeof s.max_runs === "number" ? { maxRuns: s.max_runs } : {}),
+    ...(typeof s.max_cost_usd === "number" ? { maxCostUsd: s.max_cost_usd } : {}),
+  };
+}
+
+function waveRefusedCheck(doc: RawConfig, s: unknown): ConfigProblem[] {
+  const out: ConfigProblem[] = [];
+  if (!isObject(s)) return [error("agent.wave-refused", "is a mapping of command, key_secret, timeout, max_runs and max_cost_usd")];
+  out.push(...onlyKeys(s, WAVE_REFUSED_AGENT_KEYS, "agent.wave-refused"));
+  if (s.command !== undefined && (typeof s.command !== "string" || s.command.trim() === "")) out.push(error("agent.wave-refused.command", "is a command line that reads the prompt on stdin"));
+  if (s.key_secret !== undefined && (typeof s.key_secret !== "string" || !VARIABLE.test(s.key_secret))) out.push(error("agent.wave-refused.key_secret", "names the secret holding the model's key, such as ANTHROPIC_API_KEY; the key itself never goes in plywood.yml"));
+  if (s.timeout !== undefined && (typeof s.timeout !== "number" || !Number.isInteger(s.timeout) || s.timeout < 1)) out.push(error("agent.wave-refused.timeout", "is a whole number of minutes, 1 or more"));
+  if (s.max_runs !== undefined && (typeof s.max_runs !== "number" || !Number.isInteger(s.max_runs) || s.max_runs < 1)) out.push(error("agent.wave-refused.max_runs", "is a whole number of summaries per day, 1 or more"));
+  if (s.max_cost_usd !== undefined && (typeof s.max_cost_usd !== "number" || !(s.max_cost_usd > 0))) out.push(error("agent.wave-refused.max_cost_usd", "is a number of US dollars per day, above 0"));
+  if (eventResponsesOf(doc)["wave-refused"] !== "summary") out.push(error("agent.wave-refused", "is read with respond.wave_refused set to summary"));
+  return out;
+}
+
 function modelKeys(m: Record<string, unknown>, key: string): ConfigProblem[] {
   const out: ConfigProblem[] = [];
   if (m.instructions !== undefined && (typeof m.instructions !== "string" || m.instructions.trim() === "")) out.push(error(`${key}.instructions`, "is a path on the base branch, such as .chant/review.md"));
@@ -122,6 +157,18 @@ export const agents: ConfigGroup = {
         drift: { type: "boolean", default: false, description: "Open a pull request that fixes a drifted stack (respond.drift: pull-request)." },
         ...modelSchema,
         max_runs: { type: "integer", minimum: 1, description: "The most agent runs per day." },
+        "wave-refused": {
+          type: "object",
+          additionalProperties: false,
+          description: "The model run behind respond.wave_refused: summary. Each key is optional; chant's defaults fill the rest.",
+          properties: {
+            command: { type: "string", description: "The model command: the prompt on stdin, the summary on stdout." },
+            key_secret: { type: "string", default: DEFAULT_KEY_ENV, description: "The secret (GitHub, Forgejo) or CI/CD variable (GitLab) holding the model's key." },
+            timeout: { type: "integer", minimum: 1, description: "Minutes the command may run." },
+            max_runs: { type: "integer", minimum: 1, description: "The most summaries per day." },
+            max_cost_usd: { type: "number", exclusiveMinimum: 0, description: "The most US dollars the summaries may cost per day." },
+          },
+        },
         token_env: {
           type: "string",
           description: "The secret (GitHub, Forgejo) or protected variable (GitLab) holding the token the push job pushes the agent's branch with. Default: the job token on GitHub and Forgejo, CHANT_FORGE_TOKEN on GitLab. A GitHub push with the job token starts no workflow, so the agent's commit gets no preview.",
@@ -141,6 +188,7 @@ export const agents: ConfigGroup = {
       if (!isObject(a)) out.push(error("agent", "must be a mapping"));
       else {
         out.push(...onlyKeys(a, AGENT_KEYS, "agent"), ...modelKeys(a, "agent"));
+        if (a["wave-refused"] !== undefined) out.push(...waveRefusedCheck(doc, a["wave-refused"]));
         for (const k of ["comment", "drift"] as const) if (a[k] !== undefined && typeof a[k] !== "boolean") out.push(error(`agent.${k}`, "is true or false"));
         if (a.token_env !== undefined && (typeof a.token_env !== "string" || !VARIABLE.test(a.token_env))) out.push(error("agent.token_env", "names the secret holding the push token, such as PLYWOOD_AGENT_TOKEN; the token itself never goes in plywood.yml"));
         if (a.max_runs !== undefined && (typeof a.max_runs !== "number" || !Number.isInteger(a.max_runs) || a.max_runs < 1)) out.push(error("agent.max_runs", "is a whole number of runs per day, 1 or more"));
@@ -157,5 +205,7 @@ export const agents: ConfigGroup = {
     if (review) out.pipeline.review = review;
     const agent = agentOf(doc);
     if (agent) out.pipeline.agent = agent;
+    const waveSummary = waveSummaryOf(doc);
+    if (waveSummary) out.pipeline.waveSummary = waveSummary;
   },
 };

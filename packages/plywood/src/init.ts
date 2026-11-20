@@ -576,12 +576,20 @@ async function preCommitStep(root: string, config: string, dryRun: boolean): Pro
   return { file: DECLARATION_FILE, status: after === before ? "unchanged" : "written", note: `${config} runs as the check hook pre-commit; the check job's image needs pre-commit` };
 }
 
+/** The wave's cost hold from the pulumi lexicon's preset, which checks the command and builds chant's `holds.cost`. */
+export async function costHold(cost: NonNullable<ChantSettings["pipeline"]["cost"]>): Promise<Record<string, unknown>> {
+  const { pulumiCostHold } = await import("@intentius/chant-lexicon-pulumi/cost-hold");
+  return { ...pulumiCostHold({ approveAbove: cost.approveAbove!, command: cost.command, ...(cost.format ? { format: cost.format } : {}), ...(cost.currency ? { currency: cost.currency } : {}) }) };
+}
+
 /** The waves spec with chant's names filled (chant `productWavesSpec`). */
 async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], doc: RawConfig, settings: ChantSettings, branch: string, ordered: ReadonlyArray<{ name: string; stacks: InitStack[] }>, forge: ForgeKind): Promise<Record<string, unknown>> {
   const runner = waveRunner(chantPipelineOptions(settings.pipeline).runner);
   const rego = isObject(doc.policy) && (typeof doc.policy.rego === "string" || doc.policy.source !== undefined || doc.policy.command !== undefined);
+  const hold = settings.pipeline.cost ? await costHold(settings.pipeline.cost) : undefined;
   const base = wavesSpec({
     ...(rego ? { policy: true } : {}),
+    ...(hold ? { cost: hold } : {}),
     stacks,
     ordered,
     gate: gateOf(doc),

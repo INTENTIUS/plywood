@@ -68,6 +68,14 @@ Each one is a request on the workspace ledger and runs once a second person appr
 | `plywood control reconcile [--apply] [--project <key>]` | opens a pull request in each repository with its `plywood.yml` from its entry |
 | `plywood control dispatch [--sha <sha>]` | tells the control repo in `plywood.yml` that this commit applied |
 
+## View
+
+| Command | Does |
+|---|---|
+| `plywood view [--export <dir>] [--port <n>] [--no-open]` | runs [behold](https://intentius.io/behold/) on your machine over the repository's stacks, and opens the browser; `--export` writes a static copy to `<dir>` |
+
+`plywood view` starts behold with `npx`, at the version this plywood pins, together with the pulumi lexicon that reads the stacks. The package is fetched on the first run only, and a repository that never runs `view` never fetches it. behold answers on `http://127.0.0.1:<port>` (default 4600). The command waits for that answer and opens the browser, and Ctrl-C stops it. The repository stays as it is. An error from behold prints as one line and exits 1.
+
 ## Agents
 
 | Command | Does |

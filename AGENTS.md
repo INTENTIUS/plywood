@@ -3,7 +3,7 @@
 Working in the INTENTIUS workspace, `../agents/shared.md` applies too. This file adds what is particular to plywood.
 
 - Read CONTRIBUTING.md first. A feature goes in chant CI core when terragucci shares it, else in chant's pulumi lexicon. plywood holds only its words, presets, config defaults, init templates and docs. Approvals, gate decisions, overrides, applies and runs are rows on the chant workspace ledger, never plywood git writes.
-- No module under `packages/plywood/src` runs pulumi, plunge or git. chant runs them in process with plywood's words (`src/words.ts`).
+- No module under `packages/plywood/src` runs pulumi, plunge or git. chant runs them in process with plywood's words (`src/words.ts`). Apart from `upgrade`, only `src/view.ts` starts a process: `npx` for the pinned behold, and the platform's browser opener.
 - plywood owns no exit codes. It passes chant's through; `src/exit-codes.ts` reads chant's table.
 - `@intentius/chant` and every chant lexicon are pinned to one exact version, the same in the root and package manifests; `just bundle-check` holds the pin. A chant feature newer than the pin comes with a move of the pin, not a feature-detect: plywood imports what the pinned chant has, and the build fails on a subpath it lacks. The bundle does not carry chant: an `@intentius/chant` import the installed chant serves as compiled JS stays external and runs the pinned package.
 - `just chant-local <chant-dir>|--reset` builds against a local chant through `chant dev local`. Run `--reset` before committing a lock file.

@@ -47,6 +47,20 @@ generated-check:
 generate: ci images-render
     npx chant dev render packages/plywood/src/config/index.ts schemaFiles
 
+# Confirm npm serves the behold and pulumi lexicon releases `plywood view`
+# pins (src/view.ts BEHOLD_PIN). A person runs this before a release; the
+# checks themselves stay on local builds and fakes.
+behold-pin:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    specs="$(grep -E '^  (behold|lexicon): "' packages/plywood/src/view.ts | sed -E 's/^[^"]*"([^"]*)".*$/\1/')"
+    test "$(echo "$specs" | wc -l)" -eq 2
+    for spec in $specs; do
+      version="$(npm view "$spec" version | tail -n 1)"
+      test -n "$version" || { echo "behold-pin: npm serves nothing for $spec" >&2; exit 1; }
+      echo "behold-pin: $spec is served as $version"
+    done
+
 # Build against a local chant instead of the pin, with chant's `chant dev
 # local`: `just chant-local <chant-dir>` packs that checkout, installs it, builds
 # and runs the bundle check, and `just chant-local --reset` goes back to the pin.

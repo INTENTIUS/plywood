@@ -52,6 +52,12 @@
  * | pw-estate          | estate/dora           | main's waves leave prod-us out                     |
  * | pw-mcp             | mcp/read-only         | the server starts with --propose                   |
  *
+ * plywood#155's release scenario, on Forgejo alone like plywood#60's:
+ *
+ * | scenario    | claim                  | what the BREAK arm changes              |
+ * |-------------|------------------------|-----------------------------------------|
+ * | pw-rollback | rollback/gated-release | the earlier release's commit is revoked |
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -84,6 +90,7 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-traces": "telemetry/wave-trace",
   "pw-estate": "estate/dora",
   "pw-mcp": "mcp/read-only",
+  "pw-rollback": "rollback/gated-release",
 };
 
 /** The scenario files in `dir`, by id. */

@@ -49,7 +49,8 @@ describe("respond.wave_refused: summary and agent.wave-refused", () => {
   it("accepts summary, and the vocabulary's spelling of the key", () => {
     expect(problems(SUMMARY)).toEqual([]);
     expect(problems("respond:\n  wave-refused: summary\n")).toEqual([]);
-    expect(problems("respond:\n  wave_refused: summary\n  wave-refused: diff\n")).toContain("error respond.wave-refused");
+    // Both spellings set is an error, named at either spelling (chant's vocabulary check names the earlier one).
+    expect(problems("respond:\n  wave_refused: summary\n  wave-refused: diff\n").some((p) => /^error respond\.wave[-_]refused$/.test(p))).toBe(true);
     expect(problems("respond:\n  wave_refused: loud\n")).toContain("error respond.wave_refused");
     expect(toChantSettings(parseConfig("respond:\n  wave-refused: summary\n")).pipeline.respond).toEqual({ "wave-refused": "summary" });
   });

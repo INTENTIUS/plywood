@@ -51,6 +51,7 @@ export const SIDEBAR = [
 			page('Approve a wave', 'guides/approve-a-wave'),
 			page('Approvals runbook', 'guides/approvals-runbook'),
 			page('Re-preview from a comment', 'guides/re-preview-from-a-comment'),
+			page('Run your commands around a preview and an update', 'guides/run-hooks'),
 			page('Fix a refused wave', 'guides/fix-a-refused-wave'),
 			page('Update a stack before it merges', 'guides/update-before-merge'),
 			page('Preview and update a few resources', 'guides/target-resources'),

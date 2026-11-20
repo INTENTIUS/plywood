@@ -12,6 +12,8 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 | `up` | merge, or `/plywood up` | the update, its ledger row and the snapshot |
 | `drift` | the schedule | one issue per drifted stack |
 
+Your own commands run around `preview` and `up` too: hooks under `ci.hooks` in `chant.workspace.json`, before and after the preview and before and after the update, read at the base commit. A failing hook stops the stage, or with `onFailure: "approve"` holds the wave for an approval. [Run your commands around a preview and an update](/plywood/guides/run-hooks/) lists the moments.
+
 <Tabs syncKey="engine">
 <TabItem label="Pulumi">
 | Stage | Command |

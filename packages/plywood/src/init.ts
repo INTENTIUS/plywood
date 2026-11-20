@@ -84,6 +84,7 @@ import {
 } from "./init/render";
 import { writeWorkflow } from "./init/workflow";
 import { reviewSuffixOf } from "./review-stacks";
+import { readDeclarationText, withDeclarationHooks } from "./stage-hooks";
 import { UP_OP_FILE, upOpFile, WAVES_OUTPUT_DIR, wavesEngine, wavesSpecText, writeWaveJobs } from "./waves-workflow";
 import { takeFlag, WORKFLOW_FILE, workflowPlan, writtenNotes, type StageIo } from "./stages";
 import { orderLines, orderWaves, stackOrder } from "./stack-order";
@@ -388,8 +389,16 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   const chant = await chantProduct();
   {
     let spec: Record<string, unknown> | undefined = await wavesSpecStep(chant, stacks, doc, settings, detected.defaultBranch, waves, forge.kind);
+    // plywood#36: the waves run the ci.hooks the pull request jobs run, before and after the preview and the update.
+    try {
+      const declared = declaration.doc ? { text: JSON.stringify(declaration.doc), file: DECLARATION_FILE } : readDeclarationText(root);
+      spec = withDeclarationHooks(spec, declared, root);
+    } catch (e) {
+      files.push({ file: WAVES_SPEC_FILE, status: "failed", note: `ci.hooks in ${DECLARATION_FILE}: ${(e as Error).message}` });
+      spec = undefined;
+    }
     // plywood#29: env, pass, parallelism and environments on each wave (src/jobs.ts).
-    if (settings.pipeline.jobs) {
+    if (spec && settings.pipeline.jobs) {
       try {
         spec = withJobSettings(spec, settings.pipeline.jobs, forge.kind);
       } catch (e) {

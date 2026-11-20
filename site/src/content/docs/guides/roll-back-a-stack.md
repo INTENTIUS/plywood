@@ -11,11 +11,13 @@ Cut a release after a good update. Without `--yes` the cut is a dry run that pri
 npx chant release cut shop-2026-10-27 --yes
 ```
 
-Roll every stack the release holds in an environment back to it:
+Roll every stack the release holds in an environment back to it, naming the environment first:
 
 ```sh
-npx plywood rollback --release shop-2026-10-27 --env prod
+npx plywood rollback prod --release shop-2026-10-27
 ```
+
+`plywood rollback --release shop-2026-10-27 --env prod` runs the same rollback. With `--release`, the name before it is an environment; without `--release`, it is a stack, written `project/stack` as in plywood.yml.
 
 Roll one stack back to the release it ran before the current one, or to the release with a given digest:
 

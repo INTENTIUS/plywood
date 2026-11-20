@@ -318,7 +318,43 @@ describe("plywood rollback", () => {
     expect(chant.calls).toEqual([["components", "rollback", "prod", "--release", "shop-2026-10-27", "--json"]]);
     const out = io(dir);
     expect(await rollbackStack(["shop/prod", "--release", "r1"], false, T, out)).toBe(T.failed);
-    expect(out.stderr.join("\n")).toContain("--env prod");
+    expect(out.stderr.join("\n")).toContain("rollback prod --release <name>");
+  });
+
+  it("takes the environment as the positional with --release, as chant's components rollback does", async () => {
+    const chant = fakeChant(T.waiting);
+    setChantProductForTests(chant.api);
+    const out = io(repo(YML));
+    expect(await rollbackStack(["staging", "--release", "shop-2026-10-27", "--dry-run"], false, T, out)).toBe(T.waiting);
+    expect(chant.calls).toEqual([["components", "rollback", "staging", "--release", "shop-2026-10-27", "--dry-run"]]);
+    expect(out.stderr.join("\n")).toContain("release gate");
+  });
+
+  it("keeps --env as the alias of the positional, and refuses two different environments", async () => {
+    const chant = fakeChant(0);
+    setChantProductForTests(chant.api);
+    const dir = repo(YML);
+    expect(await rollbackStack(["prod", "--env", "prod", "--release", "r1"], false, T, io(dir))).toBe(T.done);
+    expect(chant.calls).toEqual([["components", "rollback", "prod", "--release", "r1"]]);
+    const out = io(dir);
+    expect(await rollbackStack(["staging", "--env", "prod", "--release", "r1"], false, T, out)).toBe(T.failed);
+    expect(out.stderr.join("\n")).toContain("two environments");
+    const none = io(dir);
+    expect(await rollbackStack(["--release", "r1"], false, T, none)).toBe(T.failed);
+    expect(none.stderr.join("\n")).toContain("needs the environment");
+    expect(chant.calls).toHaveLength(1);
+  });
+
+  it("reads the positional as a stack without --release, and points an environment at --release", async () => {
+    const chant = fakeChant(0);
+    setChantProductForTests(chant.api);
+    const dir = repo(YML);
+    expect(await rollbackStack(["shop/prod", "--digest", "sha256:abc"], false, T, io(dir))).toBe(T.done);
+    expect(chant.calls).toEqual([["components", "rollback", "prod", "--component", "shop-prod", "--digest", "sha256:abc"]]);
+    const out = io(dir);
+    expect(await rollbackStack(["prod"], false, T, out)).toBe(T.failed);
+    expect(out.stderr.join("\n")).toContain("rollback prod --release <name>");
+    expect(chant.calls).toHaveLength(1);
   });
 
 });

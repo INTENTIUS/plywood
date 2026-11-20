@@ -94,7 +94,7 @@ export function helpText(): string {
     "  cancel <stack> [--lock <id>]                        release a stuck stack lock; on file:// it reads the id",
     "  move <urn>... --from <stack> --to <stack>           move resources; both stacks preview no change",
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
-    "  rollback <stack> [--digest <d>] | --release <name> --env <env>",
+    "  rollback <stack> [--digest <d>] | <env> --release <name>",
     "                                                      preview a release's program, then update behind its gate",
     "  action <stack> <name> [--anew]                      run an action plywood.yml declares: replace its command resource",
     "",

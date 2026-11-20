@@ -164,7 +164,7 @@ export const STACK_OP_WORDS = {
     export: `${PRODUCT} export <project/stack> --out <file> [--version <n>]`,
     cancel: `${PRODUCT} cancel <project/stack> [--lock <id>]`,
     move: `${PRODUCT} move <urn>... --from <project/stack> --to <project/stack>, or ${PRODUCT} move <project/stack> --onto plunge`,
-    rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback --release <name> --env <env>`,
+    rollback: `${PRODUCT} rollback <project/stack> [--digest <sha256:...>], or ${PRODUCT} rollback <env> --release <name>`,
     action: `${PRODUCT} action <project/stack> <name> [--anew], or ${PRODUCT} action --from-event`,
   },
   waiting: (verb: StackOpVerb, approve: string): string =>
@@ -199,7 +199,11 @@ export const STACK_OP_WORDS = {
   adoptWaiting: `Each stack's adoption waits for an approval of its preview's digest. Approve it with the line chant printed (${PRODUCT} approve <gate> --op plywood-adopt --plan <digest>), then run this command again.`,
   rollbackWaiting: `The rollback's preview waits at the release gate. Approve its digest with the line chant printed, then run this command again.`,
   releaseIsEnvWide: (stack: string, env: string): string =>
-    `--release rolls back every stack the release records in an environment, so it takes --env, not a stack. Run '${PRODUCT} rollback --release <name> --env ${env}', or '${PRODUCT} rollback ${stack}' for this stack's previous release.`,
+    `--release rolls back every stack the release records in an environment, so it takes an environment, not a stack. Run '${PRODUCT} rollback ${env} --release <name>', or '${PRODUCT} rollback ${stack}' for this stack's previous release.`,
+  envNeedsRelease: (env: string): string =>
+    `rollback reads ${env} as an environment, which goes back to a release: run '${PRODUCT} rollback ${env} --release <name>'. A single stack is project/stack, as plywood.yml lists it.`,
+  twoEnvironments: (positional: string, env: string): string =>
+    `rollback names two environments, ${positional} and --env ${env}. --env is the positional's alias, so give one of them.`,
 } as const;
 
 /**

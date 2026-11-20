@@ -35,6 +35,7 @@ import { chantBuildFlags, chantPipelineOptions } from "./images";
 import { writeWorkflow } from "./init/workflow";
 import { unwrapWavesSpec, wavesEngine, writeWaveJobs } from "./waves-workflow";
 import { writeDriftJobs } from "./drift";
+import { readDeclarationText, withDeclarationHooks } from "./stage-hooks";
 import { waveMovedLine } from "./refusals";
 import { writeReviewJobs } from "./agents";
 import { writeAgentJobs } from "./agent-jobs";
@@ -249,6 +250,13 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       waves = readWavesSpec(io.cwd);
     } catch (e) {
       return usage(`.chant/op-waves/${OP_NAME}.spec.json: ${(e as Error).message}`, table, io);
+    }
+    // plywood#36: the waves run the ci.hooks the pull request jobs run, before and after the preview and the update.
+    try {
+      waves = withDeclarationHooks(waves, readDeclarationText(io.cwd), io.cwd);
+    } catch (e) {
+      io.err(`${PRODUCT}: ci.hooks: ${(e as Error).message}`);
+      return table.failed;
     }
     // plywood#29: env, pass, parallelism and environments on the waves, and on the pull request jobs with chant#4625.
     const pipeline = toChantSettings(config).pipeline;

@@ -5,6 +5,11 @@
 default:
     @just --list
 
+# The local gate: every check ci/ci.ts runs (typecheck, build, unit tests,
+# bundle check, generated files, site prose lint, site build), nothing that
+# deploys or records. Stops at the first failure.
+check: typecheck bundle-check generated-check test site-lint site
+
 # Install the package's dependencies from the root lock file.
 install:
     npm ci
@@ -152,5 +157,5 @@ site-stop:
 
 # The site's prose lint: the `sentences` rules plus the house rules, with no
 # baseline. Any finding fails.
-site-lint:
+site-lint: site-install
     cd site && npm run lint:prose

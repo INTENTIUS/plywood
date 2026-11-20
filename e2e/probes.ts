@@ -12,6 +12,9 @@
  *             when it is there
  *   rows      reads `plywood audit --json` and exits 0 when a row holds
  *             every field=value
+ *   rollback  reads `plywood rollback --json` and exits 0 when it recorded a
+ *             restore in the environment (a `restores` field, as chant's
+ *             components rollback writes it)
  *   mcp       a stdio MCP client for `plywood mcp`, which lists the tools,
  *             refuses a tool that writes, and calls plywood:stacks
  */
@@ -70,6 +73,23 @@ if (kind === "signed") {
   say(ok.length > 0, ok.length ? ok.length + " signed " + event + " event(s) from " + source + " naming " + target : "no " + event + " event from " + source + " naming " + target + " verifies under the receiver's key (" + seen.length + " requests)");
 }
 say(false, "received takes trace, metric or signed, not " + kind);
+`;
+
+/**
+ * `rollback <file> <env>`: the document `plywood rollback <env> --release <name> --json` printed holds a
+ * record with a `restores` field in <env>, which chant writes only when the restore ran. A document that
+ * is not JSON, or that holds no such record, exits 1.
+ */
+export const ROLLBACK_JS = `
+let doc;
+try { doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { console.log("the rollback printed no JSON document: " + e.message); process.exit(1); }
+const env = process.argv[2];
+const found = [];
+const walk = (v) => { if (v && typeof v === "object") { if (v.restores && typeof v.restores === "object") found.push(v); for (const x of Object.values(v)) walk(x); } };
+walk(doc);
+const hit = found.filter((r) => r.env === undefined || r.env === env);
+console.log(hit.length ? hit.length + " record(s) restore a release in " + env : "no record in the rollback's document restores a release in " + env);
+process.exit(hit.length ? 0 : 1);
 `;
 
 /** `rows <file> <path=value>...`: a dotted path into a row; an array holds the value when one element equals it. */

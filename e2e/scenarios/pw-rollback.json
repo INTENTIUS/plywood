@@ -1,0 +1,175 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-rollback",
+  "product": "plywood",
+  "claim": "rollback/gated-release",
+  "title": "An environment rolls back to the release it ran before, through its release gate (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "waves",
+      "do": "out-of-band",
+      "label": "main puts prod-us first in the waves",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "stock-first"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release-a",
+      "do": "out-of-band",
+      "label": "release shop-a is cut from main's tip, tagged green",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-a"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "deploy-a",
+      "do": "out-of-band",
+      "label": "prod runs release shop-a",
+      "command": [
+        "plywood-e2e",
+        "deploy",
+        "prod",
+        "shop-a"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/rollback-events",
+      "overlay": "prod-us-events-7200",
+      "title": "prod-us: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "events-merge",
+      "do": "merge",
+      "pull": "events"
+    },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's first wave job is on the ledger",
+      "command": [
+        "plywood-e2e",
+        "wait-runs",
+        "pulumi-up",
+        "1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release-b",
+      "do": "out-of-band",
+      "label": "release shop-b is cut from the merge commit",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-b"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "deploy-b",
+      "do": "out-of-band",
+      "label": "prod runs release shop-b",
+      "command": [
+        "plywood-e2e",
+        "deploy",
+        "prod",
+        "shop-b"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "revoke",
+      "do": "out-of-band",
+      "label": "the commit of ${PLYWOOD_E2E_REVOKED:-none} is revoked (none in the plain arm)",
+      "command": [
+        "plywood-e2e",
+        "revoke",
+        "${PLYWOOD_E2E_REVOKED:-none}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "plywood rollback prod to shop-a waits at the release gate, the reviewer approves it, and the restore is recorded",
+      "command": [
+        "plywood-e2e",
+        "rollback",
+        "prod",
+        "shop-a"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_REVOKED": "shop-a"
+    },
+    "note": "the commit shop-a was cut from is revoked, so chant refuses the rollback with release-revoked before any gate, nothing is restored, and the applied step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

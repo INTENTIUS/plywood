@@ -3,11 +3,15 @@
  * that run them, with fakes. The programs that run inside the containers are
  * in probes.test.ts.
  */
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doraCounts, overrideRecorded, reportHolds } from "../checks";
 import { dryRun } from "../main";
-import { auditScript, mcpScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext } from "../ports";
-import { RECEIVER, RECEIVER_URL } from "../probes";
+import { auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext } from "../ports";
+import { RECEIVER, RECEIVER_URL, ROLLBACK_JS } from "../probes";
 import { readScenario } from "../scenarios";
 
 describe("the checks", () => {
@@ -168,6 +172,7 @@ describe("the scenarios' BREAK arms", () => {
       ["pw-notify", "PLYWOOD_E2E_SIGNING_KEY", "another-key"],
       ["pw-traces", "PLYWOOD_E2E_TELEMETRY", "telemetry-off"],
       ["pw-estate", "PLYWOOD_E2E_TELEMETRY", "telemetry-none"],
+      ["pw-rollback", "PLYWOOD_E2E_REVOKED", "shop-a"],
     ];
     for (const [id, key, value] of cases) {
       const s = readScenario(id);
@@ -183,5 +188,53 @@ describe("the scenarios' BREAK arms", () => {
     expect(dryRun(readScenario("pw-comment-up")).join("\n")).toContain(`comment "/plywood up" on events as author`);
     const s = readScenario("pw-policy-override");
     expect(s.steps.filter((x) => x.do === "comment").map((x) => x.id)).toEqual(["up-denied", "up-overridden"]);
+  });
+});
+
+describe("pw-rollback", () => {
+  it("cuts, deploys, revokes and rolls back through the commands, each with the forge's ledger under it", async () => {
+    const t = ctx();
+    for (const words of [["release", "shop-a"], ["revoke", "shop-a"], ["revoke", "none"], ["deploy", "prod", "shop-a"], ["rollback", "prod", "shop-a"]]) expect(await runCommand(t.c, words)).toBe(0);
+    expect(t.ran).toHaveLength(5);
+    for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
+    expect(last(t.ran[0]!)).toContain("npx chant release cut 'shop-a' --yes --actor 'tutor'");
+    expect(last(t.ran[1]!)).toContain('git tag -a "ci/revoked/$sha"');
+    expect(last(t.ran[2]!)).toContain("no release revoked");
+    expect(last(t.ran[3]!)).toContain("npx chant run --components --env 'prod' --release 'shop-a'");
+    await expect(runCommand(t.c, ["rollback", "prod"])).rejects.toThrow(/takes <env> <label>/);
+  });
+
+  it("asks as the author, has the reviewer approve the line it prints, and reads the restore from the second run", () => {
+    const script = rollbackScript("prod", "shop-a", "tutor", "reviewer");
+    expect(script).toContain("plywood rollback 'prod' --release 'shop-a' --actor 'tutor'");
+    expect(script).toContain('if [ "$code" != 3 ]; then exit "$code"; fi');
+    expect(script).toContain(`plywood "$@" --approver 'reviewer' --yes`);
+    expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
+    expect(releaseScript("shop-b", "tutor")).toContain('git tag -a "ci/green/$sha"');
+    expect(deployScript("prod", "shop-b")).toBe("npx chant run --components --env 'prod' --release 'shop-b' --yes");
+    expect(revokeScript("none")).not.toContain("git tag");
+  });
+
+  it("holds when the document records a restore in the environment, and fails on a refusal or another environment", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pw-rollback-155-"));
+    const run = (doc: string, env: string) => {
+      const file = join(dir, `${env}.json`);
+      writeFileSync(file, doc);
+      return spawnSync("node", ["-e", ROLLBACK_JS, file, env]).status;
+    };
+    const record = { component: "shop", env: "prod", digest: "sha256:ab", restores: { env: "prod", runId: "4790", timestamp: "2026-11-20T11:20:05.000Z" } };
+    expect(run(JSON.stringify({ outcome: { deployed: [] }, records: [record] }), "prod")).toBe(0);
+    expect(run(JSON.stringify([{ ...record, env: "staging" }]), "prod")).toBe(1);
+    expect(run(JSON.stringify({ error: "release-revoked" }), "prod")).toBe(1);
+    expect(run("release-revoked: shop-a", "prod")).toBe(1);
+  });
+
+  it("revokes shop-a in the BREAK arm only, and rolls back to it last", () => {
+    const s = readScenario("pw-rollback");
+    const lines = dryRun(s).join("\n");
+    expect(lines).toContain("run plywood-e2e revoke none");
+    expect(lines).toContain("run plywood-e2e revoke shop-a");
+    expect(s.steps.map((x) => x.id).slice(-2)).toEqual(["revoke", "applied"]);
+    expect(s.steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "rollback", "prod", "shop-a"], expect: [{ exit: 0 }] });
   });
 });

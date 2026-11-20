@@ -52,7 +52,7 @@ import {
 import { driftIssueTitle, driftOpName } from "../packages/plywood/src/words";
 import type { ApproveInput, Arm, BucketPort, Clock, HarnessModule, LedgerRecord, Person, SafeRunInstance } from "./harness";
 import { overlayFiles, readOverlay } from "./overlays";
-import { MCP_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROWS_JS } from "./probes";
+import { MCP_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROLLBACK_JS, ROWS_JS } from "./probes";
 
 // ── reports ─────────────────────────────────────────────────────────────
 
@@ -418,6 +418,63 @@ export function receivedArgv(args: readonly string[]): string[] {
   return ["docker", "exec", RECEIVER, "node", "-e", RECEIVED_JS, RECEIVED_FILE, ...args];
 }
 
+/**
+ * The script `release` runs in a job container on a clone of main: tag HEAD
+ * green the way `chant ci tick` would (an annotated, unsigned `ci/green/<sha>`),
+ * cut the release `label` from it, and push the tags. The ledger's push is
+ * withForgeLedger's. The cut is a release of the shop repository's
+ * components, so it is what `plywood rollback --release` restores.
+ */
+export function releaseScript(label: string, by: string): string {
+  return [
+    'sha="$(git rev-parse HEAD)"',
+    'git rev-parse -q --verify "refs/tags/ci/green/$sha" >/dev/null || git tag -a "ci/green/$sha" -m "e2e: green"',
+    `npx chant release cut ${quote(label)} --yes --actor ${quote(by)}`,
+    "git push -q origin --tags",
+  ].join("\n");
+}
+
+/** The script `revoke` runs: tag the commit release `label` was cut from `ci/revoked/<sha>` and push it, as `chant ci tick` revokes a commit that later fails. `none` revokes nothing. */
+export function revokeScript(label: string): string {
+  if (label === "none") return 'echo "plywood-e2e: no release revoked"';
+  return [
+    `tag="$(npx chant release tag ${quote(label)})"`,
+    'test -n "$tag"',
+    'sha="$(git rev-list -n 1 "$tag")"',
+    'git tag -a "ci/revoked/$sha" -m "e2e: revoked"',
+    'git push -q origin "refs/tags/ci/revoked/$sha"',
+  ].join("\n");
+}
+
+/** The script `deploy` runs: `chant run --components --env <env> --release <label>` at HEAD, the commit the release was cut from, so the environment's ledger names the release. */
+export function deployScript(env: string, label: string): string {
+  return `npx chant run --components --env ${quote(env)} --release ${quote(label)} --yes`;
+}
+
+/**
+ * The script `rollback` runs: `plywood rollback <env> --release <label>` as
+ * `by`. The release gate must wait (exit 3) and print the line that
+ * approves it; `approver` approves that line, and the same command runs
+ * again with --json, whose document must record the restore (./probes.ts
+ * ROLLBACK_JS). Any other exit of the first call, such as chant's refusal of
+ * a revoked release, is the script's own.
+ */
+export function rollbackScript(env: string, label: string, by: string, approver: string): string {
+  const ask = `plywood rollback ${quote(env)} --release ${quote(label)} --actor ${quote(by)}`;
+  return [
+    "code=0",
+    `out="$(${ask} 2>&1)" || code=$?`,
+    `printf '%s\\n' "$out"`,
+    'if [ "$code" != 3 ]; then exit "$code"; fi',
+    `line="$(printf '%s\\n' "$out" | grep -m1 -F 'plywood approve ')"`,
+    `test -n "$line" || { echo ${quote(`plywood rollback waited without the line that approves it`)} >&2; exit 1; }`,
+    'set -- ${line#*plywood }',
+    `plywood "$@" --approver ${quote(approver)} --yes`,
+    `${ask} --json > /tmp/plywood-e2e-rollback.json`,
+    `node -e ${quote(ROLLBACK_JS)} /tmp/plywood-e2e-rollback.json ${quote(env)}`,
+  ].join("\n");
+}
+
 /** The commands `plywood-e2e` takes, with their arguments. */
 export const COMMANDS: Record<string, string> = {
   "wait-runs": "<op> <count> [<stack>]: wait until the ledger holds <count> wave jobs of <op> since the arm started, only those that targeted <stack> when given",
@@ -449,6 +506,10 @@ export const COMMANDS: Record<string, string> = {
   receiver: ": a fresh receiver on the bench's network (./probes.ts RECEIVER_JS)",
   received: "<trace <service> <stack>|metric <name>|signed <event> <source> <target> <key>>: the receiver holds it, read until it does or a minute passes (./probes.ts RECEIVED_JS)",
   "notify-drift-job": "<stack> <signing key>: the drift-job command with notify's webhook at the receiver, signed with <key>",
+  release: "<label>: cut release <label> from main's tip, tagged green first, in a job container as the author",
+  revoke: "<label|none>: tag the commit <label> was cut from ci/revoked and push it; none revokes nothing",
+  deploy: "<env> <label>: chant run --components --env <env> --release <label> at main's tip, in a job container, with the forge's ledger under it",
+  rollback: "<env> <label>: plywood rollback <env> --release <label> as the author, the release gate approved by the reviewer, and the restore recorded (./probes.ts ROLLBACK_JS)",
   mcp: "<read-only|propose>: a stdio client over plywood mcp in a job container: the tools listed, none that writes, and plywood:stacks called (./probes.ts MCP_JS)",
 };
 
@@ -523,6 +584,18 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       const env = { PULUMI_BACKEND_URL: stockBackend(a[0]!) };
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, withForgeLedger(actionScript(a[0]!, a[1]!, c.author.login))));
     }
+    case "release":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(releaseScript(a[0]!, c.author.login))));
+    case "revoke":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(revokeScript(a[0]!))));
+    case "deploy":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployScript(a[0]!, a[1]!))));
+    case "rollback":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(rollbackScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));
     case "approve-pending": {
       need(1);
       const p = await c.ledger.pending(a[0]!, c.since());

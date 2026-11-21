@@ -64,8 +64,10 @@ export interface StageIo {
  * and `stage` are the pipeline's (plywood#156): the wave jobs read their
  * stage's spec with `pipeline spec --stage`, the first stage cuts the release
  * with `release cut`, and `reject` turns down a release at a stage's gate.
+ * `agent` is chant's agent job (`agent prepare`, `agent run`), which the
+ * alert, failure and schedule agents' workflows run (plywood#169).
  */
-export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock", "query", "ledger", "audit-log", "pipeline", "release", "stage", "reject"] as const;
+export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock", "query", "ledger", "audit-log", "pipeline", "release", "stage", "reject", "agent"] as const;
 
 /** Flags whose next argument is a value, for splitting a command line. */
 const VALUED = new Set(["--base", "--pr", "--forge", "--env", "--output", "-o", "--stack", "--file", "--head", "--gate", "--branch", "--report-url", "--target"]);

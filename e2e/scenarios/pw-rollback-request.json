@@ -1,0 +1,119 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-rollback-request",
+  "product": "plywood",
+  "claim": "pipeline/rollback-request",
+  "title": "A failing soak check in staging requests staging's rollback, which waits at its gate (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "pipeline",
+      "do": "out-of-band",
+      "label": "main sets staging's soak to a failing check and on_verify_fail ${PLYWOOD_E2E_ON_FAIL:-rollback}, and plywood init writes .chant/pipeline.ts",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_ROLLBACK_OVERLAY:-pipeline-rollback}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "do": "out-of-band",
+      "label": "release shop-r1 is cut from main's tip, tagged green",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-r1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "do": "out-of-band",
+      "label": "dev runs release shop-r1, its gate approved by the reviewer",
+      "command": [
+        "plywood-e2e",
+        "deploy-gated",
+        "dev",
+        "shop-r1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "staging",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-r1 from dev to staging through its gates",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "staging",
+        "shop-r1",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "held",
+      "do": "out-of-band",
+      "label": "a promote of shop-r1 into prod-us reads staging's failing soak and exits 3",
+      "command": [
+        "plywood-e2e",
+        "promote-held",
+        "prod-us",
+        "shop-r1",
+        "staging"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "requested",
+      "do": "out-of-band",
+      "label": "workspace status shows staging's rollback request at gate staging-rollback",
+      "command": [
+        "plywood-e2e",
+        "stage-status",
+        "staging",
+        "rollback"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_ROLLBACK_OVERLAY": "pipeline-rollback-hold",
+      "PLYWOOD_E2E_ON_FAIL": "hold"
+    },
+    "note": "staging's on_verify_fail is hold, so the failing check holds the stage and requests no rollback: the requested step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

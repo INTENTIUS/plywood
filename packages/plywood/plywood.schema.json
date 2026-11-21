@@ -215,7 +215,7 @@
         "pr-review"
       ],
       "default": "ledger",
-      "description": "ledger, sealed or pr-review."
+      "description": "ledger, sealed or pr-review. Default ledger, and pr-review when approval_rules are set, so the merged pull request's reviews prove the approvers the rules need."
     },
     "preview": {
       "type": "boolean",
@@ -223,37 +223,21 @@
       "description": "true (the default): plywood init sets approvals.preview in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. false leaves it out."
     },
     "approval_rules": {
-      "type": "object",
-      "description": "Role and quorum per stack glob. Read at base.",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "role": {
-            "type": "string",
-            "description": "A role .chant/trust.json gives the approvers."
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Roles, any of which counts."
-          },
-          "count": {
-            "type": "integer",
-            "minimum": 1,
-            "default": 1,
-            "description": "Distinct approvers the stacks need."
-          },
-          "quorum": {
-            "type": "integer",
-            "minimum": 1,
-            "default": 1,
-            "description": "Distinct approvers the stacks need."
+      "description": "Approval rules, read at base: stack glob to { roles, count, proven, name }, or a label to a group with all or any of such rules, nested up to three deep. A list of rules covers every stack.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/approvalNode"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approvalNode"
           }
         }
-      }
+      ]
     },
     "policy": {
       "type": "object",
@@ -973,7 +957,7 @@
     "agent": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Agents that act on a request: /plywood agent <ask>, the drift agent's pull request, and the agents a production alert, a failed update on merge or a schedule starts. Each opens a pull request; none applies, approves or merges. All are off until set.",
+      "description": "Agents that act on a request: /plywood agent <ask>, the drift agent's pull request, and the agents a production alert, a failed update on merge, a failed verify or soak, or a schedule starts. Each opens a pull request; none applies, approves or merges. All are off until set.",
       "properties": {
         "comment": {
           "type": "boolean",
@@ -1061,6 +1045,31 @@
               "description": "Minutes in which one member's facts join one agent run."
             }
           }
+        },
+        "verify-failed": {
+          "description": "An agent opens a pull request when a stage's verify or soak check fails after an update. true, or a map. The promote and wave jobs record the failure.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "window": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1440,
+                  "default": 15,
+                  "description": "Minutes in which one member's facts join one agent run."
+                },
+                "relay_key_secret": {
+                  "type": "string",
+                  "description": "The secret holding the relay key the facts are signed and checked with. Default CHANT_RELAY_KEY."
+                }
+              }
+            }
+          ]
         },
         "command": {
           "type": "string",
@@ -1526,16 +1535,13 @@
       }
     },
     "environments": {
-      "description": "Each environment of promotion to its stage keys, such as targets: each project to the stack it updates there. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
+      "description": "Each environment of promotion to its stage keys: targets (each project to the stack it updates there), its gate, hold, freeze, soak, risk and the rest. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
       "type": "object",
       "additionalProperties": {
         "anyOf": [
           {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "targets"
-            ],
             "properties": {
               "targets": {
                 "type": "object",
@@ -1544,6 +1550,460 @@
                   "type": "string",
                   "minLength": 1
                 }
+              },
+              "gate": {
+                "type": "string",
+                "enum": [
+                  "always",
+                  "on-destructive",
+                  "never"
+                ],
+                "description": "When the stage's waves wait for an approval, in place of gate."
+              },
+              "approval": {
+                "type": "string",
+                "enum": [
+                  "ledger",
+                  "sealed",
+                  "pr-review"
+                ],
+                "description": "Which approvals of the stage count, in place of approval."
+              },
+              "approval_rules": {
+                "description": "The stage's approval rules, in place of approval_rules.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/approvalNode"
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/approvalNode"
+                    }
+                  }
+                ]
+              },
+              "forge_environment": {
+                "description": "The forge deployment environment of the stage's jobs: a name, or a map with name and url.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              },
+              "hold": {
+                "description": "A manual hold: no release is promoted into the stage. true, or a map with reason, until (an ISO 8601 time) and description.",
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "reason": {
+                        "type": "string"
+                      },
+                      "until": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              },
+              "freeze": {
+                "type": "array",
+                "description": "Freeze windows in which no release is promoted into the stage.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "from",
+                    "until"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "until": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "urgent": {
+                "type": "object",
+                "required": [
+                  "role"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  }
+                },
+                "description": "The role whose one proven approval passes the stage's gate on plywood promote --urgent."
+              },
+              "pause_after_rollback": {
+                "type": "boolean",
+                "default": false,
+                "description": "A rollback of the stage pauses it until plywood resume <env>."
+              },
+              "on_verify_fail": {
+                "type": "string",
+                "enum": [
+                  "hold",
+                  "rollback"
+                ],
+                "default": "hold",
+                "description": "A failed verify or soak check holds the stage as applied, or requests the rollback to its previous release, which waits for an approval."
+              },
+              "failure_tolerance": {
+                "description": "The failed runs a wave lets through: a whole number, or a share such as 10%.",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?%$"
+                  }
+                ]
+              },
+              "after": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The stages a release applies in before this one opens for it. Default the stage before it in promotion."
+              },
+              "queue": {
+                "type": "string",
+                "enum": [
+                  "replace"
+                ],
+                "description": "replace: the stage takes one release at a time, and a newer release waiting replaces an older one."
+              },
+              "soak": {
+                "type": "object",
+                "required": [
+                  "duration"
+                ],
+                "additionalProperties": false,
+                "description": "Checks that must keep passing for duration after the stage's last update before a release is promoted into the next stage.",
+                "properties": {
+                  "duration": {
+                    "type": "string",
+                    "description": "A duration such as 30m or 2h, or 0 to wait for the checks alone."
+                  },
+                  "checks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "http",
+                            "prometheus",
+                            "cloudwatch-alarm",
+                            "command",
+                            "health",
+                            "drift",
+                            "apply",
+                            "policy"
+                          ]
+                        },
+                        "on_fail": {
+                          "type": "string",
+                          "enum": [
+                            "restart",
+                            "hold"
+                          ],
+                          "default": "restart"
+                        }
+                      },
+                      "description": "One soak check: its kind, with that kind's settings beside it, and on_fail."
+                    }
+                  },
+                  "overrides": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "members"
+                      ],
+                      "properties": {
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "duration": {
+                          "type": "string"
+                        },
+                        "checks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "kind"
+                            ],
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "http",
+                                  "prometheus",
+                                  "cloudwatch-alarm",
+                                  "command",
+                                  "health",
+                                  "drift",
+                                  "apply",
+                                  "policy"
+                                ]
+                              },
+                              "on_fail": {
+                                "type": "string",
+                                "enum": [
+                                  "restart",
+                                  "hold"
+                                ],
+                                "default": "restart"
+                              }
+                            },
+                            "description": "One soak check: its kind, with that kind's settings beside it, and on_fail."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "risk": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Over this risk score, the stage's waves and a promote into it take approval_rules on top of the gate's own.",
+                "properties": {
+                  "approve_above": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "approval_rules": {
+                    "description": "Approval rules, as approval_rules takes them.",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/$defs/approvalNode"
+                        }
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/approvalNode"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "replan_dependents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Stacks whose dependents are previewed again when an output they read changes after an update in this stage."
+              },
+              "publish": {
+                "type": "object",
+                "description": "Release artifacts the stage publishes once it updated: { member, output }, or { secret }.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "member": {
+                      "type": "string"
+                    },
+                    "output": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "forge_secret": {
+                              "type": "string"
+                            },
+                            "aws_secrets_manager": {
+                              "type": "string"
+                            },
+                            "gcp_secret_manager": {
+                              "type": "string"
+                            },
+                            "azure_key_vault": {
+                              "type": "string"
+                            },
+                            "json_key": {
+                              "type": "string"
+                            },
+                            "region": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "reads": {
+                "type": "object",
+                "description": "Artifacts of an earlier stage the stage's update gets in a variable: { stage, artifact }.",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "stage",
+                    "artifact"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "stage": {
+                      "type": "string"
+                    },
+                    "artifact": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "agent_steps": {
+                "type": "object",
+                "description": "Agent steps: a model's reading of the release the stage takes, with an answer of a declared shape. A step approves nothing and applies nothing.",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "prompt",
+                    "schema"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "schema": {
+                      "type": "object"
+                    },
+                    "reads": {
+                      "type": "object"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "key_secret": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 360
+                    },
+                    "max_runs": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_cost_usd": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Plain values the stage's jobs get as variables."
+              },
+              "secrets": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "forge_secret": {
+                          "type": "string"
+                        },
+                        "aws_secrets_manager": {
+                          "type": "string"
+                        },
+                        "gcp_secret_manager": {
+                          "type": "string"
+                        },
+                        "azure_key_vault": {
+                          "type": "string"
+                        },
+                        "json_key": {
+                          "type": "string"
+                        },
+                        "region": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "description": "Secrets the stage's jobs get as variables, each named by where it is kept: a forge secret's name, or a map naming a cloud secret store."
+              },
+              "imports": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The config_sets this set takes first, in order."
               }
             }
           },
@@ -1583,6 +2043,149 @@
         "pattern": "^[a-z0-9][a-z0-9_-]*$"
       },
       "description": "The order a release moves through the environments, first to last. The merge updates the first environment's stacks, and plywood promote carries a release to each next one behind its gate. Each project takes one stack per environment: the one named after it, or the one environments.<name>.targets names. Off when absent."
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The change risk each preview scores from 0 to 1. Over approve_above, the change needs an approval of its own digest. Off when absent.",
+      "properties": {
+        "approve_above": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "The score above which a change needs an approval of its own."
+        },
+        "questions": {
+          "type": "array",
+          "description": "Questions the review agent answers from 0 to 1, each a reason in the score.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "text",
+              "weight"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              "text": {
+                "type": "string"
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "approve_above": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "replan_dependents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Stacks (names or globs) whose dependents are previewed again when an output they read changes after an update. The preview waits at its own gate. Off when absent."
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The release the merge cuts once the first environment of promotion updated.",
+      "properties": {
+        "cut": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cut a release once the first stage updated. On when plywood writes a pipeline."
+        },
+        "label": {
+          "type": "string",
+          "default": "auto",
+          "description": "The release's label, or auto for the next version."
+        }
+      }
+    },
+    "recheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schedule"
+      ],
+      "description": "How often a promotion a soak holds is tried again.",
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "description": "A five-field cron line."
+        }
+      }
+    },
+    "config_sets": {
+      "type": "object",
+      "description": "Shared sets of config and secrets that environments import.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Plain values the stage's jobs get as variables."
+          },
+          "secrets": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "forge_secret": {
+                      "type": "string"
+                    },
+                    "aws_secrets_manager": {
+                      "type": "string"
+                    },
+                    "gcp_secret_manager": {
+                      "type": "string"
+                    },
+                    "azure_key_vault": {
+                      "type": "string"
+                    },
+                    "json_key": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "description": "Secrets the stage's jobs get as variables, each named by where it is kept: a forge secret's name, or a map naming a cloud secret store."
+          },
+          "imports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The config_sets this set takes first, in order."
+          }
+        }
+      }
     },
     "control": {
       "description": "The control repo this repository tells after each update on merge: its project key or URL, or a mapping.",
@@ -1633,6 +2236,11 @@
             "api_base": {
               "type": "string",
               "description": "The forge's REST base, when the host's usual one is not it."
+            },
+            "release": {
+              "type": "boolean",
+              "default": false,
+              "description": "The plywood-applied dispatch carries the release digest of the updated commit, so the control repo reads that release's artifacts."
             }
           }
         }
@@ -1665,6 +2273,94 @@
           "description": "true: plywood init names the check hooks under local.checks in .chant/trust.json, so a hook proven on a person's machine is skipped in CI."
         }
       }
+    }
+  },
+  "$defs": {
+    "approvalNode": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "roles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Roles from .chant/trust.json, any of which counts."
+            },
+            "role": {
+              "type": "string",
+              "description": "One role; the older spelling of roles."
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Distinct approvers the stacks need."
+            },
+            "quorum": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The older spelling of count."
+            },
+            "proven": {
+              "type": "boolean",
+              "default": false,
+              "description": "Only approvers a seal or a review proves count toward count."
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9_-]+$",
+              "description": "The rule's name in its progress line, the preview note and the pending fact."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/approvalNode"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/approvalNode"
+                  }
+                }
+              ],
+              "description": "Met when every rule in it is met."
+            },
+            "any": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/approvalNode"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/approvalNode"
+                  }
+                }
+              ],
+              "description": "Met when one rule in it is met."
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9_-]+$"
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -65,6 +65,17 @@
  * |----------------|--------------------------|------------------------------------------------|
  * | pw-alert-agent | agent/alert-pull-request | main leaves agent.alert off, so no workflow    |
  *
+ * plywood#156's stage pipeline scenarios, on Forgejo alone, each on the
+ * .chant/pipeline.ts plywood init writes from plywood.yml:
+ *
+ * | scenario            | claim                      | what the BREAK arm changes                       |
+ * |---------------------|----------------------------|--------------------------------------------------|
+ * | pw-soak-hold        | pipeline/soak-hold         | staging's soak lasts 0 and its check passes      |
+ * | pw-stage-canary     | pipeline/canary            | main sets no waves.canary                        |
+ * | pw-risk-record      | pipeline/risk-record       | main sets no risk keys                           |
+ * | pw-rollback-request | pipeline/rollback-request  | staging's on_verify_fail is hold                 |
+ * | pw-pipeline         | pipeline/dev-staging-prod  | main holds prod-us                               |
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -100,6 +111,11 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-rollback": "rollback/gated-release",
   "pw-alert-agent": "agent/alert-pull-request",
   "pw-promote": "promote/gated-release",
+  "pw-soak-hold": "pipeline/soak-hold",
+  "pw-stage-canary": "pipeline/canary",
+  "pw-risk-record": "pipeline/risk-record",
+  "pw-rollback-request": "pipeline/rollback-request",
+  "pw-pipeline": "pipeline/dev-staging-prod",
 };
 
 /** The scenario files in `dir`, by id. */

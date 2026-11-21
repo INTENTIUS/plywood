@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dirname, "..", "..");
 
 describe("plywood's scenarios", () => {
   it("are plywood#22's claims, one scenario each, pulumi-cloud/token aside, and plywood#39's", () => {
-    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-action", "pw-adopt", "pw-alert-agent", "pw-audit", "pw-canary", "pw-comment-up", "pw-disjoint", "pw-drift", "pw-estate", "pw-mcp", "pw-moved-plan", "pw-moved-preview", "pw-notify", "pw-one-note", "pw-policy-deny", "pw-policy-override", "pw-promote", "pw-rollback", "pw-traces"]);
+    expect(Object.keys(scenarioFiles()).sort()).toEqual(["pw-action", "pw-adopt", "pw-alert-agent", "pw-audit", "pw-canary", "pw-comment-up", "pw-disjoint", "pw-drift", "pw-estate", "pw-mcp", "pw-moved-plan", "pw-moved-preview", "pw-notify", "pw-one-note", "pw-pipeline", "pw-policy-deny", "pw-policy-override", "pw-promote", "pw-risk-record", "pw-rollback", "pw-rollback-request", "pw-soak-hold", "pw-stage-canary", "pw-traces"]);
     expect(SCENARIO_CLAIMS).toEqual({
       "pw-disjoint": "plunge/disjoint-updates",
       "pw-moved-plan": "plunge/saved-plan-moved",
@@ -36,6 +36,11 @@ describe("plywood's scenarios", () => {
       "pw-rollback": "rollback/gated-release",
       "pw-alert-agent": "agent/alert-pull-request",
       "pw-promote": "promote/gated-release",
+      "pw-soak-hold": "pipeline/soak-hold",
+      "pw-stage-canary": "pipeline/canary",
+      "pw-risk-record": "pipeline/risk-record",
+      "pw-rollback-request": "pipeline/rollback-request",
+      "pw-pipeline": "pipeline/dev-staging-prod",
     });
   });
 
@@ -56,7 +61,7 @@ describe("plywood's scenarios", () => {
   it("lint clean through `just e2e lint`", async () => {
     const out: string[] = [];
     expect(await lint(await harness(), (l) => void out.push(l))).toBe(0);
-    expect(out).toHaveLength(19);
+    expect(out).toHaveLength(24);
   });
 
   it("catch a scenario that drifted from plywood's rules", () => {

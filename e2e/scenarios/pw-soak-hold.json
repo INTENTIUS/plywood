@@ -1,0 +1,119 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-soak-hold",
+  "product": "plywood",
+  "claim": "pipeline/soak-hold",
+  "title": "A promote out of staging waits while staging's soak runs, and nothing deploys to prod-us (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "pipeline",
+      "do": "out-of-band",
+      "label": "main sets staging's soak to ${PLYWOOD_E2E_SOAK:-two hours of a passing check}, and plywood init writes .chant/pipeline.ts",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_SOAK_OVERLAY:-pipeline-soak}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "do": "out-of-band",
+      "label": "release shop-s1 is cut from main's tip, tagged green",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-s1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "do": "out-of-band",
+      "label": "dev runs release shop-s1, its gate approved by the reviewer",
+      "command": [
+        "plywood-e2e",
+        "deploy-gated",
+        "dev",
+        "shop-s1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "staging",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-s1 from dev to staging through its gates",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "staging",
+        "shop-s1",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "held",
+      "do": "out-of-band",
+      "label": "a promote of shop-s1 into prod-us exits 3 on staging's soak",
+      "command": [
+        "plywood-e2e",
+        "promote-held",
+        "prod-us",
+        "shop-s1",
+        "staging"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "soak",
+      "do": "out-of-band",
+      "label": "workspace status shows prod-us held by staging's soak, or staging's soak pending",
+      "command": [
+        "plywood-e2e",
+        "stage-status",
+        "staging",
+        "soak"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_SOAK_OVERLAY": "pipeline-soak-zero",
+      "PLYWOOD_E2E_SOAK": "zero minutes"
+    },
+    "note": "staging's soak lasts 0 and its check passes, so nothing holds the promote into prod-us: the held step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

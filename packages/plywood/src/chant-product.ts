@@ -33,6 +33,8 @@ export interface ProductPipelineJobs {
   preview?: { jobName: string; noteJobName: string; comment: string };
   /** The stale marking's job (chant#4628), with `staleNotes`. */
   stale?: { command: string; env: Record<string, string> };
+  /** The comment job (chant#4946, #5027), with `commentJob`: its name, command, env and the comment prefixes that start it. */
+  comment?: { jobName: string; command: string; env: Record<string, string>; prefixes: string[] };
   /** The action job (chant#4654), with `actionJob`: the comment and the dispatch inputs it answers, and `plywood action --from-event`. */
   action?: { jobName: string; comment: string; inputs: { member: string; action: string }; command: string };
 }
@@ -69,6 +71,8 @@ export interface ProductPipelineOptions {
   applyMerge?: { tokenEnv: string; method?: string };
   /** The job that answers `/plywood action <stack> <name>` and a dispatch with `stack` and `action` inputs (chant#4654). */
   actionJob?: boolean | { inputs?: { member?: string; action?: string } };
+  /** GitHub and Forgejo: the comment job, under the name given (chant#4946, #5027); plywood's answers `/plywood reject` (src/reject-comment.ts). */
+  commentJob?: boolean | { jobName?: string };
   /** GitLab only: the note-commands job a schedule starts with `CHANT_NOTE_COMMANDS=1`, which answers the comment commands (chant#4785). */
   noteCommands?: boolean;
   /** The runner identity the plan job's plan and policy checks are signed with (chant#4870, #4869): `post.evidence`. */
@@ -99,6 +103,8 @@ export interface ChantProduct {
   productApplyFailedAgent(words: ProductWordsInput | ProductWords, options?: Record<string, unknown>): Record<string, unknown>;
   /** The scheduled agent's Op spec (chant#5357): `schedule` is a cron and `task` what each run does. */
   productScheduleAgent(words: ProductWordsInput | ProductWords, options: Record<string, unknown> & { schedule: string; task: string }): Record<string, unknown>;
+  /** The failed-verify agent's Op spec (chant#5339): its own workflow, on a schedule and by hand. */
+  productVerifyFailedAgent(words: ProductWordsInput | ProductWords, options?: Record<string, unknown>): Record<string, unknown>;
   /** The standing pending gates waiting on a plan digest, with the pull request a `pr-<n>` op names (chant#4607). */
   pendingGatesByPlan(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
   /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */

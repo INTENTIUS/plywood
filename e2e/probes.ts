@@ -108,6 +108,31 @@ console.log(found.length ? found.length + " record(s) deploy the release in " + 
 process.exit(found.length ? 0 : 1);
 `;
 
+/**
+ * `stage <file> <env> <field>` (plywood#156): in `chant workspace status --json`, a member's pipeline stage
+ * named <env> must have <field> set: not null and not absent, and for `canaryHolds` one entry holding.
+ */
+export const STAGE_JS = `
+let doc;
+try { doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { console.log("workspace status printed no JSON document: " + e.message); process.exit(1); }
+const [env, field] = [process.argv[2], process.argv[3]];
+const stages = (doc.members || []).flatMap((m) => (m.pipeline && m.pipeline.stages) || []).filter((s) => s.name === env);
+if (!stages.length) { console.log("no member's pipeline has a stage " + env); process.exit(1); }
+const set = (s) => field === "canaryHolds" ? (s.canaryHolds || []).some((h) => h.holding) : s[field] !== null && s[field] !== undefined;
+const hit = stages.filter(set);
+console.log(hit.length ? "stage " + env + " has " + field + ": " + JSON.stringify(hit[0][field]) : "stage " + env + " has no " + field);
+process.exit(hit.length ? 0 : 1);
+`;
+
+/** `canary <file>` (plywood#156): a stage's op-waves spec whose first wave is marked `canary`. */
+export const CANARY_JS = `
+let doc;
+try { doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { console.log("pipeline spec printed no JSON document: " + e.message); process.exit(1); }
+const first = (doc.waves || [])[0];
+console.log(first && first.canary === true ? "the first wave, " + first.name + ", is the canary" : "the stage's first wave is not marked canary");
+process.exit(first && first.canary === true ? 0 : 1);
+`;
+
 /** `rows <file> <path=value>...`: a dotted path into a row; an array holds the value when one element equals it. */
 export const ROWS_JS = `
 const doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));

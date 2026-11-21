@@ -24,7 +24,7 @@ drift: { schedule: "0 6 * * *" }
 | `engine` | a `plunge+` backend picks `plunge`, else Pulumi | `pulumi` or `plunge` |
 | `backend` | `PULUMI_BACKEND_URL`, then `Pulumi.yaml`'s `backend.url` | the backend URL, for every stack or per stack under `stacks` |
 | `gate` | `on-destructive` | `always`, `on-destructive` or `never`: when a wave waits for an approval |
-| `approval` | `ledger` | `ledger`, `sealed` or `pr-review` |
+| `approval` | `ledger`, or `pr-review` when `approval_rules` are set | `ledger`, `sealed` or `pr-review` |
 | `preview` | `true` | `plywood init` sets `approvals.preview` in the waves spec, so a merged wave applies only the plans its pull request previewed, or exits 4. `false` leaves it out. It was off by default in 0.3.1 and 0.3.2 |
 | `approval_rules` | none | per stack glob, `roles` from `.chant/trust.json` and a `count` of distinct approvers (default 1); read at base |
 | `apply.when` | `merge` | `merge`, or `pull-request` for `/plywood up` before merge |

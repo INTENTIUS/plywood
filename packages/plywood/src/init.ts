@@ -54,7 +54,7 @@ import { toChantSettings, type ChantSettings } from "./chant-config";
 import { identityClouds, pulumiCloudOf } from "./config/identity";
 import { cleanPath, packsForStack, policyPacksOf, policyProvidersOf, stepPolicyPacksOf } from "./config/policy";
 import { providersPackConfig, providersPackFiles, providersRego, PROVIDERS_PACK_CONFIG, PROVIDERS_PACK_DIR, PROVIDERS_REGO_FILE } from "./policy-presets";
-import { gateOf, previewOf } from "./config/approval";
+import { gateOf, previewOf, wavesApprovalOf } from "./config/approval";
 import { engineOf } from "./config/engine";
 import { evidenceOf } from "./config/evidence";
 import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
@@ -62,6 +62,7 @@ import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig 
 import { FORGES } from "./config/routing";
 import { planEnvironment, promotionOf, promotionTargets, stageGates, stageTargetsOf } from "./config/promotion";
 import { stacksOf as configuredStacks } from "./config/stacks";
+import { replanDependentsOf } from "./config/stage";
 import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
 import { chantBuildFlags, chantPipelineOptions } from "./images";
@@ -630,6 +631,12 @@ async function wavesSpecStep(chant: ChantProduct, stacks: readonly InitStack[], 
     ...(runner !== undefined ? { runner } : {}),
     ...(settings.pipeline.quorum?.length ? { quorum: settings.pipeline.quorum } : {}),
     ...(settings.pipeline.notify ? { notify: { ...settings.pipeline.notify } } : {}),
+    // plywood#156: waves.canary marks chant's canary wave; risk.approve_above holds a wave over the score; replan_dependents previews dependents again.
+    ...(settings.pipeline.canary?.length ? { canary: true } : {}),
+    ...(settings.ci.risk?.approveAbove !== undefined ? { riskApproveAbove: settings.ci.risk.approveAbove } : {}),
+    ...(replanDependentsOf(doc.replan_dependents) ? { replanDependents: replanDependentsOf(doc.replan_dependents)! } : {}),
+    // Rules and no `approval`: the waves take pr-review, as a stage with rules does, so the merged pull request's reviews prove the approvers.
+    ...(wavesApprovalOf(doc) ? { approval: wavesApprovalOf(doc)! } : {}),
   });
   const named = chant.productWavesSpec(base, PRODUCT_WORDS);
   // On unless plywood.yml says `preview: false` (plywood#56): a merged wave applies what its pull request previewed, or exits 4 (chant's approvals.preview).
@@ -675,7 +682,13 @@ async function workflowStep(
     ...writtenNotes(plan, written.file),
   ];
   const out: InitFile[] = [{ file: output, status: written.status, ...(notes.length ? { note: notes.join("; ") } : {}) }];
-  if (plan.jobs.waves) {
+  if (plan.jobs.waves && promotionOf(doc)) {
+    // plywood#156: under promotion, .chant/pipeline.ts and chant's pipeline workflows, as plywood ci writes them.
+    const { repositoryStacks, writePipelineJobs } = await import("./pipeline-jobs");
+    const stageIo = { ...io, cwd: root };
+    const code = await writePipelineJobs(chant, { doc, settings, forge, spec: plan.jobs.waves.spec as Record<string, unknown>, words: plan.words, env: opts.env ?? planEnvironment(doc), check: false, stacks: await repositoryStacks(root, doc, settings) }, table, stageIo);
+    if (code !== table.done) out.push({ file: ".chant/pipeline.ts", status: "failed", note: `the pipeline: exit ${code}` });
+  } else if (plan.jobs.waves) {
     const code = await writeWaveJobs(chant, forge, plan.jobs.waves, plan.words, table, { ...io, cwd: root }, wavesEngine(settings.pipeline));
     if (code !== table.done) out.push({ file: WAVES_OUTPUT_DIR[forge], status: "failed", note: `the waves workflow: chant exited ${code}` });
   }

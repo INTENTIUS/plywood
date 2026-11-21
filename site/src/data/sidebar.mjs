@@ -59,6 +59,7 @@ export const SIDEBAR = [
 			page('Resources registered inside apply()', 'guides/resources-registered-at-up'),
 			page('Run without approvals', 'guides/run-without-approvals'),
 			page('Promote a release through environments', 'guides/promote-a-release'),
+			page('Run the environments as a stage pipeline', 'guides/run-a-stage-pipeline'),
 			page('Roll a stack back to a release', 'guides/roll-back-a-stack'),
 		]),
 		group('Policy and audit', [

@@ -35,7 +35,7 @@ export const VERBS: readonly VerbWords[] = [
 export const BIN = "npx --no-install plywood";
 
 /** chant's comment commands, by the word typed after `/plywood` (chant `CiProductCommand`). */
-export type ChantCommand = "plan" | "apply" | "lock" | "unlock" | "agent" | "action";
+export type ChantCommand = "plan" | "apply" | "lock" | "unlock" | "agent" | "action" | "reject";
 
 /**
  * plywood's words in the shape chant's `assertProductWords` takes
@@ -51,6 +51,8 @@ export interface ProductWordsInput {
   commands: Record<string, ChantCommand>;
   approve: string;
   override: string;
+  /** The line that rejects the release a stage's gate waits on (chant#5354 `reject`). */
+  reject?: string;
   op: string;
   prGate: string;
   gateName: string;
@@ -75,6 +77,7 @@ export const PRODUCT_WORDS: Readonly<ProductWordsInput> = Object.freeze({
   commands: { preview: "plan", up: "apply", lock: "lock", unlock: "unlock" },
   approve: "plywood approve {gate} --plan {digest} {sign}",
   override: "plywood override {gate} --rule {rule} --reason <text>",
+  reject: "plywood reject {op} {gate} --plan {digest} --reason {reason} {sign}",
   op: OP_NAME,
   prGate: PR_GATE,
   gateName: "wave-{k}",
@@ -90,6 +93,21 @@ export const PRODUCT_WORDS: Readonly<ProductWordsInput> = Object.freeze({
  * pipeline with the action job gets it, through {@link wordsForJobs}.
  */
 export const ACTION_COMMAND: Readonly<Record<string, ChantCommand>> = Object.freeze({ action: "action" });
+
+/**
+ * `/plywood reject [--stage <stage>] <reason>` (chant#5354): the words the
+ * comment jobs run under, `plywood components pr-comment` (the reject
+ * workflow on GitHub and Forgejo, src/reject-comment.ts) and `plywood
+ * components pr-notes` (GitLab's note poll). chant records the rejection
+ * from a comment when the words map a command onto `reject`, and the stage's
+ * approval rules take the commenter's forge identity; otherwise it replies
+ * with the reject line. It is not in PRODUCT_WORDS, whose commands each name
+ * a job of the pull request workflow.
+ */
+export const REJECT_COMMAND: Readonly<Record<string, ChantCommand>> = Object.freeze({ reject: "reject" });
+
+/** plywood's words with the reject command, for the jobs that answer comments. */
+export const COMMENT_WORDS: Readonly<ProductWordsInput> = Object.freeze({ ...PRODUCT_WORDS, commands: { ...PRODUCT_WORDS.commands, ...REJECT_COMMAND } });
 
 /**
  * The words for a pipeline that has jobs for `jobs` only. chant refuses a
@@ -208,14 +226,26 @@ export const STACK_OP_WORDS = {
 
 /** `plywood promote`'s words (src/stack-ops.ts promoteRelease). */
 export const PROMOTE_WORDS = {
-  usage: `${PRODUCT} promote --to <env> [--release <name>] [--from <env>] [--allow-skip] [--dry-run]`,
-  waiting: `The promote waits at the release gate. Someone other than you approves the change set its 'release gate: change set <digest>' line names, with '${PRODUCT} approve release --plan <digest>', and then you run this command again.`,
+  usage: `${PRODUCT} promote --to <env> [--release <name>] [--from <env>] [--allow-skip] [--dry-run], or ${PRODUCT} promote --to <env> --release <name> --urgent --reason <text>`,
+  urgentUsage: `${PRODUCT} promote --to <env> --release <name> --urgent --reason <text>`,
+  waiting: `The promote waits at a gate, and someone other than you approves it: a stage's gate with the approve line printed above, the release gate with '${PRODUCT} approve release --plan <digest>' for the change set its 'release gate: change set <digest>' line names. Then you run this command again; each gate in turn waits the same way.`,
   noPromotion: (path: string): string =>
     `${path} sets no promotion, so there is no order to promote in. List the environments first to last, as promotion: [dev, staging, prod], and run '${PRODUCT} init' again.`,
   notAnEnvironment: (flag: string, env: string, promotion: readonly string[]): string =>
     `${flag} ${env} is not an environment of promotion; they are ${promotion.join(", ")}`,
   firstEnvironment: (env: string): string =>
     `${env} is the first environment of promotion, which the merge updates; promote carries a release from it to the next. To go back to a release there, run '${PRODUCT} rollback ${env} --release <name>'.`,
+} as const;
+
+/** `plywood pause` and `plywood resume <env>`'s words (src/stage-commands.ts, plywood#156). */
+export const STAGE_WORDS = {
+  usage: {
+    pause: `${PRODUCT} pause <env> --reason <text>`,
+    resume: `${PRODUCT} resume <env> --reason <text>`,
+  },
+  noPromotion: (path: string): string =>
+    `${path} sets no promotion, so it has no stages to pause. List the environments first to last, as promotion: [dev, staging, prod], and run '${PRODUCT} ci'.`,
+  notAStage: (env: string, promotion: readonly string[]): string => `${env} is not an environment of promotion; they are ${promotion.join(", ")}`,
 } as const;
 
 /**

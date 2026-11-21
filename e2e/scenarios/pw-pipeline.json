@@ -1,0 +1,118 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-pipeline",
+  "product": "plywood",
+  "claim": "pipeline/dev-staging-prod",
+  "title": "One change's release goes dev, staging, prod-us through the stage gates of the pipeline plywood writes (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "pipeline",
+      "do": "out-of-band",
+      "label": "main lists promotion dev, staging, prod-us, prod-eu, every gate always, and plywood init writes .chant/pipeline.ts",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_PIPELINE_OVERLAY:-promotion}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "do": "out-of-band",
+      "label": "release shop-l1 is cut from main's tip, tagged green",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-l1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "do": "out-of-band",
+      "label": "dev runs release shop-l1, its gate approved by the reviewer",
+      "command": [
+        "plywood-e2e",
+        "deploy-gated",
+        "dev",
+        "shop-l1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "staging",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-l1 from dev to staging through its gates",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "staging",
+        "shop-l1",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-l1 from staging to prod-us through its gates",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "prod-us",
+        "shop-l1",
+        "staging"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "running",
+      "do": "out-of-band",
+      "label": "workspace status shows prod-us running a release",
+      "command": [
+        "plywood-e2e",
+        "stage-status",
+        "prod-us",
+        "release"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_PIPELINE_OVERLAY": "pipeline-held-prod"
+    },
+    "note": "main holds prod-us, so chant refuses the promote into it while the hold stands, nothing is deployed to prod-us, and the applied step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

@@ -1,0 +1,1 @@
+{"append":{"plywood.yml":"gate: always\npromotion: [dev, staging, prod-us, prod-eu]\nenvironments:\n  staging:\n    soak:\n      duration: \"0\"\n      checks:\n        - kind: command\n          command: [\"true\"]\n"}}

@@ -19,6 +19,7 @@ export const CHANT_DEFAULTS = {
   productDriftAgent: (_words: unknown, _op: string, options?: Record<string, unknown>) => ({ on: "drift", ...(options ?? {}) }),
   productAlertAgent: (_words: unknown, options?: Record<string, unknown>) => ({ name: "plywood-alert-agent", trigger: { kind: "cron", schedule: "*/15 * * * *" }, agent: { on: "alert", ...agentOptions(options) } }),
   productApplyFailedAgent: (_words: unknown, options?: Record<string, unknown>) => ({ name: "plywood-apply-failed-agent", trigger: { kind: "cron", schedule: "*/15 * * * *" }, agent: { on: "apply-failed", ...agentOptions(options) } }),
+  productVerifyFailedAgent: (_words: unknown, options?: Record<string, unknown>) => ({ name: "plywood-verify-failed-agent", trigger: { kind: "cron", schedule: "*/15 * * * *" }, agent: { on: "verify-failed", ...agentOptions(options) } }),
   productScheduleAgent: (_words: unknown, options: Record<string, unknown> & { schedule: string }) => ({ name: "plywood-schedule-agent", trigger: { kind: "cron", schedule: options.schedule }, agent: { on: "schedule", ...agentOptions(options) } }),
   opWavesPostsApprovalStatus: () => false,
   productActionFromEnv: () => ({ kind: "refused" as const, reason: "no action was asked" }),

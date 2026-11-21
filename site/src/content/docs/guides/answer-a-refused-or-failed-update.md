@@ -7,8 +7,8 @@ A stopped wave gets a comment on the pull request that merged its commit. With n
 
 | Event | Key | Default | Comment |
 |---|---|---|---|
-| a wave refused for a moved preview, a hold or a decline | `respond.wave_refused` | `diff` | each change that differs from the approved preview, or the holder; `summary` puts a model's summary above it |
-| a failed update | `respond.apply_failed` | `triage` | the failed stacks and resources with the engine's error |
+| a wave refused for a moved preview, a hold or a decline | `respond.wave-refused` | `diff` | each change that differs from the approved preview, or the holder; `summary` puts a model's summary above it |
+| a failed update | `respond.apply-failed` | `triage` | the failed stacks and resources with the engine's error |
 | a description that leaves out deletes or replaces | `respond.description` | `off` | with `check`, the deletes and replaces it leaves out |
 
 `off` turns a comment off. A later run edits the same comment.

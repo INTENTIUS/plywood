@@ -83,7 +83,7 @@ describe("plywood.yml", () => {
   });
 
   it("turns approval_rules into chant quorum rules the author never counts toward", () => {
-    const text = 'approval: sealed\napproval_rules:\n  "shop/prod-*": { role: platform, quorum: 2 }\n  "*": { role: developers }\n';
+    const text = 'approval: sealed\napproval_rules:\n  "shop/prod-*": { roles: [platform], count: 2 }\n  "*": { roles: [developers] }\n';
     expect(checkConfig(parseConfig(text))).toEqual([]);
     expect(toChantSettings(parseConfig(text)).pipeline.quorum).toEqual([
       { targets: ["shop/prod-*"], count: 2, roles: ["platform"], notAuthor: true },

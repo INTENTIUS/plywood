@@ -13,6 +13,6 @@ An approval on the ledger starts no run on the forge, so `plywood approve up` po
 npx plywood approve up --plan jcs1-sha256:71d2... --forge github --branch main
 ```
 
-`--forge` falls back to `forge.kind` in `plywood.yml`, then to the CI job's forge. `--branch` falls back to the job's target branch. Posting needs a forge token in the shell. When plywood cannot tell the forge or the branch, or the post fails, the approval still stands: plywood prints the `plywood run wave ... --approval-status --open` line to post it by hand, and the status moves at the next push or review anyway.
+`--forge` falls back to `forge` in `plywood.yml`, then to the CI job's forge. `--branch` falls back to the job's target branch. Posting needs a forge token in the shell. When plywood cannot tell the forge or the branch, or the post fails, the approval still stands: plywood prints the `plywood run wave ... --approval-status --open` line to post it by hand, and the status moves at the next push or review anyway.
 
 An approval of another digest leaves the status `pending`. So does a push after the approval that changes a wave's plans.

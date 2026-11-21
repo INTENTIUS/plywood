@@ -30,6 +30,7 @@ import { policy } from "./policy";
 import { reviewStacks } from "./review-stacks";
 import { routing } from "./routing";
 import { stacks } from "./stacks";
+import { readVocabulary, vocabularyProblems } from "./vocabulary";
 import { error, isObject, type ConfigGroup, type ConfigProblem, type JsonSchema, type RawConfig } from "./types";
 
 export type { ConfigGroup, ConfigProblem, RawConfig } from "./types";
@@ -42,7 +43,10 @@ export const CONFIG_NAMES = ["plywood.yml", "plywood.yaml"] as const;
 export interface PlywoodConfig {
   /** The file read, or undefined for a config given as text. */
   file?: string;
+  /** The config with chant's vocabulary keys moved onto the spellings the groups read. */
   doc: RawConfig;
+  /** The config as written, when it differs from `doc`: the vocabulary's checks and a rewrite of the file read it. */
+  written?: RawConfig;
 }
 
 export class ConfigError extends Error {
@@ -88,7 +92,8 @@ export function parseConfig(text: string, file?: string): PlywoodConfig {
   }
   if (doc === null || doc === undefined) doc = {};
   if (!isObject(doc)) throw new ConfigError(`${file ?? "plywood.yml"}: the file must be a mapping of plywood keys`);
-  return { ...(file ? { file } : {}), doc };
+  const read = readVocabulary(doc);
+  return { ...(file ? { file } : {}), doc: read, written: doc };
 }
 
 /** Reads plywood.yml at `file`. */
@@ -96,7 +101,12 @@ export function loadConfig(file: string): PlywoodConfig {
   return parseConfig(readFileSync(file, "utf8"), file);
 }
 
-/** Every problem in the config: unknown keys, then each group's checks. */
+/**
+ * Every problem in the config: unknown keys, then each group's checks, then
+ * chant's vocabulary findings. A key a group already refuses gets no second
+ * error from the vocabulary, which checks the same words (`gate`,
+ * `evidence.identity`).
+ */
 export function checkConfig(config: PlywoodConfig): ConfigProblem[] {
   const known = knownKeys();
   const out: ConfigProblem[] = [];
@@ -105,6 +115,8 @@ export function checkConfig(config: PlywoodConfig): ConfigProblem[] {
     if (!known.has(key)) out.push(error(key, `is not a plywood key; the keys are ${[...known].sort().join(", ")}`));
   }
   for (const g of GROUPS) out.push(...g.check(config.doc));
+  const refused = new Set(out.filter((p) => p.severity === "error").map((p) => p.key));
+  out.push(...vocabularyProblems(config.written ?? config.doc).filter((p) => p.severity !== "error" || !refused.has(p.key)));
   return out;
 }
 

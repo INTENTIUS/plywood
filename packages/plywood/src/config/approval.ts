@@ -75,6 +75,7 @@ export const approval: ConfigGroup = {
         properties: {
           role: { type: "string", description: "A role .chant/trust.json gives the approvers." },
           roles: { type: "array", items: { type: "string" }, description: "Roles, any of which counts." },
+          count: { type: "integer", minimum: 1, default: 1, description: "Distinct approvers the stacks need." },
           quorum: { type: "integer", minimum: 1, default: 1, description: "Distinct approvers the stacks need." },
         },
       },

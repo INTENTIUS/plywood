@@ -12,7 +12,7 @@ stacks:
   shop/dev: { gate: never }
   shop/prod-east: { gate: always }
 approval_rules:
-  "*/prod-*": { role: platform, quorum: 2 }
+  "*/prod-*": { roles: [platform], count: 2 }
 ```
 
 A wave takes the strictest gate of its stacks. Each environment can use its own cloud identity. [Scope state and cloud access](/plywood/guides/scope-state-access/).

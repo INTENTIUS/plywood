@@ -17,6 +17,7 @@
  * install lines are src/images.ts's (chant's for a linked release) and check
  * the release checksums.
  */
+import { withVocabularyKeys } from "./vocabulary";
 import { DIGEST, ENGINE_ROOT, imageFor, imageReference, installLines, engineBin, parsePlugin, PLUGIN, TOOL_VERSIONS, type EngineName, type EnginePin } from "../images";
 import type { ChantRunner } from "../chant-config";
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type JsonSchema, type RawConfig } from "./types";
@@ -144,7 +145,7 @@ function linkedVersion(engine: EngineName, doc: RawConfig, versions: string[]): 
 export const images: ConfigGroup = {
   name: "images",
   keys: ["pulumi", "plunge", "image", "runners"],
-  schema: {
+  schema: withVocabularyKeys({
     pulumi: versionSchema("Pulumi CLI", TOOL_VERSIONS.pulumi),
     plunge: versionSchema("plunge", TOOL_VERSIONS.plunge),
     image: {
@@ -165,7 +166,7 @@ export const images: ConfigGroup = {
       description: "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
       anyOf: [runnerSpecSchema, { type: "object", minProperties: 1, not: { required: ["group"] }, propertyNames: { enum: [...RUNNER_STAGES] }, additionalProperties: runnerSpecSchema }],
     },
-  },
+  }, { runners: "runner" }),
   check(doc) {
     const forge = isObject(doc.forge) ? doc.forge.kind : undefined;
     const out: ConfigProblem[] = [...versionProblems(doc.pulumi, "pulumi"), ...versionProblems(doc.plunge, "plunge"), ...imageProblems(doc.image), ...runnersProblems(doc.runners, forge)];

@@ -129,6 +129,7 @@ function modelKeys(m: Record<string, unknown>, key: string): ConfigProblem[] {
 
 const modelSchema = {
   command: { type: "string", description: "The model command: the prompt on stdin, the answer on stdout." },
+  key_secret: { type: "string", default: DEFAULT_KEY_ENV, description: "The variable holding the model's key, the one secret the command sees." },
   key_env: { type: "string", default: DEFAULT_KEY_ENV, description: "The variable holding the model's key, the one secret the command sees." },
   timeout: { type: "integer", minimum: 1, description: "Minutes the command may run." },
 };

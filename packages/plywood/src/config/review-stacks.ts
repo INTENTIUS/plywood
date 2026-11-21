@@ -7,6 +7,7 @@
  * optional suffix, so chant's pulumi lexicon runs `destroy` and `stack rm`
  * on no other stack (src/review-stacks.ts).
  */
+import { withVocabularyKeys } from "./vocabulary";
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem } from "./types";
 
 export const DEFAULT_REVIEW_STACK_NAME = "pr-{number}";
@@ -23,7 +24,7 @@ export function reviewStackName(pattern: string, pr: number | string): string {
 export const reviewStacks: ConfigGroup = {
   name: "review_stacks",
   keys: ["review_stacks"],
-  schema: {
+  schema: withVocabularyKeys({
     review_stacks: {
       type: "object",
       additionalProperties: false,
@@ -35,7 +36,7 @@ export const reviewStacks: ConfigGroup = {
         ttl: { type: "string", pattern: TTL.source, description: "How long a review stack lives after its last update, such as 72h. chant's default when absent." },
       },
     },
-  },
+  }, { review_stacks: "ephemeral" }),
   check(doc) {
     const r = doc.review_stacks;
     if (r === undefined) return [];

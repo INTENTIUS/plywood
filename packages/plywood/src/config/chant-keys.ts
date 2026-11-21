@@ -11,7 +11,7 @@ export const PLYWOOD_KEY_FOR: Readonly<Record<string, string | null>> = {
   workflow: "apply.when",
   locks: "locks.when",
   lockGrain: "locks.grain",
-  prEnvironment: "review_stacks",
+  prEnvironment: "ephemeral",
   branches: "branches",
   labels: "labels",
   policy: "policy",
@@ -23,7 +23,7 @@ export const PLYWOOD_KEY_FOR: Readonly<Record<string, string | null>> = {
 
 /** Why `ci.<sub>` is refused, naming the plywood key that sets it. */
 export function chantKeyMessage(sub: string | undefined): string {
-  if (sub === undefined) return "is chant's block, and plywood.yml holds no chant key; set plywood's keys (apply, locks, review_stacks, branches, labels) and plywood sets chant's";
+  if (sub === undefined) return "is chant's block, and plywood.yml holds no chant key; set plywood's keys (apply, locks, ephemeral, branches, labels) and plywood sets chant's";
   const plywood = PLYWOOD_KEY_FOR[sub];
   if (plywood) return `is chant's key; set ${plywood} in plywood.yml, and plywood sets ci.${sub} from it`;
   if (plywood === null) return `is chant's key, and plywood sets ci.${sub} itself`;

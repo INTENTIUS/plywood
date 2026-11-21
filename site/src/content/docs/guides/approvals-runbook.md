@@ -12,11 +12,11 @@ plywood switches on chant's [approval rules](https://intentius.io/chant/guide/ap
 ```yaml
 approval: sealed
 approval_rules:
-  "shop/prod-*": { role: platform, quorum: 2 }
-  "*": { role: developers }
+  "shop/prod-*": { roles: [platform], count: 2 }
+  "*": { roles: [developers] }
 ```
 
-Both files are read at base. A rule that names a role counts only proven approvals. Pair it with `approval: sealed` for signed approvals or `approval: pr-review` for the forge's reviews. `plywood config check` warns when `approval` is left at `ledger`. `roles` takes a list, any of which counts. The author of a pull request never counts toward its own quorum.
+Both files are read at base. A rule that names a role counts only proven approvals. Pair it with `approval: sealed` for signed approvals or `approval: pr-review` for the forge's reviews. `plywood config check` warns when `approval` is left at `ledger`. `roles` takes a list, any of which counts. The author of a pull request never counts toward the approver count.
 
 ## An approval that no longer counts
 

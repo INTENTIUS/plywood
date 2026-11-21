@@ -240,6 +240,12 @@
             },
             "description": "Roles, any of which counts."
           },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Distinct approvers the stacks need."
+          },
           "quorum": {
             "type": "integer",
             "minimum": 1,
@@ -254,6 +260,10 @@
       "additionalProperties": false,
       "description": "Rego rules and CrossGuard policy packs in the preview job, feeding chant's gate. Read at base.",
       "properties": {
+        "path": {
+          "type": "string",
+          "description": "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line."
+        },
         "rego": {
           "type": "string",
           "description": "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line."
@@ -602,59 +612,133 @@
         }
       }
     },
+    "ephemeral": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template"
+      ],
+      "description": "A stack per open pull request. Off when absent.",
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "The stack whose config a review stack starts from, as project/stack."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^pr-\\{number\\}(?:-[a-z0-9][a-z0-9-]*)?$",
+          "default": "pr-{number}",
+          "description": "The review stack's name: pr-{number}, or pr-{number}-<suffix>. Only stacks named so are destroyed."
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^\\d+[mhd]$",
+          "description": "How long a review stack lives after its last update, such as 72h. chant's default when absent."
+        }
+      }
+    },
     "notify": {
       "type": "object",
       "additionalProperties": false,
       "description": "Chat and webhook messages when a wave waits, an update is refused or fails, or drift is found. Each value names a variable.",
       "properties": {
         "slack": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "webhook"
-          ],
-          "properties": {
-            "webhook": {
+          "oneOf": [
+            {
               "type": "string",
               "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
               "description": "The variable holding the incoming webhook's URL."
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "webhook"
+              ],
+              "properties": {
+                "webhook": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "The variable holding the incoming webhook's URL."
+                }
+              }
             }
-          }
+          ]
         },
         "teams": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "webhook"
-          ],
-          "properties": {
-            "webhook": {
+          "oneOf": [
+            {
               "type": "string",
               "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
               "description": "The variable holding the incoming webhook's URL."
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "webhook"
+              ],
+              "properties": {
+                "webhook": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "The variable holding the incoming webhook's URL."
+                }
+              }
             }
-          }
+          ]
         },
         "webhook": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "url",
-            "key"
-          ],
-          "description": "A generic webhook; each chant.notify/v1 event is signed with the key.",
-          "properties": {
-            "url": {
+          "description": "A generic webhook; each chant.notify/v1 event is signed with webhook_key. The variable holding the webhook's URL, or { url, key }.",
+          "oneOf": [
+            {
               "type": "string",
-              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-              "description": "The variable holding the webhook's URL."
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
             },
-            "key": {
-              "type": "string",
-              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-              "description": "The variable holding the signing key."
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "url",
+                "key"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "The variable holding the webhook's URL."
+                },
+                "key": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "description": "The variable holding the signing key."
+                }
+              }
             }
-          }
+          ]
+        },
+        "webhook_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the key the webhook's events are signed with."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "refused",
+              "failed",
+              "drift"
+            ]
+          },
+          "description": "The events to send: waiting, refused, failed, drift. Default: all of them."
+        },
+        "relay_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the relay key."
         },
         "on": {
           "type": "array",
@@ -684,6 +768,11 @@
         "endpoint": {
           "type": "string",
           "description": "The OTLP/HTTP base URL; /v1/traces is added."
+        },
+        "headers_secret": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The variable holding the OTLP headers, k=v,k2=v2."
         },
         "headers_env": {
           "type": "string",
@@ -774,10 +863,30 @@
             "issue",
             "pull-request",
             "up",
-            "none"
+            "none",
+            "off"
           ],
           "default": "issue",
           "description": "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only."
+        },
+        "wave-refused": {
+          "type": "string",
+          "enum": [
+            "diff",
+            "summary",
+            "off"
+          ],
+          "default": "diff",
+          "description": "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing."
+        },
+        "apply-failed": {
+          "type": "string",
+          "enum": [
+            "triage",
+            "off"
+          ],
+          "default": "triage",
+          "description": "triage: a failed update posts the stacks and resources that failed, with the error; off: nothing."
         },
         "wave_refused": {
           "type": "string",
@@ -788,15 +897,6 @@
           ],
           "default": "diff",
           "description": "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing."
-        },
-        "wave-refused": {
-          "type": "string",
-          "enum": [
-            "diff",
-            "summary",
-            "off"
-          ],
-          "description": "The vocabulary's spelling of wave_refused."
         },
         "apply_failed": {
           "type": "string",
@@ -851,6 +951,11 @@
               "type": "string",
               "description": "The model command: the prompt on stdin, the answer on stdout."
             },
+            "key_secret": {
+              "type": "string",
+              "default": "ANTHROPIC_API_KEY",
+              "description": "The variable holding the model's key, the one secret the command sees."
+            },
             "key_env": {
               "type": "string",
               "default": "ANTHROPIC_API_KEY",
@@ -883,6 +988,11 @@
         "command": {
           "type": "string",
           "description": "The model command: the prompt on stdin, the answer on stdout."
+        },
+        "key_secret": {
+          "type": "string",
+          "default": "ANTHROPIC_API_KEY",
+          "description": "The variable holding the model's key, the one secret the command sees."
         },
         "key_env": {
           "type": "string",
@@ -957,11 +1067,9 @@
       "description": "Pull request label to stack globs. A labelled pull request previews only the stacks its labels match."
     },
     "forge": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "The forge the jobs talk to. Read from the repository's remote when absent.",
-      "properties": {
-        "kind": {
+      "description": "The forge the jobs talk to: github, gitlab or forgejo. Read from the repository's remote when absent.",
+      "oneOf": [
+        {
           "type": "string",
           "enum": [
             "github",
@@ -969,11 +1077,29 @@
             "forgejo"
           ]
         },
-        "url": {
-          "type": "string",
-          "description": "The forge's base URL, for a self-hosted forge."
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab",
+                "forgejo"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "description": "The forge's base URL, for a self-hosted forge."
+            }
+          }
         }
-      }
+      ]
+    },
+    "forge_url": {
+      "type": "string",
+      "description": "The forge's base URL, for a self-hosted forge."
     },
     "pulumi": {
       "description": "The Pulumi CLI release the jobs run, such as 3.272.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
@@ -1135,6 +1261,106 @@
         }
       ]
     },
+    "runner": {
+      "description": "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[^\\s,]+$"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "group"
+              ],
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[^\\s,]+$"
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "not": {
+            "required": [
+              "group"
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "default",
+              "preview",
+              "up",
+              "drift"
+            ]
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^\\s,]+$"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\s,]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "group"
+                ],
+                "properties": {
+                  "group": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[^\\s,]+$"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
     "env": {
       "description": "Variables every job runs with: the waves, the drift jobs and the pull request jobs. Values are written into the workflow, so put a secret under pass.",
       "type": "object",
@@ -1169,6 +1395,23 @@
             "type": "string",
             "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "secrets"
+          ],
+          "properties": {
+            "secrets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              },
+              "uniqueItems": true
+            }
+          }
         }
       ]
     },
@@ -1177,8 +1420,36 @@
       "type": "integer",
       "minimum": 1
     },
-    "environments": {
+    "forge_environments": {
       "description": "Stack glob to the forge deployment environment its update jobs run in (GitHub and GitLab): a name, or a map with name and url. The first glob that matches a stack wins; stacks of one wave in different environments run in one job each.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "environments": {
+      "description": "The earlier spelling of forge_environments: stack glob to a name, or a map with name and url.",
       "type": "object",
       "additionalProperties": {
         "anyOf": [

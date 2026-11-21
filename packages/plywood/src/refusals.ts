@@ -44,7 +44,7 @@ export function refusalLine(refusal: Refusal, ctx: RefusalContext = {}): string 
     case "declined":
       return `An approver declined the change, so nothing was updated. Push a new change and preview it again.`;
     case "misplaced":
-      return `The job ran outside the forge environment, branch or runner plywood.yml gives this stack, and chant's job guard named the difference above, so nothing ran. Run it from that branch on that runner, or change environments and runners in plywood.yml and run '${PRODUCT} ci' again.`;
+      return `The job ran outside the forge environment, branch or runner plywood.yml gives this stack, and chant's job guard named the difference above, so nothing ran. Run it from that branch on that runner, or change forge_environments and runners in plywood.yml and run '${PRODUCT} ci' again.`;
   }
 }
 

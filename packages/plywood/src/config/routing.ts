@@ -27,19 +27,25 @@ const copy = (v: Record<string, string[]>): Record<string, string[]> => Object.f
 
 export const routing: ConfigGroup = {
   name: "routing",
-  keys: ["branches", "labels", "forge"],
+  keys: ["branches", "labels", "forge", "forge_url"],
   schema: {
     branches: { ...GLOB_MAP, description: "Branch name to stack globs. A stack a glob matches updates from that branch alone." },
     labels: { ...GLOB_MAP, description: "Pull request label to stack globs. A labelled pull request previews only the stacks its labels match." },
     forge: {
-      type: "object",
-      additionalProperties: false,
-      description: "The forge the jobs talk to. Read from the repository's remote when absent.",
-      properties: {
-        kind: { type: "string", enum: [...FORGES] },
-        url: { type: "string", description: "The forge's base URL, for a self-hosted forge." },
-      },
+      description: "The forge the jobs talk to: github, gitlab or forgejo. Read from the repository's remote when absent.",
+      oneOf: [
+        { type: "string", enum: [...FORGES] },
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            kind: { type: "string", enum: [...FORGES] },
+            url: { type: "string", description: "The forge's base URL, for a self-hosted forge." },
+          },
+        },
+      ],
     },
+    forge_url: { type: "string", description: "The forge's base URL, for a self-hosted forge." },
   },
   check(doc) {
     const out: ConfigProblem[] = [...globMapProblems(doc.branches, "branches"), ...globMapProblems(doc.labels, "labels")];

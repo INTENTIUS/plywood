@@ -12,7 +12,10 @@
  *                     with --forge it posts the note and the statuses
  *   plywood ci        the workflow: productPipelineJobs checks the words
  *                     against the jobs, and chant's generator writes the file
- *                     with plywood's bin in every line
+ *                     with plywood's bin in every line; under promotion,
+ *                     .chant/pipeline.ts and the pipeline's workflows
+ *                     (src/pipeline-jobs.ts), and with --check, whether the
+ *                     committed .chant/pipeline.ts is current
  *   plywood components|ci <sub>|run|lock|unlock ...
  *                     chant's own verbs, for the lines the generated jobs run
  *
@@ -43,7 +46,7 @@ import { writeReviewJobs } from "./agents";
 import { writeAgentJobs } from "./agent-jobs";
 import { applyFailedFacts, writeTriggerAgentJobs } from "./agent-triggers";
 import type { AgentSettings } from "./config/agents";
-import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
+import { COMMENT_WORDS, OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
 export interface StageIo {
   out: (s: string) => void;
@@ -57,9 +60,12 @@ export interface StageIo {
  * `ledger` for reading the ledger (plywood#20), and `audit-log` for chant's
  * audit-log reads (chant#4632: `audit-log unrecorded` lists the cloud writes
  * no recorded update made). `ci` is chant's only with a subcommand, such as
- * `ci check-job`, the apply-job guard (chant#4624).
+ * `ci check-job`, the apply-job guard (chant#4624). `pipeline`, `release`
+ * and `stage` are the pipeline's (plywood#156): the wave jobs read their
+ * stage's spec with `pipeline spec --stage`, the first stage cuts the release
+ * with `release cut`, and `reject` turns down a release at a stage's gate.
  */
-export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock", "query", "ledger", "audit-log"] as const;
+export const CHANT_PASSTHROUGH = ["components", "run", "lock", "unlock", "query", "ledger", "audit-log", "pipeline", "release", "stage", "reject"] as const;
 
 /** Flags whose next argument is a value, for splitting a command line. */
 const VALUED = new Set(["--base", "--pr", "--forge", "--env", "--output", "-o", "--stack", "--file", "--head", "--gate", "--branch", "--report-url", "--target"]);
@@ -95,7 +101,9 @@ export async function withChant(_what: string, _table: ExitTable, _io: StageIo, 
 /** A chant verb a generated job runs through the bin: passed to chant unchanged, with plywood's words. */
 export function passthrough(argv: string[], table: ExitTable, io: StageIo): Promise<number> {
   if (argv[0] === "run" && argv[1] === "wave") return runWave(argv, table, io);
-  return withChant(`${PRODUCT} ${argv[0]}`, table, io, (chant) => chant.runChantInProcess(argv, PRODUCT_WORDS));
+  // chant#5354: the comment jobs record `/plywood reject` under words that map it.
+  const words = argv[0] === "components" && (argv[1] === "pr-comment" || argv[1] === "pr-notes") ? COMMENT_WORDS : PRODUCT_WORDS;
+  return withChant(`${PRODUCT} ${argv[0]}`, table, io, (chant) => chant.runChantInProcess(argv, words));
 }
 
 /**
@@ -143,12 +151,37 @@ export async function check(args: string[], json: boolean, table: ExitTable, io:
     return table.failed;
   }
   if (!json) for (const line of r.lines) io.err(line);
+  // plywood#156: chant's findings on the waves' approval rules (chant#5349), in chant's words: a refusal fails the check.
+  const quorum = await quorumFindings(io.cwd);
+  for (const line of quorum.warnings) io.err(`${PRODUCT} check: warning: ${line}`);
+  if (quorum.refusals.length) {
+    for (const line of quorum.refusals) io.err(`${PRODUCT} check: ${line}`);
+    return table.failed;
+  }
   const at = base.value ?? io.env.BASE_SHA;
   if (!at) return usage("check needs --base <rev>, the commit the change is measured from (or BASE_SHA); the hooks are read there, so a change cannot remove its own check", table, io);
   const targets = positionals(base.rest);
   const output = takeFlag(base.rest, "--output");
   const argv = ["ci", "check", "--base", at, ...targets, ...(output.value ? ["--output", output.value] : []), ...(json ? ["--json"] : [])];
   return withChant(`${PRODUCT} check's hooks`, table, io, (chant) => chant.runChantInProcess(argv, PRODUCT_WORDS));
+}
+
+/**
+ * chant's findings on the waves spec's approval rules (chant#5349): a rule
+ * no approver can meet, and a count plain approval lines can meet. chant
+ * refuses the first when it builds the waves once its release turns the
+ * refusal on, and warns until then; plywood prints what chant says.
+ */
+export async function quorumFindings(cwd: string): Promise<{ warnings: string[]; refusals: string[] }> {
+  let spec: unknown;
+  try {
+    spec = readWavesSpec(cwd);
+  } catch {
+    return { warnings: [], refusals: [] };
+  }
+  if (!spec || typeof spec !== "object" || !Array.isArray((spec as { waves?: unknown }).waves)) return { warnings: [], refusals: [] };
+  const op = await import("@intentius/chant/op");
+  return op.opWavesQuorumFindings(spec as Parameters<typeof op.opWavesQuorumFindings>[0], await op.opWavesProofSourcesAt(cwd));
 }
 
 /**
@@ -244,9 +277,11 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   const envFlag = takeFlag(forgeFlag.rest, "--env");
   const outFlag = takeFlag(envFlag.rest, "--output");
   if (forgeFlag.missing || envFlag.missing || outFlag.missing) return usage("--forge, --env and --output each take a value", table, io);
-  const extra = outFlag.rest.filter((a) => a !== "--dry-run");
+  const extra = outFlag.rest.filter((a) => a !== "--dry-run" && a !== "--check");
   if (extra.length) return usage(`ci does not take ${extra.join(" ")}`, table, io);
   const dryRun = outFlag.rest.includes("--dry-run");
+  // plywood#156: --check compares .chant/pipeline.ts with what plywood.yml writes, and writes nothing.
+  const checkOnly = outFlag.rest.includes("--check");
 
   const path = findConfig(io.cwd);
   if (!path) return usage(`no plywood.yml in ${io.cwd} or above it; run '${PRODUCT} init' first`, table, io);
@@ -314,6 +349,34 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       return table.failed;
     }
     const waveJobs = jobs.waves && "control" in control ? { ...jobs.waves, spec: { ...(jobs.waves.spec as Record<string, unknown>), control: control.control } } : jobs.waves;
+    // plywood#156: under promotion, .chant/pipeline.ts from plywood.yml, and chant's pipeline workflows in place of the waves workflow.
+    const promoted = promotionOf(config.doc) !== undefined;
+    const pipelineJobs = async (check: boolean): Promise<number> => {
+      if (!waveJobs) {
+        io.err(`${PRODUCT} ci: promotion is set and there is no .chant/op-waves/${OP_NAME}.spec.json to build the stages' waves from; run '${PRODUCT} init' first`);
+        return table.failed;
+      }
+      const { repositoryStacks, writePipelineJobs } = await import("./pipeline-jobs");
+      const settings = toChantSettings(config);
+      return writePipelineJobs(chant, {
+        doc: config.doc,
+        settings,
+        forge,
+        spec: waveJobs.spec as Record<string, unknown>,
+        words: plan.words,
+        env,
+        ...("control" in control ? { control: control.control } : {}),
+        check,
+        stacks: await repositoryStacks(io.cwd, config.doc, settings),
+      }, table, io);
+    };
+    if (checkOnly) {
+      if (!promoted) {
+        io.err(`${PRODUCT} ci --check: plywood.yml sets no promotion, so there is no .chant/pipeline.ts to check`);
+        return table.done;
+      }
+      return pipelineJobs(true);
+    }
     const summary = {
       forge,
       env,
@@ -351,7 +414,11 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
       if (!json) io.err(`${PRODUCT} ci: chant's generator exited ${written.code} and wrote no ${output}; any file there before is back as it was`);
       return written.code;
     }
-    const wavesCode = waveJobs ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io, wavesEngine(toChantSettings(config).pipeline)) : table.done;
+    const wavesCode = promoted
+      ? await pipelineJobs(false)
+      : waveJobs
+        ? await writeWaveJobs(chant, forge, waveJobs, plan.words, table, io, wavesEngine(toChantSettings(config).pipeline))
+        : table.done;
     if (wavesCode !== table.done) return wavesCode;
     // The scheduled drift jobs, when plywood.yml sets drift.schedule (plywood#8).
     const driftCode = await writeDriftJobs(chant, forge, config.doc, plan.words, table, io, env);

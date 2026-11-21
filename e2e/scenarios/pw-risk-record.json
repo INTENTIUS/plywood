@@ -1,0 +1,98 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-risk-record",
+  "product": "plywood",
+  "claim": "pipeline/risk-record",
+  "title": "A merged change's release carries its risk score, which the dev stage reads under its risk keys (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "pipeline",
+      "do": "out-of-band",
+      "label": "main sets promotion and risk.approve_above, and plywood init writes .chant/pipeline.ts",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_RISK_OVERLAY:-pipeline-risk}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "do": "open",
+      "branch": "e2e/risk-events",
+      "overlay": "dev-events-7200",
+      "title": "dev: keep events for two hours"
+    },
+    {
+      "id": "events-plan",
+      "do": "plan",
+      "pull": "events",
+      "expect": [
+        {
+          "report": {
+            "status": "planned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "events-approve",
+      "do": "approve",
+      "pull": "events"
+    },
+    {
+      "id": "events-merge",
+      "do": "merge",
+      "pull": "events"
+    },
+    {
+      "id": "update",
+      "do": "out-of-band",
+      "label": "the merge's dev wave settled shop/dev",
+      "command": [
+        "plywood-e2e",
+        "wait-stacks",
+        "pulumi-up",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "do": "out-of-band",
+      "label": "workspace status shows the risk dev's release carries",
+      "command": [
+        "plywood-e2e",
+        "stage-status",
+        "dev",
+        "risk"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_RISK_OVERLAY": "promotion"
+    },
+    "note": "main sets no risk keys, so no score is made and the release carries none: the risk step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

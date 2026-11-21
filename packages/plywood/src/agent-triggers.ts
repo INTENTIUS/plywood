@@ -1,6 +1,6 @@
 /**
- * The agents a production alert, a failed update on merge and a schedule
- * start (plywood#157), from plywood.yml's `agent`. Each is chant's agent job
+ * The agents a production alert, a failed update on merge, a failed verify
+ * or soak and a schedule start (plywood#157, plywood#156), from plywood.yml's `agent`. Each is chant's agent job
  * in a workflow of its own (`productAlertAgent`, `productApplyFailedAgent`
  * and `productScheduleAgent`, chant#5329 and chant#5357); plywood maps its
  * keys onto chant's settings and writes the Op spec chant's generator reads.
@@ -15,6 +15,11 @@
  *                      jobs record each failed update as a fact: the waves
  *                      spec's `options.agentFacts` (src/waves-workflow.ts)
  *   agent.schedule     plywood-schedule-agent, on agent.schedule.cron
+ *   agent.verify-failed
+ *                      plywood-verify-failed-agent (chant#5339, plywood#156):
+ *                      under promotion, the pipeline's promote and wave jobs
+ *                      record each failed verify and failing soak check as a
+ *                      fact (src/pipeline-jobs.ts `agentFacts`)
  *   agent.max_runs, agent.command, agent.key_env, agent.timeout, agent.token_env
  *                      as for the comment agent, one limit for each agent's runs
  *
@@ -31,12 +36,13 @@ import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
 import { PRODUCT, type ProductWordsInput } from "./words";
 
-export type FactTrigger = "alert" | "apply-failed" | "schedule";
+export type FactTrigger = "alert" | "apply-failed" | "verify-failed" | "schedule";
 
 /** What each trigger is called in chant, and in the files plywood writes. */
 export const TRIGGER_OPS: Readonly<Record<FactTrigger, { op: string; overview: string }>> = {
   alert: { op: "plywood-alert-agent", overview: "A model opens a pull request for a production alert the relay recorded" },
   "apply-failed": { op: "plywood-apply-failed-agent", overview: "A model opens a pull request for an update that failed on merge" },
+  "verify-failed": { op: "plywood-verify-failed-agent", overview: "A model opens a pull request when a stage's verify or soak fails after an update" },
   schedule: { op: "plywood-schedule-agent", overview: "A model does a recurring task and opens a pull request" },
 };
 
@@ -45,13 +51,19 @@ export const triggerOpFile = (t: FactTrigger): string => `ops/${TRIGGER_OPS[t].o
 
 /** The triggers plywood.yml turns on, in a fixed order. */
 export function factTriggersOn(a: AgentSettings | undefined): FactTrigger[] {
-  return [...(a?.alert ? ["alert" as const] : []), ...(a?.applyFailed ? ["apply-failed" as const] : []), ...(a?.schedule ? ["schedule" as const] : [])];
+  return [...(a?.alert ? ["alert" as const] : []), ...(a?.applyFailed ? ["apply-failed" as const] : []), ...(a?.verifyFailed ? ["verify-failed" as const] : []), ...(a?.schedule ? ["schedule" as const] : [])];
 }
 
 /** The relay key's secret the apply jobs and the apply-failed agent share: the one agent.apply-failed names, else chant's default. */
 export function applyFailedFacts(a: AgentSettings | undefined): { relayKeyEnv?: string } | undefined {
   if (!a?.applyFailed) return undefined;
   return a.applyFailed.relayKeyEnv !== undefined ? { relayKeyEnv: a.applyFailed.relayKeyEnv } : {};
+}
+
+/** The relay key's secret the pipeline's jobs and the verify-failed agent share (chant#5339): the one agent.verify-failed names, else chant's default. */
+export function verifyFailedFacts(a: AgentSettings | undefined): { relayKeyEnv?: string } | undefined {
+  if (!a?.verifyFailed) return undefined;
+  return a.verifyFailed.relayKeyEnv !== undefined ? { relayKeyEnv: a.verifyFailed.relayKeyEnv } : {};
 }
 
 /** A trigger's Op file: the Op chant's generator discovers the workflow's name from. */
@@ -81,8 +93,9 @@ export function triggerSpec(chant: ChantProduct, t: FactTrigger, a: AgentSetting
     const s = a.schedule!;
     return chant.productScheduleAgent(words, { ...base, schedule: s.cron, task: s.task, ...(s.window !== undefined ? { window: s.window } : {}) });
   }
-  const f = (t === "alert" ? a.alert : a.applyFailed)!;
+  const f = (t === "alert" ? a.alert : t === "apply-failed" ? a.applyFailed : a.verifyFailed)!;
   const options = { ...base, ...(f.window !== undefined ? { window: f.window } : {}), ...(f.relayKeyEnv !== undefined ? { relayKeyEnv: f.relayKeyEnv } : {}) };
+  if (t === "verify-failed") return chant.productVerifyFailedAgent(words, options);
   return t === "alert" ? chant.productAlertAgent(words, options) : chant.productApplyFailedAgent(words, options);
 }
 
@@ -123,8 +136,9 @@ export async function writeTriggerAgentJobs(chant: ChantProduct, forge: ForgeKin
 
 /** What the person setting up a trigger still has to do outside plywood.yml. */
 function noteFor(t: FactTrigger, a: AgentSettings, forge: ForgeKind): [string] {
-  const key = (t === "schedule" ? undefined : (t === "alert" ? a.alert : a.applyFailed)?.relayKeyEnv) ?? "CHANT_RELAY_KEY";
+  const key = (t === "schedule" ? undefined : (t === "alert" ? a.alert : t === "apply-failed" ? a.applyFailed : a.verifyFailed)?.relayKeyEnv) ?? "CHANT_RELAY_KEY";
   if (t === "alert") return [`${PRODUCT} ci: agent.alert reads the alerts the relay recorded; point an alert source at the relay's POST /alert/<source> (chant's notify guide), and set ${key} from a secret${forge === "gitlab" ? ", and guard each job of .gitlab-ci.yml against the relay's trigger pipeline" : ""}`];
   if (t === "apply-failed") return [`${PRODUCT} ci: agent.apply-failed reads the failures the merge's wave jobs record; set ${key} from a secret for the wave jobs and the agent`];
+  if (t === "verify-failed") return [`${PRODUCT} ci: agent.verify-failed reads the failed verifies and soaks the pipeline's jobs record; set ${key} from a secret for those jobs and the agent`];
   return [`${PRODUCT} ci: agent.schedule runs on ${a.schedule!.cron}`];
 }

@@ -52,7 +52,7 @@ import {
 import { driftIssueTitle, driftOpName } from "../packages/plywood/src/words";
 import type { ApproveInput, Arm, BucketPort, Clock, HarnessModule, LedgerRecord, Person, SafeRunInstance } from "./harness";
 import { overlayFiles, readOverlay } from "./overlays";
-import { MCP_JS, PROMOTE_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROLLBACK_JS, ROWS_JS } from "./probes";
+import { CANARY_JS, MCP_JS, PROMOTE_JS, STAGE_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROLLBACK_JS, ROWS_JS } from "./probes";
 import { RELEASE_GATE } from "../packages/plywood/src/init/render";
 
 // ── reports ─────────────────────────────────────────────────────────────
@@ -557,26 +557,93 @@ export function deployGatedScript(env: string, label: string, by: string, approv
 }
 
 /**
+ * The lines that approve whichever gate a promote waits at, from `$out`:
+ * the stage's gate of the pipeline plywood writes under promotion (chant's
+ * own `chant approve <pipeline> <stage> ... --plan <digest>` line), else the
+ * project's release gate (`release gate: change set <digest>`). Exits 1 when
+ * the promote waited and named neither.
+ */
+function approveWaitingGate(what: string, approver: string): string[] {
+  return [
+    `line="$(printf '%s\\n' "$out" | grep -o 'chant approve [a-z0-9_-]* [a-z0-9_-]*[^\`]*--plan sha256:[0-9a-f]*' | head -n 1)"`,
+    RELEASE_GATE_DIGEST,
+    `if [ -n "$line" ]; then npx $line --approver ${quote(approver)} --yes;`,
+    `elif [ -n "$digest" ]; then plywood approve ${RELEASE_GATE} --plan "$digest" --approver ${quote(approver)} --yes;`,
+    `else echo ${quote(`${what} waited without naming the gate and digest it binds`)} >&2; exit 1; fi`,
+  ];
+}
+
+/**
  * The script `promote` runs: `plywood promote --to <env> --release <label>
- * --from <from>` as `by`. The release gate must wait (exit 3) and name the
- * change set it binds; `approver` approves that digest, and the same command
- * runs again with --json, whose document must record the deploy in <env>
- * (./probes.ts PROMOTE_JS). Any other exit of the first call, such as
- * chant's refusal of a promote that skips an environment, is the script's own.
+ * --from <from> --json` as `by`. Each time it waits (exit 3), `approver`
+ * approves the gate it names: under promotion the pipeline's stage gate
+ * first (plywood#156), then the project's release gate; the same command runs
+ * again, at most three times. The last document must record the deploy in
+ * <env> (./probes.ts PROMOTE_JS). Any other exit, such as chant's refusal of
+ * a promote that skips an environment, is the script's own.
  */
 export function promoteScript(env: string, label: string, from: string, by: string, approver: string): string {
-  const ask = `plywood promote --to ${quote(env)} --release ${quote(label)} --from ${quote(from)} --actor ${quote(by)}`;
+  const ask = `plywood promote --to ${quote(env)} --release ${quote(label)} --from ${quote(from)} --actor ${quote(by)} --json`;
   return [
-    "code=0",
-    `out="$(${ask} 2>&1)" || code=$?`,
-    `printf '%s\\n' "$out"`,
-    'if [ "$code" != 3 ]; then exit "$code"; fi',
-    RELEASE_GATE_DIGEST,
-    `test -n "$digest" || { echo ${quote("plywood promote waited without naming the change set its release gate binds")} >&2; exit 1; }`,
-    `plywood approve ${RELEASE_GATE} --plan "$digest" --approver ${quote(approver)} --yes`,
-    `${ask} --json > /tmp/plywood-e2e-promote.json`,
+    "code=3",
+    "round=0",
+    'while [ "$code" = 3 ] && [ "$round" -lt 3 ]; do',
+    "  round=$((round + 1))",
+    "  code=0",
+    `  ${ask} > /tmp/plywood-e2e-promote.json 2> /tmp/plywood-e2e-promote.err || code=$?`,
+    "  cat /tmp/plywood-e2e-promote.err >&2",
+    '  if [ "$code" != 3 ]; then break; fi',
+    '  out="$(cat /tmp/plywood-e2e-promote.json /tmp/plywood-e2e-promote.err)"',
+    ...approveWaitingGate("plywood promote", approver).map((l) => `  ${l}`),
+    "done",
+    'if [ "$code" != 0 ]; then exit "$code"; fi',
     `node -e ${quote(PROMOTE_JS)} /tmp/plywood-e2e-promote.json ${quote(env)}`,
   ].join("\n");
+}
+
+/**
+ * The script `promote-held` runs (plywood#156): `plywood promote --to <env>
+ * --release <label> --from <from>` as `by`, approving the gates it waits at
+ * as `promote` does, until a soak holds it: the promote must exit 3 with a
+ * line naming the soak, and nothing deploys to <env>. A promote that goes
+ * through, or stops for another reason, fails the step.
+ */
+export function promoteHeldScript(env: string, label: string, from: string, by: string, approver: string): string {
+  const ask = `plywood promote --to ${quote(env)} --release ${quote(label)} --from ${quote(from)} --actor ${quote(by)}`;
+  return [
+    "round=0",
+    'while [ "$round" -lt 3 ]; do',
+    "  round=$((round + 1))",
+    "  code=0",
+    `  out="$(${ask} 2>&1)" || code=$?`,
+    `  printf '%s\\n' "$out"`,
+    '  if [ "$code" != 3 ]; then echo "plywood promote exited $code, and a soak holds a promote with 3" >&2; exit 1; fi',
+    `  if printf '%s\\n' "$out" | grep -qi 'soak'; then echo ${quote(`a soak holds the promote into ${env}`)}; exit 0; fi`,
+    ...approveWaitingGate("plywood promote", approver).map((l) => `  ${l}`),
+    "done",
+    `echo ${quote(`plywood promote into ${env} waited at its gates and no soak held it`)} >&2`,
+    "exit 1",
+  ].join("\n");
+}
+
+/**
+ * The script `stage-status` runs (plywood#156): `chant workspace status
+ * <env> --json` on the forge's ledger, and the stage <env>'s <field> in the
+ * member's pipeline must be set (./probes.ts STAGE_JS): `soak`, `risk`,
+ * `rollback`, `release`, or `canaryHolds` holding.
+ */
+export function stageStatusScript(env: string, field: string): string {
+  return [`npx chant workspace status ${quote(env)} --json > /tmp/plywood-e2e-status.json`, `node -e ${quote(STAGE_JS)} /tmp/plywood-e2e-status.json ${quote(env)} ${quote(field)}`].join("\n");
+}
+
+/**
+ * The script `pipeline-canary` runs (plywood#156): `plywood pipeline spec
+ * --stage <stage>`, the stage's op-waves spec folded from the committed
+ * .chant/pipeline.ts, whose first wave must be marked `canary`
+ * (./probes.ts CANARY_JS).
+ */
+export function pipelineCanaryScript(stage: string): string {
+  return [`plywood pipeline spec --stage ${quote(stage)} > /tmp/plywood-e2e-stage.json`, `node -e ${quote(CANARY_JS)} /tmp/plywood-e2e-stage.json`].join("\n");
 }
 
 /** The commands `plywood-e2e` takes, with their arguments. */
@@ -614,7 +681,10 @@ export const COMMANDS: Record<string, string> = {
   revoke: "<label|none>: tag the commit <label> was cut from ci/revoked and push it; none revokes nothing",
   deploy: "<env> <label>: chant run --components --env <env> --release <label> at main's tip, in a job container, with the forge's ledger under it",
   "deploy-gated": "<env> <label>: chant run --components --env <env> --release <label> as the author, its component gate approved by the reviewer with chant's own line",
-  promote: "<env> <label> <from>: plywood promote --to <env> --release <label> --from <from> as the author, the release gate approved by the reviewer, and the deploy recorded (./probes.ts PROMOTE_JS)",
+  promote: "<env> <label> <from>: plywood promote --to <env> --release <label> --from <from> as the author, each gate it waits at approved by the reviewer, and the deploy recorded (./probes.ts PROMOTE_JS)",
+  "promote-held": "<env> <label> <from>: plywood promote --to <env> as the author, its gates approved by the reviewer, until a soak holds it with exit 3",
+  "stage-status": "<env> <field>: chant workspace status <env> --json, and stage <env>'s <field> set in the member's pipeline (./probes.ts STAGE_JS)",
+  "pipeline-canary": "<stage>: plywood pipeline spec --stage <stage>, whose first wave is the canary (./probes.ts CANARY_JS)",
   rollback: "<env> <label>: plywood rollback <env> --release <label> as the author, the release gate approved by the reviewer, and the restore recorded (./probes.ts ROLLBACK_JS)",
   "agent-secrets": ": the repository's Actions secrets the alert agent's workflow reads, set as the admin",
   alert: "<title>: chant's relay on loopback in a job container takes one signed generic alert, and its fact is on chant/lifecycle (./ports.ts alertScript)",
@@ -708,6 +778,15 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     case "promote":
       need(3);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteScript(a[0]!, a[1]!, a[2]!, c.author.login, c.reviewer.login))));
+    case "promote-held":
+      need(3);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteHeldScript(a[0]!, a[1]!, a[2]!, c.author.login, c.reviewer.login))));
+    case "stage-status":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(stageStatusScript(a[0]!, a[1]!))));
+    case "pipeline-canary":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, pipelineCanaryScript(a[0]!)));
     case "rollback":
       need(2);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(rollbackScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));

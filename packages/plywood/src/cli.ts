@@ -33,6 +33,7 @@ import { approve, override, resume, up } from "./up";
 import { upgrade } from "./upgrade";
 import { viewCommand } from "./view";
 import { cancelStack, exportStack, moveStack, promoteRelease, rollbackStack } from "./stack-ops";
+import { stageCommand } from "./stage-commands";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
 declare const __PLYWOOD_VERSION__: string | undefined;
@@ -74,7 +75,9 @@ export function helpText(): string {
     "  preview [<stack>] [--base <rev>] [--pr <n>] [--forge <kind>] [--target <urn>]... [--target-dependents] [--refresh]",
     "                                                      preview the stacks the change reaches; --forge posts the note",
     "  ci [--forge <kind>] [--env <env>] [--output <file>] [--dry-run]",
-    "                                                      write the pull request workflow",
+    "                                                      write the pull request workflow; with promotion, .chant/pipeline.ts",
+    "                                                      and the pipeline's waves and promote workflows",
+    "  ci --check                                          whether .chant/pipeline.ts is what plywood.yml writes",
     "  tips [<id>]                                         the tips a preview can name",
     "  up [--wave <k>] [--decide | --share <i> | --group <name>]",
     "                                                      run the merge's waves through the pulumi-up step",
@@ -96,6 +99,12 @@ export function helpText(): string {
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
     "  promote --to <env> [--release <name>] [--from <env>] [--allow-skip]",
     "                                                      carry a release to the next environment of promotion, behind its gate",
+    "  promote --to <env> --release <name> --urgent --reason <text>",
+    "                                                      pass the stage's gate on its urgent rule",
+    "  reject <op> <gate> --plan <digest> --reason <text> [--sign]",
+    "                                                      turn down the release a stage's gate waits on",
+    "  pause <env> --reason <text>                         stop releases entering a stage of promotion",
+    "  resume <env> --reason <text>                        let them in again; the newest release that waited enters",
     "  rollback <stack> [--digest <d>] | <env> --release <name>",
     "                                                      preview a release's program, then update behind its gate",
     "  action <stack> <name> [--anew]                      run an action plywood.yml declares: replace its command resource",
@@ -180,7 +189,10 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "check") return check(args.slice(1), json, table, stageIo);
   if (verb === "preview") return preview(args.slice(1), json, table, stageIo);
   if (verb === "up") return up(args.slice(1), json, table, stageIo);
+  // plywood#156: `plywood resume <env>` is chant's stage resume; without an environment it starts the cleared wave jobs.
+  if (verb === "resume" && args[1] !== undefined && !args[1].startsWith("-")) return stageCommand("resume", args.slice(1), json, table, stageIo);
   if (verb === "resume") return resume(args.slice(1), json, table, stageIo);
+  if (verb === "pause") return stageCommand("pause", args.slice(1), json, table, stageIo);
   if (verb === "approve") return approve(args.slice(1), json, table, stageIo);
   if (verb === "override") return override(args.slice(1), json, table, stageIo);
   if (verb === "export") return exportStack(args.slice(1), json, table, stageIo);

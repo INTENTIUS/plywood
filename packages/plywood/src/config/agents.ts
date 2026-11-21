@@ -26,6 +26,10 @@
  *                          (chant#5357). The triage comment stays
  *   agent.schedule         a map of cron, task and window: an agent does the
  *                          task on the cron and opens a pull request (chant#5357)
+ *   agent.verify-failed    true, or a map of window and relay_key_secret: an
+ *                          agent opens a pull request when a stage's verify
+ *                          or soak fails after an update (chant#5339). The
+ *                          pipeline's jobs record the failures (plywood#156)
  *   agent.command, agent.key_env, agent.timeout   as for review
  *   agent.max_runs         the most agent runs per day, the spend limit
  *   agent.token_env        the secret (GitHub, Forgejo) or protected variable
@@ -49,7 +53,7 @@ const SCHEDULE_KEYS = ["cron", "task", "window"] as const;
 /** chant's longest task (`agent.schedule.task`, the vocabulary's "at most 4000 characters"). */
 export const SCHEDULE_TASK_MAX = 4000;
 const REVIEW_KEYS = ["instructions", "command", "key_env", "timeout"] as const;
-const AGENT_KEYS = ["comment", "drift", "alert", "apply-failed", "schedule", "command", "key_env", "timeout", "max_runs", "token_env", "wave-refused"] as const;
+const AGENT_KEYS = ["comment", "drift", "alert", "apply-failed", "schedule", "verify-failed", "command", "key_env", "timeout", "max_runs", "token_env", "wave-refused"] as const;
 /** The refused-wave summary's keys, `agent.wave-refused.*` in chant's vocabulary. */
 export const WAVE_REFUSED_AGENT_KEYS = ["command", "key_secret", "timeout", "max_runs", "max_cost_usd"] as const;
 
@@ -85,6 +89,8 @@ export interface AgentSettings {
   applyFailed?: FactAgentSettings;
   /** `agent.schedule`, absent when off. */
   schedule?: ScheduleAgentSettings;
+  /** `agent.verify-failed` (chant#5339), absent when off. */
+  verifyFailed?: FactAgentSettings;
   command?: string;
   keyEnv: string;
   timeout?: number;
@@ -126,12 +132,14 @@ export function agentOf(doc: RawConfig): AgentSettings | undefined {
   const alert = factAgentOf(a.alert);
   const applyFailed = factAgentOf(a["apply-failed"]);
   const schedule = scheduleOf(a.schedule);
+  const verifyFailed = factAgentOf(a["verify-failed"]);
   return {
     comment: a.comment === true,
     drift: a.drift === true,
     ...(alert ? { alert } : {}),
     ...(applyFailed ? { applyFailed } : {}),
     ...(schedule ? { schedule } : {}),
+    ...(verifyFailed ? { verifyFailed } : {}),
     ...(typeof a.command === "string" ? { command: a.command } : {}),
     keyEnv: typeof a.key_env === "string" ? a.key_env : DEFAULT_KEY_ENV,
     ...(typeof a.timeout === "number" ? { timeout: a.timeout } : {}),
@@ -233,7 +241,7 @@ export const agents: ConfigGroup = {
     agent: {
       type: "object",
       additionalProperties: false,
-      description: "Agents that act on a request: /plywood agent <ask>, the drift agent's pull request, and the agents a production alert, a failed update on merge or a schedule starts. Each opens a pull request; none applies, approves or merges. All are off until set.",
+      description: "Agents that act on a request: /plywood agent <ask>, the drift agent's pull request, and the agents a production alert, a failed update on merge, a failed verify or soak, or a schedule starts. Each opens a pull request; none applies, approves or merges. All are off until set.",
       properties: {
         comment: { type: "boolean", default: false, description: "Answer /plywood agent <ask> on a pull request." },
         drift: { type: "boolean", default: false, description: "Open a pull request that fixes a drifted stack (respond.drift: pull-request)." },
@@ -255,6 +263,10 @@ export const agents: ConfigGroup = {
             task: { type: "string", maxLength: SCHEDULE_TASK_MAX, description: "What the agent does on each run, in your words." },
             window: factSchema.window,
           },
+        },
+        "verify-failed": {
+          description: "An agent opens a pull request when a stage's verify or soak check fails after an update. true, or a map. The promote and wave jobs record the failure.",
+          oneOf: [{ type: "boolean" }, { type: "object", additionalProperties: false, properties: factSchema }],
         },
         ...modelSchema,
         max_runs: { type: "integer", minimum: 1, description: "The most agent runs per day." },
@@ -293,8 +305,10 @@ export const agents: ConfigGroup = {
         for (const k of ["comment", "drift"] as const) if (a[k] !== undefined && typeof a[k] !== "boolean") out.push(error(`agent.${k}`, "is true or false"));
         if (a.token_env !== undefined && (typeof a.token_env !== "string" || !VARIABLE.test(a.token_env))) out.push(error("agent.token_env", "names the secret holding the push token, such as PLYWOOD_AGENT_TOKEN; the token itself never goes in plywood.yml"));
         if (a.max_runs !== undefined && (typeof a.max_runs !== "number" || !Number.isInteger(a.max_runs) || a.max_runs < 1)) out.push(error("agent.max_runs", "is a whole number of runs per day, 1 or more"));
-        out.push(...factAgentProblems("agent.alert", a.alert), ...factAgentProblems("agent.apply-failed", a["apply-failed"]), ...scheduleProblems(a.schedule));
-        const on = a.comment === true || a.drift === true || (a.alert !== undefined && a.alert !== false) || (a["apply-failed"] !== undefined && a["apply-failed"] !== false) || a.schedule !== undefined;
+        out.push(...factAgentProblems("agent.alert", a.alert), ...factAgentProblems("agent.apply-failed", a["apply-failed"]), ...factAgentProblems("agent.verify-failed", a["verify-failed"]), ...scheduleProblems(a.schedule));
+        const verifyOn = a["verify-failed"] !== undefined && a["verify-failed"] !== false;
+        if (verifyOn && doc.promotion === undefined) out.push(warning("agent.verify-failed", "is on and plywood.yml has no promotion, so no stage records a failed verify or soak"));
+        const on = a.comment === true || a.drift === true || (a.alert !== undefined && a.alert !== false) || (a["apply-failed"] !== undefined && a["apply-failed"] !== false) || a.schedule !== undefined || verifyOn;
         if (on && a.max_runs === undefined) out.push(warning("agent.max_runs", "is not set, so nothing limits how often an agent runs"));
         if (a.drift === true && !(isObject(doc.respond) && doc.respond.drift === "pull-request")) out.push(warning("agent.drift", "is true and respond.drift is not pull-request, so no drift run starts the agent"));
       }

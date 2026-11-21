@@ -137,7 +137,10 @@ describe("the trigger agents against the installed chant", () => {
     process.chdir(dir);
     const out = io(dir);
     try {
-      const code = await writeTriggerAgentJobs(real, "github", parseConfig(YML).doc, PRODUCT_WORDS, EXIT, out);
+      // Every trigger on, verify-failed too (plywood#156).
+      const all = parseConfig(YML.replace("  apply-failed: true\n", "  apply-failed: true\n  verify-failed: true\n")).doc;
+      expect(Object.keys(all.agent as object)).toContain("verify-failed");
+      const code = await writeTriggerAgentJobs(real, "github", all, PRODUCT_WORDS, EXIT, out);
       const said = out.stderr.join("\n");
       expect(said).not.toContain("refused");
       expect(code).toBe(EXIT.done);

@@ -49,6 +49,7 @@ import type { ForgeTargetOptions } from "@intentius/chant/pr-forge";
 import type * as PulumiLexicon from "@intentius/chant-lexicon-pulumi";
 import type { PulumiStackExportResult, PulumiStackMoveResult, PulumiStackOpOutcome } from "@intentius/chant-lexicon-pulumi";
 import { toChantSettings, type ChantMemberSettings } from "./chant-config";
+import { approvalSet, DEFAULT_APPROVAL } from "./config/approval";
 import { pulumiCloudOf } from "./config/identity";
 import { checkConfig, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
 import { listedPromotionStacks, promotionOf, promotionTargets, stageTargetsOf } from "./config/promotion";
@@ -149,10 +150,18 @@ export function resolveStack(config: PlywoodConfig, path: string, key: string, d
   };
 }
 
-/** Which approvals count for a request: plywood.yml's `approval` and `approval_rules`, as chant reads them. */
+/**
+ * Which approvals count for a request: plywood.yml's `approval` and
+ * `approval_rules`, as chant reads them. A request has no pull request to
+ * review, so the `pr-review` the waves take by default under rules
+ * (src/config/approval.ts `approvalOf`) does not apply here: the mode is
+ * plywood.yml's own `approval`, else `ledger`.
+ */
 export function requestRules(config: PlywoodConfig): StackOpCommon["rules"] {
   const p = toChantSettings(config).pipeline;
-  return { mode: p.approval ?? "ledger", ...(p.quorum?.length ? { quorum: p.quorum } : {}) };
+  const mode = approvalSet(config.doc.approval) ? config.doc.approval : DEFAULT_APPROVAL;
+  // chant's gated request types its rules as plain rules; a group in approval_rules reaches chant as written.
+  return { mode, ...(p.quorum?.length ? { quorum: p.quorum } : {}) } as StackOpCommon["rules"];
 }
 
 /** The backend a stack names, for the engine's run, when the environment names none. */
@@ -477,11 +486,14 @@ export async function promoteRelease(args: string[], json: boolean, table: ExitT
   const from = takeFlag(to.rest, "--from");
   const release = takeFlag(from.rest, "--release");
   const actor = takeFlag(release.rest, "--actor");
-  for (const [flag, f] of [["--to", to], ["--from", from], ["--release", release], ["--actor", actor]] as const) {
+  // plywood#156: chant's urgent rule (chant#5355) takes --urgent with a one-line --reason.
+  const reason = takeFlag(actor.rest, "--reason");
+  for (const [flag, f] of [["--to", to], ["--from", from], ["--release", release], ["--actor", actor], ["--reason", reason]] as const) {
     if (f.missing) return usage(`${flag} takes a value`, table, io);
   }
-  const switches: string[] = actor.rest.filter((a) => a === "--dry-run" || a === "--events-json" || a === "--allow-skip");
-  const rest = actor.rest.filter((a) => !switches.includes(a));
+  const switches: string[] = reason.rest.filter((a) => a === "--dry-run" || a === "--events-json" || a === "--allow-skip" || a === "--urgent" || a === "--pending");
+  const rest = reason.rest.filter((a) => !switches.includes(a));
+  if (switches.includes("--urgent") && (!release.value || !reason.value)) return usage(`promote --urgent names the release and why: ${PROMOTE_WORDS.urgentUsage}`, table, io);
   const extra = rest.filter((a) => a.startsWith("-"));
   if (extra.length) return usage(`promote does not take ${extra.join(" ")}`, table, io);
   const named = positionals(rest);
@@ -502,6 +514,7 @@ export async function promoteRelease(args: string[], json: boolean, table: ExitT
     ...(from.value ? ["--from", from.value] : []),
     ...(release.value ? ["--release", release.value] : []),
     ...(actor.value ? ["--actor", actor.value] : []),
+    ...(reason.value ? ["--reason", reason.value] : []),
     ...switches,
     ...(json ? ["--json"] : []),
   ];

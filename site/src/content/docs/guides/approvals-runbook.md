@@ -16,7 +16,7 @@ approval_rules:
   "*": { roles: [developers] }
 ```
 
-Both files are read at base. A rule that names a role counts only proven approvals. Pair it with `approval: sealed` for signed approvals or `approval: pr-review` for the forge's reviews. `plywood config check` warns when `approval` is left at `ledger`. `roles` takes a list, any of which counts. The author of a pull request never counts toward the approver count.
+Both files are read at base. A rule that names a role counts only proven approvals. Pair it with `approval: sealed` for signed approvals or `approval: pr-review` for the forge's reviews. With `approval_rules` and no `approval` key, plywood uses `pr-review`, so the merged pull request's reviews prove its reviewers even in a repository whose signers file names nobody. `roles` takes a list, any of which counts. The author of a pull request never counts toward its own quorum.
 
 ## An approval that no longer counts
 

@@ -34,7 +34,7 @@ import { join } from "node:path";
 import { applyMergeOf, applyWhenOf } from "./config/apply";
 import type { RawConfig } from "./config/types";
 import { checkConfig, findConfig, loadConfig } from "./config/index";
-import { planEnvironment } from "./config/promotion";
+import { planEnvironment, promotionOf } from "./config/promotion";
 import { RELEASE_GATE } from "./init/render";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
@@ -62,9 +62,11 @@ export const RELEASE_GATE_OP = "release";
 
 export function approveTarget(
   gate: string,
-  opts: { pr?: string; stack?: string; op?: string },
+  opts: { pr?: string; stack?: string; op?: string; stages?: readonly string[] },
 ): { op: string; gate: string } | { error: string } {
   if (opts.op) return { op: opts.op, gate };
+  // A stage's gate of .chant/pipeline.ts (plywood#156), and the gate a promote that skips the stage waits at: the pipeline's op, named plywood (src/pipeline.ts PIPELINE_NAME).
+  if (opts.stages?.some((s) => gate === s || gate === `${s}-skip`)) return { op: PRODUCT, gate };
   // A promote, rollback or redeploy waits at the release gate, which chant records under its release op.
   if (gate === RELEASE_GATE) return { op: RELEASE_GATE_OP, gate };
   // `plywood approve pr-12` names the pull request's op; its gate is `up`.
@@ -130,7 +132,9 @@ export async function approve(args: string[], json: boolean, table: ExitTable, i
   const plan = passed.argv[passed.argv.indexOf("--plan") + 1];
   // chant#4607: `approve up --plan <digest>` finds its pull request from the digest.
   const byPlan = gate === PR_GATE && !prNumber && !op.value && passed.argv.includes("--plan");
-  const target = byPlan ? undefined : approveTarget(gate, { pr: prNumber, stack: stack.value, op: op.value });
+  const configPath = findConfig(io.cwd);
+  const stages = configPath ? promotionOf(loadConfig(configPath).doc) : undefined;
+  const target = byPlan ? undefined : approveTarget(gate, { pr: prNumber, stack: stack.value, op: op.value, ...(stages ? { stages } : {}) });
   if (target && "error" in target) return usage(target.error, table, io);
   if (!passed.argv.includes("--plan") && !passed.argv.includes("--expire")) {
     return usage(`approve needs --plan <digest>, the digest the preview printed, so a change that moved since is never approved in its place`, table, io);

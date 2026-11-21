@@ -237,6 +237,14 @@ export interface WavesSpecInput {
   policy?: boolean;
   /** The wave cost hold (chant `holds.cost`, from the pulumi lexicon's `pulumiCostHold`). */
   cost?: Record<string, unknown>;
+  /** `waves.canary` is set: the first wave, named `canary`, is marked chant's canary (chant#5327), whose soak holds the waves after it. */
+  canary?: boolean;
+  /** `risk.approve_above`: over the score a wave waits whatever its gate says (chant#5325 `holds.risk`). */
+  riskApproveAbove?: number;
+  /** `replan_dependents`: the stacks whose dependents are previewed again after an update (chant#5345). */
+  replanDependents?: string[];
+  /** The approval each wave names (src/config/approval.ts `wavesApprovalOf`); without it chant gives each wave the pull request's. */
+  approval?: string;
 }
 
 /**
@@ -256,10 +264,13 @@ export function wavesSpec(input: WavesSpecInput): Record<string, unknown> {
     step: { kind: "pulumi-up" },
     ...(input.quorum && input.quorum.length > 0 ? { approvals: { quorum: input.quorum } } : {}),
     ...(input.notify ? { notify: input.notify } : {}),
-    ...(input.policy || input.cost ? { holds: { ...(input.policy ? { policy: true } : {}), ...(input.cost ? { cost: input.cost } : {}) } } : {}),
-    waves: waves.map((w) => {
+    ...(input.policy || input.cost || input.riskApproveAbove !== undefined
+      ? { holds: { ...(input.policy ? { policy: true } : {}), ...(input.cost ? { cost: input.cost } : {}), ...(input.riskApproveAbove !== undefined ? { risk: { approveAbove: input.riskApproveAbove } } : {}) } }
+      : {}),
+    ...(input.replanDependents?.length ? { replanDependents: [...input.replanDependents] } : {}),
+    waves: waves.map((w, i) => {
       const gate = w.stacks.map((s) => s.gate ?? input.gate).reduce((a, b) => (STRICTNESS[b] > STRICTNESS[a] ? b : a));
-      return { name: w.name, gate, runs: w.stacks.map((s) => ({ target: s.key, input: stepInput(s) })) };
+      return { name: w.name, ...(input.canary && i === 0 && w.name === "canary" ? { canary: true } : {}), gate, ...(input.approval ? { approval: input.approval } : {}), runs: w.stacks.map((s) => ({ target: s.key, input: stepInput(s) })) };
     }),
   };
 }

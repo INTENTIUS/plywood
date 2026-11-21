@@ -1,0 +1,67 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-stage-canary",
+  "product": "plywood",
+  "claim": "pipeline/canary",
+  "title": "waves.canary is the first wave of each stage of the pipeline plywood writes, marked as chant's canary (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "pipeline",
+      "do": "out-of-band",
+      "label": "main sets promotion and waves.canary, and plywood init writes .chant/pipeline.ts",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_CANARY_OVERLAY:-pipeline-canary}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "do": "out-of-band",
+      "label": "the dev stage's spec, folded from the committed file, marks its first wave canary",
+      "command": [
+        "plywood-e2e",
+        "pipeline-canary",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "canary",
+      "do": "out-of-band",
+      "label": "the prod-us stage's first wave is the canary too",
+      "command": [
+        "plywood-e2e",
+        "pipeline-canary",
+        "prod-us"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_CANARY_OVERLAY": "promotion"
+    },
+    "note": "main sets promotion without waves.canary, so no wave is marked canary: the dev step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

@@ -285,18 +285,19 @@ describe("pw-promote", () => {
     await expect(runCommand(t.c, ["promote", "staging", "shop-p1"])).rejects.toThrow(/takes <env> <label> <from>/);
   });
 
-  it("approves the change set the release gate names as the reviewer, and reads the deploy from the second run", () => {
+  it("approves each gate it waits at as the reviewer, and reads the deploy from the last run", () => {
     const script = promoteScript("prod-us", "shop-p1", "staging", "tutor", "reviewer");
-    expect(script).toContain('if [ "$code" != 3 ]; then exit "$code"; fi');
+    expect(script).toContain('if [ "$code" != 3 ]; then break; fi');
+    expect(script).toContain('if [ "$code" != 0 ]; then exit "$code"; fi');
     expect(script).toContain(`plywood approve release --plan "$digest" --approver 'reviewer' --yes`);
-    expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
+    expect(script.lastIndexOf("--approver")).toBeLessThan(script.indexOf("node -e"));
     const gated = deployGatedScript("dev", "shop-p1", "tutor", "reviewer");
     expect(gated).toContain("npx chant approve shop release --env 'dev' --approver 'reviewer' --yes");
   });
 
   it("reads the digest off the release gate's line", () => {
     const script = promoteScript("prod-us", "shop-p1", "staging", "tutor", "reviewer");
-    const line = script.split("\n").find((l) => l.startsWith("digest="))!;
+    const line = script.split("\n").map((l) => l.trim()).find((l) => l.startsWith("digest="))!;
     const out = 'release gate: change set jcs1-sha256:ab12 for "prod-us", 1 entry, 0 hole(s)';
     const r = spawnSync("sh", ["-c", `out=${JSON.stringify(out)}\n${line}\nprintf '%s' "$digest"`], { encoding: "utf8" });
     expect(r.stdout).toBe("jcs1-sha256:ab12");

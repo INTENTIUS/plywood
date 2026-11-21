@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseYAML } from "@intentius/chant/yaml";
 import { agents } from "./agents";
 import { apply } from "./apply";
-import { approval } from "./approval";
+import { approval, APPROVAL_DEFS } from "./approval";
 import { chantKeys } from "./chant-keys";
 import { control } from "./control";
 import { cost } from "./cost";
@@ -32,11 +32,12 @@ import { reviewStacks } from "./review-stacks";
 import { routing } from "./routing";
 import { stacks } from "./stacks";
 import { readVocabulary, vocabularyProblems } from "./vocabulary";
+import { stage } from "./stage";
 import { error, isObject, type ConfigGroup, type ConfigProblem, type JsonSchema, type RawConfig } from "./types";
 
 export type { ConfigGroup, ConfigProblem, RawConfig } from "./types";
 
-export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, cost, identity, reviewStacks, observe, drift, agents, routing, images, jobs, promotion, control, evidence, later];
+export const GROUPS: readonly ConfigGroup[] = [chantKeys, stacks, engine, apply, locks, approval, policy, cost, identity, reviewStacks, observe, drift, agents, routing, images, jobs, promotion, stage, control, evidence, later];
 
 /** The names chant's pulumi lexicon also looks for (chant#4559, member-engine.ts `PLYWOOD_FILES`). */
 export const CONFIG_NAMES = ["plywood.yml", "plywood.yaml"] as const;
@@ -134,6 +135,7 @@ export function plywoodSchema(): JsonSchema {
     type: "object",
     additionalProperties: false,
     properties,
+    $defs: APPROVAL_DEFS,
   };
 }
 

@@ -18,6 +18,7 @@
  *     read_token_secret: CHANT_CONTROL_READ_TOKEN
  *     ref: main
  *     api_base: http://127.0.0.1:3000/api/v1
+ *     release: true                         the dispatch carries the release digest (chant#5356)
  *
  * The checks here are the shape; chant's `controlSettingsProblems` checks
  * the rest when `plywood ci` resolves the target.
@@ -61,6 +62,7 @@ export function controlOf(doc: RawConfig): ChantControlSettings | undefined {
     if (key === "repo" || key === "op") continue;
     if (typeof c[key] === "string") out[chant] = c[key];
   }
+  if (c.release === true) out.release = true;
   return out as unknown as ChantControlSettings;
 }
 
@@ -72,9 +74,11 @@ export function controlOf(doc: RawConfig): ChantControlSettings | undefined {
  * the cross-stack edges (plywood#28).
  */
 export function controlBuildArgv(doc: RawConfig, member: string): string[] {
-  const settings = controlOf(doc) as unknown as Record<string, string> | undefined;
-  if (!settings) return [];
-  const { repo, ...rest }: Record<string, string> = { member, ...settings };
+  const all = controlOf(doc) as unknown as Record<string, unknown> | undefined;
+  if (!all) return [];
+  // `release` is the dispatch's after an update, not a setting of the note job's read.
+  const { release: _release, ...settings } = all;
+  const { repo, ...rest } = { member, ...settings } as Record<string, string>;
   return ["--control", repo!, ...Object.entries(rest).flatMap(([k, v]) => ["--control-setting", `${k}=${v}`])];
 }
 
@@ -99,6 +103,7 @@ export const control: ConfigGroup = {
             read_token_secret: { type: "string", description: "The secret holding a read-only token for the control repo. Default CHANT_CONTROL_READ_TOKEN." },
             ref: { type: "string", description: "The branch a GitLab or Forgejo dispatch runs on. Default main." },
             api_base: { type: "string", description: "The forge's REST base, when the host's usual one is not it." },
+            release: { type: "boolean", default: false, description: "The plywood-applied dispatch carries the release digest of the updated commit, so the control repo reads that release's artifacts." },
           },
         },
       ],
@@ -109,7 +114,8 @@ export const control: ConfigGroup = {
     if (c === undefined) return [];
     if (typeof c === "string") return controlRepoKey(c).split("/").length >= 3 ? [] : [error("control", `${c} names no host/owner/name`)];
     if (!isObject(c)) return [error("control", "must be the control repo's project key, or a mapping with repo")];
-    const out: ConfigProblem[] = [...onlyKeys(c, Object.keys(CONTROL_KEYS), "control")];
+    const out: ConfigProblem[] = [...onlyKeys(c, [...Object.keys(CONTROL_KEYS), "release"], "control")];
+    if (c.release !== undefined && typeof c.release !== "boolean") out.push(error("control.release", "is true or false"));
     if (typeof c.repo !== "string") out.push(error("control.repo", "must name the control repo, such as github.com/acme/infra-control"));
     else if (controlRepoKey(c.repo).split("/").length < 3) out.push(error("control.repo", `${c.repo} names no host/owner/name`));
     for (const key of Object.keys(CONTROL_KEYS)) {

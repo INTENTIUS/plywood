@@ -32,13 +32,14 @@ import type { ChantGatePolicy } from "../chant-config";
 import { environmentOf } from "../init/detect";
 import { gateOf } from "./approval";
 import { stacksOf } from "./stacks";
-import { error, isObject, onlyKeys, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
+import { stageEntryProblems, STAGE_ENTRY_KEYS } from "./stage";
+import { error, isObject, type ConfigGroup, type ConfigProblem, type RawConfig } from "./types";
 
 /** An environment name: lowercase letters, digits, `-` and `_`, as chant names an environment. */
 export const ENVIRONMENT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
-/** The keys a stage entry under `environments.<name>` takes. */
-export const STAGE_KEYS = ["targets"] as const;
+/** The keys a stage entry under `environments.<name>` takes: `targets` and the stage keys (src/config/stage.ts). */
+export const STAGE_KEYS = STAGE_ENTRY_KEYS;
 
 /** The pull request environments chant names `pr-<n>`, which no stage may take. */
 const PR_ENVIRONMENT = /^pr-[0-9]+$/;
@@ -60,8 +61,13 @@ export function isForgeEnvironmentEntry(value: unknown): boolean {
   return keys.length > 0 && keys.every((k) => k === "name" || k === "url");
 }
 
-/** Whether an `environments` entry is a stage entry: a mapping of stage keys, any mapping that is not a glob's forge environment. */
-export function isStageEntry(value: unknown): value is { targets?: unknown } {
+/**
+ * Whether an `environments` entry is a stage entry: a mapping of stage keys
+ * (src/config/stage.ts), any mapping that is not a glob's forge environment.
+ * A mapping with a key no stage takes is a stage entry too, and the stage
+ * check names the key.
+ */
+export function isStageEntry(value: unknown): value is { targets?: unknown } & Record<string, unknown> {
   return isObject(value) && !isForgeEnvironmentEntry(value);
 }
 
@@ -178,7 +184,10 @@ export const promotion: ConfigGroup = {
     const p = doc.promotion;
     const stageEntries = isObject(doc.environments) ? Object.entries(doc.environments).filter(([, e]) => isStageEntry(e)) : [];
     if (p === undefined) {
-      for (const [env] of stageEntries) out.push(error(`environments.${env}.targets`, "names a stack for a stage, and plywood.yml has no promotion; list the environments in order under promotion"));
+      for (const [env, entry] of stageEntries) {
+        const first = Object.keys(entry as Record<string, unknown>).find((k) => (STAGE_KEYS as readonly string[]).includes(k)) ?? "targets";
+        out.push(error(`environments.${env}.${first}`, first === "targets" ? "names a stack for a stage, and plywood.yml has no promotion; list the environments in order under promotion" : "sets a stage, and plywood.yml has no promotion; list the environments in order under promotion"));
+      }
       return out;
     }
     if (!Array.isArray(p) || p.some((e) => typeof e !== "string")) return [error("promotion", "must be a list of environment names, first to last")];
@@ -192,11 +201,12 @@ export const promotion: ConfigGroup = {
     if (twice.length) out.push(error("promotion", `lists ${[...new Set(twice)].join(", ")} twice; each environment comes once`));
     for (const [env, entry] of stageEntries) {
       const e = entry as Record<string, unknown>;
-      out.push(...onlyKeys(e, STAGE_KEYS, `environments.${env}`));
       if (!names.includes(env)) out.push(error(`environments.${env}`, `is a stage, and promotion does not list ${env}`));
       if (e.targets !== undefined && (!isObject(e.targets) || Object.values(e.targets).some((v) => typeof v !== "string" || v === ""))) {
         out.push(error(`environments.${env}.targets`, "maps each project to the stack it updates in the environment, as stack or project/stack"));
       }
+      // plywood#156: the stage keys, as chant's vocabulary names them.
+      out.push(...stageEntryProblems(env, e, doc, names));
     }
     const listed = listedPromotionStacks(doc);
     if (out.length === 0 && listed.length > 0) {

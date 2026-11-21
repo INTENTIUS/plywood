@@ -47,7 +47,17 @@ export interface ChantQuorumRule {
   count: number;
   roles?: string[];
   notAuthor?: boolean;
+  /** Only approvers a seal or a review proves count toward `count` (chant#5349). */
+  proven?: boolean;
+  /** The rule's name in its progress line, the note and the pending fact (chant#5354). */
+  name?: string;
 }
+
+/** A group of rules (chant#5354 `GateQuorumAll`, `GateQuorumAny`): met when all of them are, or one. */
+export type ChantQuorumGroup = { name?: string; all: ChantQuorumNode[] } | { name?: string; any: ChantQuorumNode[] };
+
+/** A rule or a group, as a gate's `quorum` lists them (chant `GateQuorumNode`). */
+export type ChantQuorumNode = ChantQuorumRule | ChantQuorumGroup;
 
 export interface ChantCiSettings {
   workflow?: ChantCiWorkflow;
@@ -64,6 +74,10 @@ export interface ChantCiSettings {
   reportUrl?: string;
   branches?: Record<string, string[]>;
   labels?: Record<string, string[]>;
+  /** The change risk each preview scores (chant#5325 `ChangeRiskSettings`), from plywood.yml's `risk`, read at base. */
+  risk?: { approveAbove?: number; questions?: Array<{ id: string; text: string; weight: number; approveAbove?: number }> };
+  /** Each environment's config and secret set (chant#5348 `EnvironmentSets`), from `environments.<name>` and `config_sets`. */
+  environmentSets?: { environments: Record<string, unknown>; configSets?: Record<string, unknown> };
 }
 
 export interface ChantMemberSettings {
@@ -93,7 +107,7 @@ export interface ChantPipelineSettings {
   gate?: ChantGatePolicy;
   approval?: ChantApprovalSource;
   /** The rules a gate's approvals must meet. */
-  quorum?: ChantQuorumRule[];
+  quorum?: ChantQuorumNode[];
   /** An approval by the pull request's author never counts. */
   excludeAuthor?: boolean;
   waves?: string[][];
@@ -161,6 +175,8 @@ export interface ChantControlSettings {
   readTokenSecret?: string;
   ref?: string;
   apiBase?: string;
+  /** The `plywood-applied` dispatch carries the release digest of the updated commit (chant#5356, `control.release`). */
+  release?: boolean;
 }
 
 export interface ChantSettings {

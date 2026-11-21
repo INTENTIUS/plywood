@@ -183,6 +183,10 @@ describe("plywood promote", () => {
 
   it("approves the release gate under chant's release op", () => {
     expect(approveTarget(RELEASE_GATE, {})).toEqual({ op: RELEASE_GATE_OP, gate: RELEASE_GATE });
+    // A stage's gate of .chant/pipeline.ts, and its skip gate, are the pipeline's (plywood#156).
+    expect(approveTarget("staging", { stages: ["dev", "staging"] })).toEqual({ op: "plywood", gate: "staging" });
+    expect(approveTarget("staging-skip", { stages: ["dev", "staging"] })).toEqual({ op: "plywood", gate: "staging-skip" });
+    expect(approveTarget("wave-1", { stages: ["dev", "staging"] })).toEqual({ op: "pulumi-up", gate: "wave-1" });
   });
 });
 
@@ -254,16 +258,26 @@ describe.runIf(hasPulumi)("a release carried dev, staging, prod on the installed
       git("push", "-q", "origin", "main");
       git("tag", "-a", `ci/green/${git("rev-parse", "HEAD")}`, "-m", "green");
 
-      /** Runs `args` as ana: it waits at the release gate, bo approves the change set it names, and the same command runs. */
+      /**
+       * Runs `args` as ana: it waits at the stage's gate of .chant/pipeline.ts
+       * (plywood#156), then at the release gate; bo approves each with the line
+       * it prints, and the same command runs again.
+       */
       const approved = async (env: string, ...args: string[]) => {
-        const waiting = await plywood(...args, "--actor", "ana");
-        expect(waiting.code, waiting.text).toBe(T.waiting);
-        const digest = new RegExp(`release gate: change set (\\S+) for "${env}"`).exec(waiting.text)?.[1];
-        expect(digest, waiting.text).toBeDefined();
-        const ok = await plywood("approve", RELEASE_GATE, "--plan", digest!, "--approver", "bo", "--yes");
-        expect(ok.code, ok.text).toBe(0);
-        const ran = await plywood(...args, "--actor", "ana");
-        expect(ran.code, ran.text).toBe(0);
+        const gates: string[] = [];
+        for (let round = 0; round < 3; round++) {
+          const run = await plywood(...args, "--actor", "ana");
+          if (run.code === 0) break;
+          expect(run.code, run.text).toBe(T.waiting);
+          const stage = new RegExp(`approve (${env}) --plan ((?:jcs1-)?sha256:[0-9a-f]{64})`).exec(run.text);
+          const release = new RegExp(`release gate: change set (\\S+) for "${env}"`).exec(run.text)?.[1];
+          const [gate, digest] = stage ? [stage[1]!, stage[2]!] : [RELEASE_GATE, release];
+          expect(digest, run.text).toBeDefined();
+          gates.push(gate);
+          const ok = await plywood("approve", gate, "--plan", digest!, "--approver", "bo", "--yes");
+          expect(ok.code, ok.text).toBe(0);
+        }
+        expect(gates).toEqual([env, RELEASE_GATE]);
       };
 
       // The merge's stand-in: release r1 cut from main, and dev runs it.

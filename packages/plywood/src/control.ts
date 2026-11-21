@@ -126,7 +126,7 @@ export interface ChantControl {
 }
 
 /** The `ControlSettingsInput` keys an op waves spec's `control` carries, with `member`. */
-const WAVES_CONTROL_KEYS = ["repo", "op", "forge", "member", "tokenSecret", "readTokenSecret", "ref", "apiBase"] as const;
+const WAVES_CONTROL_KEYS = ["repo", "op", "forge", "member", "tokenSecret", "readTokenSecret", "ref", "apiBase", "release"] as const;
 
 /**
  * plywood.yml's `control` as the waves spec's `control` (chant#4617): its

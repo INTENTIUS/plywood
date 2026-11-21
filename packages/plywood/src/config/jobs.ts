@@ -25,6 +25,7 @@ import type { JsonSchema } from "./types";
 import { error, isObject, warning, type ConfigGroup, type ConfigProblem } from "./types";
 import { globMatches } from "./images";
 import { isForgeEnvironmentEntry, isStageEntry } from "./promotion";
+import { STAGE_ENTRY_SCHEMA } from "./stage";
 
 /** A variable name, as every forge reads one. */
 export const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -60,19 +61,8 @@ const environmentSchema: JsonSchema = {
   ],
 };
 
-/** `environments.<name>` as a stage of promotion (src/config/promotion.ts): each project's stack there. */
-const stageSchema: JsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["targets"],
-  properties: {
-    targets: {
-      type: "object",
-      description: "Each project to the stack it updates in this environment, as stack or project/stack.",
-      additionalProperties: { type: "string", minLength: 1 },
-    },
-  },
-};
+/** `environments.<name>` as a stage of promotion (src/config/promotion.ts, src/config/stage.ts): its stacks there and the stage keys. */
+const stageSchema: JsonSchema = STAGE_ENTRY_SCHEMA;
 
 function variableProblems(name: string, key: string): ConfigProblem[] {
   if (!VARIABLE.test(name)) return [error(key, `${JSON.stringify(name)} is not a variable name: letters, digits and _, not starting with a digit`)];
@@ -153,7 +143,7 @@ export const jobs: ConfigGroup = {
       additionalProperties: environmentSchema,
     },
     environments: {
-      description: "Each environment of promotion to its stage keys, such as targets: each project to the stack it updates there. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
+      description: "Each environment of promotion to its stage keys: targets (each project to the stack it updates there), its gate, hold, freeze, soak, risk and the rest. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
       type: "object",
       additionalProperties: { anyOf: [stageSchema, environmentSchema] },
     },

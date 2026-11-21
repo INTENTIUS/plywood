@@ -82,6 +82,12 @@ describe("plywood.yml", () => {
     expect(errors("engine: pulumi\nbackend: plunge+file:///tmp/state\n")[0].key).toBe("backend");
   });
 
+  it("writes pr-review when approval_rules are set and approval is not, so a repository with no signers still builds (chant#5379)", () => {
+    expect(toChantSettings(parseConfig('approval_rules:\n  "*": { count: 1 }\n')).pipeline.approval).toBe("pr-review");
+    expect(toChantSettings(parseConfig('approval: ledger\napproval_rules:\n  "*": { count: 1 }\n')).pipeline.approval).toBe("ledger");
+    expect(toChantSettings(parseConfig("gate: always\n")).pipeline.approval).toBe("ledger");
+  });
+
   it("turns approval_rules into chant quorum rules the author never counts toward", () => {
     const text = 'approval: sealed\napproval_rules:\n  "shop/prod-*": { roles: [platform], count: 2 }\n  "*": { roles: [developers] }\n';
     expect(checkConfig(parseConfig(text))).toEqual([]);

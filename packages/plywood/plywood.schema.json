@@ -973,7 +973,7 @@
     "agent": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Agents that act on a request: /plywood agent <ask>, and the drift agent's pull request.",
+      "description": "Agents that act on a request: /plywood agent <ask>, the drift agent's pull request, and the agents a production alert, a failed update on merge or a schedule starts. Each opens a pull request; none applies, approves or merges. All are off until set.",
       "properties": {
         "comment": {
           "type": "boolean",
@@ -984,6 +984,83 @@
           "type": "boolean",
           "default": false,
           "description": "Open a pull request that fixes a drifted stack (respond.drift: pull-request)."
+        },
+        "alert": {
+          "description": "An agent opens a pull request for a production alert the relay recorded. true, or a map. The relay takes the alert at POST /alert/<source>.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "window": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1440,
+                  "default": 15,
+                  "description": "Minutes in which one member's facts join one agent run."
+                },
+                "relay_key_secret": {
+                  "type": "string",
+                  "description": "The secret holding the relay key the facts are signed and checked with. Default CHANT_RELAY_KEY."
+                }
+              }
+            }
+          ]
+        },
+        "apply-failed": {
+          "description": "An agent opens a pull request for an update that failed on merge, beside the triage comment. true, or a map. Wave jobs record the failure.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "window": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1440,
+                  "default": 15,
+                  "description": "Minutes in which one member's facts join one agent run."
+                },
+                "relay_key_secret": {
+                  "type": "string",
+                  "description": "The secret holding the relay key the facts are signed and checked with. Default CHANT_RELAY_KEY."
+                }
+              }
+            }
+          ]
+        },
+        "schedule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cron",
+            "task"
+          ],
+          "description": "An agent does a recurring task on a cron and opens a pull request when the task changes something.",
+          "properties": {
+            "cron": {
+              "type": "string",
+              "description": "When the agent runs: a five-field cron."
+            },
+            "task": {
+              "type": "string",
+              "maxLength": 4000,
+              "description": "What the agent does on each run, in your words."
+            },
+            "window": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "default": 15,
+              "description": "Minutes in which one member's facts join one agent run."
+            }
+          }
         },
         "command": {
           "type": "string",

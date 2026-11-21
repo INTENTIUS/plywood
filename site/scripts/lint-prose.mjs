@@ -120,7 +120,7 @@ function lineOf(text, offset) {
 // of the text, and a page about Pulumi stacks says "stack" often; it skips
 // these words and no others. excess-vocabulary flags "Insights", which here is
 // Pulumi Insights, a product name.
-const DOMAIN_LEMMAS = new Set(["stack", "preview", "pulumi", "plunge", "plywood", "wave", "approval", "resource", "update"]);
+const DOMAIN_LEMMAS = new Set(["stack", "preview", "pulumi", "plunge", "plywood", "wave", "approval", "resource", "update", "agent", "alert"]);
 function domainNoun(f) {
   if (f.ruleId === "dead-metaphor/rare-lemma") {
     const m = /\u201c([^\u201d/]*)/.exec(f.message);

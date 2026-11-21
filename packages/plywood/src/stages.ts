@@ -41,6 +41,8 @@ import { readDeclarationText, withDeclarationHooks } from "./stage-hooks";
 import { waveMovedLine } from "./refusals";
 import { writeReviewJobs } from "./agents";
 import { writeAgentJobs } from "./agent-jobs";
+import { applyFailedFacts, writeTriggerAgentJobs } from "./agent-triggers";
+import type { AgentSettings } from "./config/agents";
 import { OP_NAME, PR_GATE, PRODUCT, PRODUCT_WORDS, wordsForJobs, type ChantCommand, type ProductWordsInput } from "./words";
 
 export interface StageIo {
@@ -358,7 +360,10 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
     const reviewCode = await writeReviewJobs(chant, forge, config.doc, plan.words, table, io);
     if (reviewCode !== table.done) return reviewCode;
     // The agent's jobs, when plywood.yml sets agent.comment (plywood#19, chant#4616).
-    return writeAgentJobs(chant, forge, env, config.doc, plan.words, table, io);
+    const agentCode = await writeAgentJobs(chant, forge, env, config.doc, plan.words, table, io);
+    if (agentCode !== table.done) return agentCode;
+    // The agents a production alert, a failed update and a schedule start, when plywood.yml sets them (plywood#157, chant#5329, chant#5357).
+    return writeTriggerAgentJobs(chant, forge, config.doc, plan.words, table, io);
   });
 }
 
@@ -442,6 +447,8 @@ export function workflowPlan(
     "build", ".", "--components", "--generate", forge, "--pr-loop", "--env", env, "--gate", jobs.words.prGate,
     ...(shape.applyBeforeMerge ? ["--apply-before-merge", ...requires] : []),
     ...(applyMerge ? applyMergeArgv(applyMerge) : []),
+    // chant#5399: the update before merge records a failed update for agent.apply-failed, as a wave job does.
+    ...(shape.applyBeforeMerge ? agentFactsArgv(pipeline.agent) : []),
     ...respond.argv,
     "--preview-comment",
     "--stale-notes",
@@ -476,6 +483,12 @@ export function evidenceBuildArgv(e: { runnerKeySecret?: string; identity?: "oid
     ? ["--evidence-identity", "oidc", ...(e.audience ? ["--evidence-audience", e.audience] : [])]
     : ["--evidence-runner-key-secret", e.runnerKeySecret!];
   return [...identity, "--check-job", "--ref-gate-status"];
+}
+
+/** `chant build --pr-loop --agent-facts apply-failed [--agent-facts-key-env <secret>]` for agent.apply-failed (chant#5399). */
+export function agentFactsArgv(agent: AgentSettings | undefined): string[] {
+  const facts = applyFailedFacts(agent);
+  return facts ? ["--agent-facts", "apply-failed", ...(facts.relayKeyEnv ? ["--agent-facts-key-env", facts.relayKeyEnv] : [])] : [];
 }
 
 /** `pr-apply --merge auto` and its token variable and method (chant#4636). */

@@ -35,6 +35,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 
 import { dirname, join } from "node:path";
 import type { ChantProduct, ForgeKind, ProductPipelineJobs } from "./chant-product";
 import type { PipelineEvidence } from "@intentius/chant/ci-evidence-jobs";
+import { applyFailedFacts } from "./agent-triggers";
+import type { AgentSettings } from "./config/agents";
 import { chantPipelineOptions } from "./images";
 import type { ExitTable } from "./exit-codes";
 import type { StageIo } from "./stages";
@@ -59,17 +61,19 @@ export interface WavesEngine {
   beforeScript?: string[];
   /** plywood.yml `evidence`: each deciding wave job signs `plan:<wave>` and `policy:<wave>`. */
   evidence?: PipelineEvidence;
+  /** agent.apply-failed (chant#5357): each wave job records its failed updates as facts, signed with this secret's relay key. */
+  agentFacts?: { relayKeyEnv?: string };
 }
 
 /** The waves jobs' image and lines from plywood's pipeline settings, as the review and drift jobs take them. */
-export function wavesEngine(pipeline: { image?: string; engineSetup?: string[]; evidence?: PipelineEvidence }): WavesEngine {
+export function wavesEngine(pipeline: { image?: string; engineSetup?: string[]; evidence?: PipelineEvidence; agent?: AgentSettings }): WavesEngine {
   const o = chantPipelineOptions({ ...(pipeline.image ? { image: pipeline.image } : {}), ...(pipeline.engineSetup ? { engineSetup: pipeline.engineSetup } : {}) });
-  return { ...(o.image ? { image: o.image } : {}), ...(o.beforeScript?.length ? { beforeScript: o.beforeScript } : {}), ...(pipeline.evidence ? { evidence: pipeline.evidence } : {}) };
+  return { ...(o.image ? { image: o.image } : {}), ...(o.beforeScript?.length ? { beforeScript: o.beforeScript } : {}), ...(pipeline.evidence ? { evidence: pipeline.evidence } : {}), ...(applyFailedFacts(pipeline.agent) ? { agentFacts: applyFailedFacts(pipeline.agent)! } : {}) };
 }
 
 /** The spec file's text: the bare spec, or `{ waves, options }` when there is an image, a line or a runner identity to hand chant's generator. */
 export function wavesSpecText(spec: unknown, engine: WavesEngine = {}): string {
-  const options = { ...(engine.image ? { image: engine.image } : {}), ...(engine.beforeScript?.length ? { beforeScript: engine.beforeScript } : {}), ...(engine.evidence ? { evidence: engine.evidence } : {}) };
+  const options = { ...(engine.image ? { image: engine.image } : {}), ...(engine.beforeScript?.length ? { beforeScript: engine.beforeScript } : {}), ...(engine.evidence ? { evidence: engine.evidence } : {}), ...(engine.agentFacts ? { agentFacts: engine.agentFacts } : {}) };
   return JSON.stringify(Object.keys(options).length ? { waves: spec, options } : spec, null, 2) + "\n";
 }
 

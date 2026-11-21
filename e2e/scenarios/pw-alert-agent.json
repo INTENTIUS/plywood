@@ -1,0 +1,81 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-alert-agent",
+  "product": "plywood",
+  "claim": "agent/alert-pull-request",
+  "title": "A production alert starts an agent job that opens a pull request, and nothing is applied or merged (Forgejo only; the model command is the bench's own)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "secrets",
+      "do": "out-of-band",
+      "label": "the repository holds the secrets the agent's workflow reads",
+      "command": [
+        "plywood-e2e",
+        "agent-secrets"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "do": "out-of-band",
+      "label": "main sets agent.alert, with the bench's own model command",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "${PLYWOOD_E2E_AGENT:-agent-alert}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "alert",
+      "do": "out-of-band",
+      "label": "the relay takes one signed alert and records its fact on chant/lifecycle",
+      "command": [
+        "plywood-e2e",
+        "alert",
+        "e2e checkout latency"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "agent-pull",
+      "do": "out-of-band",
+      "label": "the alert agent's workflow runs and opens its pull request",
+      "command": [
+        "plywood-e2e",
+        "agent-run",
+        "plywood-alert-agent"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_AGENT": "agent-alert-off"
+    },
+    "note": "main sets agent.comment and leaves agent.alert off, so plywood ci writes no alert workflow, the dispatch is refused and the agent-pull step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' dispatch paths are not exercised."
+  }
+}

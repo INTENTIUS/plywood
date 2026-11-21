@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doraCounts, overrideRecorded, reportHolds } from "../checks";
 import { dryRun } from "../main";
-import { auditScript, deployGatedScript, deployScript, promoteScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext } from "../ports";
-import { PROMOTE_JS, RECEIVER, RECEIVER_URL, ROLLBACK_JS } from "../probes";
+import { agentRunScript, agentSecretsScript, alertScript, auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext, deployGatedScript, promoteScript } from "../ports";
+import { RECEIVER, RECEIVER_URL, ROLLBACK_JS, PROMOTE_JS } from "../probes";
 import { readScenario } from "../scenarios";
 
 describe("the checks", () => {
@@ -173,6 +173,7 @@ describe("the scenarios' BREAK arms", () => {
       ["pw-traces", "PLYWOOD_E2E_TELEMETRY", "telemetry-off"],
       ["pw-estate", "PLYWOOD_E2E_TELEMETRY", "telemetry-none"],
       ["pw-rollback", "PLYWOOD_E2E_REVOKED", "shop-a"],
+      ["pw-alert-agent", "PLYWOOD_E2E_AGENT", "agent-alert-off"],
       ["pw-promote", "PLYWOOD_E2E_FROM", "dev"],
     ];
     for (const [id, key, value] of cases) {
@@ -237,6 +238,39 @@ describe("pw-rollback", () => {
     expect(lines).toContain("run plywood-e2e revoke shop-a");
     expect(s.steps.map((x) => x.id).slice(-2)).toEqual(["revoke", "applied"]);
     expect(s.steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "rollback", "prod", "shop-a"], expect: [{ exit: 0 }] });
+  });
+});
+
+describe("pw-alert-agent", () => {
+  it("posts one signed generic alert to a relay on loopback and reads its fact from chant/lifecycle", () => {
+    const script = alertScript("e2e checkout latency");
+    expect(script).toContain("npx chant notify relay --host 127.0.0.1 --port 8787");
+    expect(script).toContain("X-Chant-Signature: sha256=$sig");
+    expect(script).toContain("/alert/generic");
+    expect(script).toContain("git show FETCH_HEAD:_alerts/alert.jsonl | grep -F 'e2e checkout latency'");
+    expect(script.indexOf("/alert/generic")).toBeLessThan(script.indexOf("_alerts/alert.jsonl"));
+  });
+
+  it("sets the two secrets as the admin, and starts the workflow by the dispatch API before it looks for the pull request", () => {
+    expect(agentSecretsScript()).toContain("actions/secrets/CHANT_RELAY_KEY");
+    const run = agentRunScript("plywood-alert-agent");
+    expect(run).toContain("actions/workflows/plywood-alert-agent.yml/dispatches");
+    expect(run.indexOf("dispatches")).toBeLessThan(run.indexOf("pulls?state=open"));
+    expect(run).toContain("plywood/agent/plywood-alert-agent");
+  });
+
+  it("runs the commands, the alert with the forge's ledger under it", async () => {
+    const t = ctx();
+    expect(await runCommand(t.c, ["alert", "e2e checkout latency"])).toBe(0);
+    expect(last(t.ran[0]!)).toContain("git push -q origin chant/lifecycle");
+    expect(await runCommand(t.c, ["agent-run", "plywood-alert-agent"])).toBe(0);
+    await expect(runCommand(t.c, ["alert"])).rejects.toThrow(/takes <title>/);
+  });
+
+  it("configures agent.alert in the plain arm and leaves it off in the BREAK arm", () => {
+    const lines = dryRun(readScenario("pw-alert-agent")).join("\n");
+    expect(lines).toContain("run plywood-e2e configure agent-alert");
+    expect(readScenario("pw-alert-agent").steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "agent-run", "plywood-alert-agent"], expect: [{ exit: 0 }] });
   });
 });
 

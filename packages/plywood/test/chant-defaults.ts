@@ -2,6 +2,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { ChantProduct } from "../src/chant-product";
 
+/** An agent's settings without the Op spec's own fields, as chant's productXAgent splits them. */
+function agentOptions(options: Record<string, unknown> = {}): Record<string, unknown> {
+  const { name: _n, runner: _r, schedule: _s, ...rest } = options;
+  return rest;
+}
+
 /**
  * The parts of chant's product pipeline a test fake does not care about,
  * answered as a repository with none of them set would be.
@@ -11,6 +17,9 @@ export const CHANT_DEFAULTS = {
   parseRequiresList: (values: readonly string[]) => ({ checks: values.flatMap((v) => v.split(",")) }),
   productWavesSpec: (spec: Record<string, unknown>) => spec,
   productDriftAgent: (_words: unknown, _op: string, options?: Record<string, unknown>) => ({ on: "drift", ...(options ?? {}) }),
+  productAlertAgent: (_words: unknown, options?: Record<string, unknown>) => ({ name: "plywood-alert-agent", trigger: { kind: "cron", schedule: "*/15 * * * *" }, agent: { on: "alert", ...agentOptions(options) } }),
+  productApplyFailedAgent: (_words: unknown, options?: Record<string, unknown>) => ({ name: "plywood-apply-failed-agent", trigger: { kind: "cron", schedule: "*/15 * * * *" }, agent: { on: "apply-failed", ...agentOptions(options) } }),
+  productScheduleAgent: (_words: unknown, options: Record<string, unknown> & { schedule: string }) => ({ name: "plywood-schedule-agent", trigger: { kind: "cron", schedule: options.schedule }, agent: { on: "schedule", ...agentOptions(options) } }),
   opWavesPostsApprovalStatus: () => false,
   productActionFromEnv: () => ({ kind: "refused" as const, reason: "no action was asked" }),
   configureOtlp: () => undefined,

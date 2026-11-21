@@ -224,6 +224,9 @@ describe("pw-rollback", () => {
     expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
     expect(releaseScript("shop-b", "tutor")).not.toContain("ci/green");
     expect(releaseScript("shop-b", "tutor")).toContain("--wait-checks");
+    // The bench's [skip ci] setup commits get a status the forge-checks gate reads; other commits keep their own checks.
+    expect(releaseScript("shop-b", "tutor").startsWith("if git log -1 --format=%s | grep -qF '[skip ci]'; then node -e")).toBe(true);
+    expect(releaseScript("shop-b", "tutor")).toContain('"/statuses/"');
     expect(releaseEnv("tok")).toMatchObject({ FORGEJO_TOKEN: "tok" });
     // A refused cut is the step's exit, not hidden behind the tag push after it.
     expect(releaseScript("shop-b", "tutor")).toContain("--actor 'tutor' &&\ngit push -q origin --tags");

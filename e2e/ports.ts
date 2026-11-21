@@ -423,18 +423,30 @@ export function receivedArgv(args: readonly string[]): string[] {
 }
 
 /**
+ * The commit status the bench posts on its own setup commits before a cut.
+ * `configure` and the seed push main with [skip ci], so no workflow reports a
+ * check on that commit and `forge-checks` refuses it. When HEAD's subject says
+ * [skip ci], this posts one `e2e/setup` success status on it with the job's
+ * Forgejo token, the forge's form of the `ci/green/<sha>` tag the bench used to
+ * write. Any other commit is cut on the checks its workflows report.
+ */
+export const SETUP_STATUS = `if git log -1 --format=%s | grep -qF '[skip ci]'; then node -e 'const e=process.env;fetch(e.FORGEJO_SERVER_URL+"/api/v1/repos/"+e.FORGEJO_REPOSITORY+"/statuses/"+process.argv[1],{method:"POST",headers:{Authorization:"token "+e.FORGEJO_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({state:"success",context:"e2e/setup",description:"the bench pushed this setup commit with [skip ci]"})}).then(r=>{if(!r.ok)throw new Error("status "+r.status)})' "$(git rev-parse HEAD)"; fi`;
+
+/**
  * The script `release` runs in a job container on a clone of main: cut the
  * release `label` from HEAD and push the tags. The cut's green gate is the
  * commit's checks on the forge (`release.green: forge-checks`, which `plywood
  * init` writes under `promotion`), so the job carries the author's Forgejo
  * token (see `releaseEnv`) and the cut waits for pending checks with
- * `--wait-checks`; no `ci/green/<sha>` tag is written by hand. The ledger's push
+ * `--wait-checks`; no `ci/green/<sha>` tag is written by hand. A setup commit
+ * the bench pushed with [skip ci] gets its {@link SETUP_STATUS} first. The ledger's push
  * is withForgeLedger's. The cut is a release of the shop repository's
  * components, so it is what `plywood rollback --release` restores. Each line
  * runs only after the one before succeeds, so a refused cut is the step's exit.
  */
 export function releaseScript(label: string, by: string): string {
   return [
+    SETUP_STATUS,
     `chant release cut ${quote(label)} --yes --wait-checks --actor ${quote(by)}`,
     "git push -q origin --tags",
   ].join(" &&\n");

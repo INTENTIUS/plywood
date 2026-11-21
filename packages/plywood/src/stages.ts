@@ -21,7 +21,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chantProduct, type ChantProduct, type ForgeKind, type ProductPipelineJobs } from "./chant-product";
-import { toChantSettings } from "./chant-config";
+import { toChantSettings, type ChantWaveSummary } from "./chant-config";
+import { DEFAULT_KEY_ENV } from "./config/agents";
 import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
@@ -481,9 +482,9 @@ export const DECIDE_LEFT_OFF = "decide is set and respond.description is not che
  * config check warns.
  */
 export function respondOptions(
-  pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string } },
+  pipeline: { respond?: Record<string, string>; decide?: { backend: string; model: string }; waveSummary?: ChantWaveSummary },
   notes: string[],
-): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string } }; argv: string[] } {
+): { options: { respond?: Record<string, string>; decide?: { backend: string; model: string }; waveSummary?: ChantWaveSummary }; argv: string[] } {
   const r = pipeline.respond;
   if (pipeline.decide && r?.description !== "check") notes.push(DECIDE_LEFT_OFF);
   if (!r || Object.keys(r).length === 0) return { options: {}, argv: [] };
@@ -496,8 +497,22 @@ export function respondOptions(
     delete responses.description;
     notes.push("respond.description is check and decide names no backend and model, so the description check is left off");
   }
-  const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}) };
-  return { options, argv: respondArgv(responses, decide) };
+  // chant#5335: with `summary` the waves' jobs carry the model's settings and key; chant fills what is left out.
+  const summary = responses["wave-refused"] === "summary" ? { waveSummary: { ...(pipeline.waveSummary ?? {}) } } : {};
+  const options = { respond: responses, ...(decide ? { decide: { ...decide } } : {}), ...summary };
+  return { options, argv: [...respondArgv(responses, decide), ...waveSummaryArgv(summary.waveSummary)] };
+}
+
+/**
+ * `--wave-summary <field>=<value>` for each setting of the refused-wave
+ * summary (chant#5399), which the pull request apply job carries as the
+ * waves' jobs do. The model's key is always named, so the job holds it when
+ * plywood.yml sets no other key. Empty when the summary is off.
+ */
+export function waveSummaryArgv(settings: ChantWaveSummary | undefined): string[] {
+  if (settings === undefined) return [];
+  const all: Record<string, string | number> = { ...settings, keyEnv: settings.keyEnv ?? DEFAULT_KEY_ENV };
+  return Object.entries(all).flatMap(([field, value]) => ["--wave-summary", `${field}=${value}`]);
 }
 
 /**

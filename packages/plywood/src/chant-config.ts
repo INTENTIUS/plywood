@@ -130,12 +130,23 @@ export interface ChantPipelineSettings {
   jobs?: JobSettings;
   /** `respond.wave_refused`, `apply_failed` and `description` by chant's event names (chant#4629 `CiResponses`). */
   respond?: Record<string, string>;
+  /** `agent.wave-refused` with `respond.wave_refused: summary`: chant's `WaveSummarySpec` (chant#5335). Absent unless the summary is on. */
+  waveSummary?: ChantWaveSummary;
   /** `decide`, for `respond.description: check` (chant#4629). */
   decide?: { backend: string; model: string };
   /** `apply.merge: auto` with its token variable and method (chant#4636 `applyMerge`). */
   applyMerge?: { tokenEnv: string; method?: "merge" | "squash" | "rebase" };
   /** plywood.yml `evidence`: the runner identity the pipelines sign check evidence with (chant#4870, #4869 `PipelineEvidence`). */
   evidence?: import("@intentius/chant/ci-evidence-jobs").PipelineEvidence;
+}
+
+/** chant's `WaveSummarySpec` field names for `agent.wave-refused.*`. */
+export interface ChantWaveSummary {
+  command?: string;
+  keyEnv?: string;
+  timeout?: number;
+  maxRuns?: number;
+  maxCostUsd?: number;
 }
 
 /** chant's `ControlSettingsInput` (`@intentius/chant/ci-control`, chant#4568). */

@@ -705,14 +705,27 @@
     "reports": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "url"
+      "oneOf": [
+        {
+          "required": [
+            "bucket"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        }
       ],
-      "description": "Where each run's HTML report is kept.",
+      "description": "The reports bucket: where each run's HTML report is kept and where plywood estate writes the estate, the delivery metrics and the audit record.",
       "properties": {
-        "url": {
+        "bucket": {
           "type": "string",
           "description": "s3://<bucket>/<prefix>, gs://<bucket>/<prefix>, az://<account>/<container>/<prefix> or file://<dir>."
+        },
+        "url": {
+          "type": "string",
+          "description": "The same as bucket, under the spelling plywood.yml used before."
         }
       }
     },
@@ -770,10 +783,20 @@
           "type": "string",
           "enum": [
             "diff",
+            "summary",
             "off"
           ],
           "default": "diff",
-          "description": "diff: a refused wave posts the diff against the approved preview; off: nothing."
+          "description": "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing."
+        },
+        "wave-refused": {
+          "type": "string",
+          "enum": [
+            "diff",
+            "summary",
+            "off"
+          ],
+          "description": "The vocabulary's spelling of wave_refused."
         },
         "apply_failed": {
           "type": "string",
@@ -875,6 +898,37 @@
           "type": "integer",
           "minimum": 1,
           "description": "The most agent runs per day."
+        },
+        "wave-refused": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The model run behind respond.wave_refused: summary. Each key is optional; chant's defaults fill the rest.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "The model command: the prompt on stdin, the summary on stdout."
+            },
+            "key_secret": {
+              "type": "string",
+              "default": "ANTHROPIC_API_KEY",
+              "description": "The secret (GitHub, Forgejo) or CI/CD variable (GitLab) holding the model's key."
+            },
+            "timeout": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minutes the command may run."
+            },
+            "max_runs": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The most summaries per day."
+            },
+            "max_cost_usd": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "The most US dollars the summaries may cost per day."
+            }
+          }
         },
         "token_env": {
           "type": "string",

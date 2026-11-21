@@ -63,6 +63,8 @@ export interface ProductPipelineOptions {
   respond?: Record<string, string>;
   /** The decide service the description check asks (chant#4629). */
   decide?: { backend: string; model: string };
+  /** The model run of `respond["wave-refused"]: "summary"` (chant#5335 `WaveSummarySpec`): the waves' jobs carry it as `CHANT_WAVE_SUMMARY_*` with the model's key. */
+  waveSummary?: import("./chant-config").ChantWaveSummary;
   /** Merge the pull request once its update before merge applied (chant#4636). */
   applyMerge?: { tokenEnv: string; method?: string };
   /** The job that answers `/plywood action <stack> <name>` and a dispatch with `stack` and `action` inputs (chant#4654). */

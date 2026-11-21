@@ -16,4 +16,4 @@ The preview job writes `.chant/pr/pr-plan.json` and an update of a pull request 
 | `policy`, `capabilityPolicy` | the Rego results, and each stack's CrossGuard findings |
 | `changeSet` | the change set over every stack; its digest equals `digest` |
 
-Secret values stay `[secret]` in the report and in every note. The change set is chant's [change set](https://intentius.io/chant/reference/change-set/). `reports.url` in `plywood.yml` keeps a copy of each run's report.
+Secret values stay `[secret]` in the report and in every note. The change set is chant's [change set](https://intentius.io/chant/reference/change-set/). `reports.bucket` in `plywood.yml` keeps a copy of each run's report.

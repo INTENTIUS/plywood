@@ -195,6 +195,7 @@ describe("plywood estate on chant#4612", () => {
         return raw.startsWith("file://") ? { kind: "file", dir: raw.slice(7) } : { error: `${raw} is not a report URL` };
       },
       reportPut: () => async () => undefined,
+      reportGet: () => async () => null,
     };
     return { fake, calls };
   }

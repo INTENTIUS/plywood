@@ -34,7 +34,7 @@ Every command takes `--json`, which prints one JSON object on stdout in place of
 
 | Command | Does |
 |---|---|
-| `plywood approve <gate> --plan <digest> [--pr <n>] [--stack <stack>] [--sign] [--yes]` | records an approval of one digest at `up` (a pull request), `review` (its review stack) or `wave-<k>`; `up` finds its pull request from the digest when `--pr` is left out, and an approval at `up` is recorded under `pulumi-up` too, where the waves after the merge read it |
+| `plywood approve <gate> --plan <digest> [--pr <n>] [--stack <stack>] [--sign] [--yes]` | records an approval of one digest at `up` (a pull request), `review` (its review stack), `wave-<k>` or `release` (a promote or rollback); `up` finds its pull request from the digest when `--pr` is left out, and an approval at `up` is recorded under `pulumi-up` too, where the waves after the merge read it |
 | `plywood override <stack> --rule <id>... --reason <text> [--plan <digest>] [--sign]` | records an override of a policy denial, spent once its update runs |
 
 ## Stack operations
@@ -46,6 +46,7 @@ Each one is a request on the workspace ledger and runs once a second person appr
 | `plywood export <stack> --out <file> [--version <n>]` | writes the stack's export, or the version `--version` names, to a file on your machine |
 | `plywood cancel <stack> [--lock <id>]` | releases a stuck stack lock; on a `file://` backend it reads the id. It reads the forge's runs first and exits `held` while one that may hold the lock is still running |
 | `plywood move <urn>... --from <stack> --to <stack>` | moves resources between stacks; both stacks then preview no change |
+| `plywood promote --to <env> [--release <name>] [--from <env>] [--allow-skip] [--dry-run]` | carries a release to the next environment of `promotion`: previews it against that environment's stacks, waits at the release gate when the environment's gate asks, then updates them. `--from` defaults to the environment before `--to`, and skipping one needs `--allow-skip` |
 | `plywood rollback <stack> [--digest <d>]` or `plywood rollback <env> --release <name>` | previews a release's program, then updates behind its gate. With `--release` the positional is an environment, and `--env <env>` is its alias; without it the positional is a stack |
 | `plywood action <stack> <name> [--anew]` | runs an action `plywood.yml` declares under the stack's `actions` by replacing its command resource; `--anew` asks again for an action that has run |
 

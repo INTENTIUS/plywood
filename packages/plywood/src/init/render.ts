@@ -19,7 +19,7 @@ import type { ChantCiSettings, ChantGatePolicy, ChantRunner, ChantRunnerSpec } f
 import type { PolicyPack } from "../config/policy";
 import type { RawConfig } from "../config/types";
 import { fill, template } from "../templates";
-import { OP_NAME, PR_GATE } from "../words";
+import { OP_NAME, PR_GATE, PRODUCT } from "../words";
 import { environmentOf, slug, type DetectedProject } from "./detect";
 
 /** One stack as init settles it. */
@@ -56,9 +56,20 @@ export function plywoodYml(keys: RawConfig): string {
   return text.endsWith("\n") ? text : text + "\n";
 }
 
-/** The chant project's config, from the template. */
-export function chantConfigTs(): string {
-  return template("chant.config.ts.tmpl");
+/**
+ * The chant project's config, from the template. With plywood.yml's
+ * `promotion` it lists the environments in that order, which chant's
+ * promotion order reads: `promote --to` takes the environment before as
+ * `--from` and refuses one that skips a step.
+ */
+export function chantConfigTs(promotion?: readonly string[]): string {
+  const environments = promotion?.length ? `\n  environments: [${promotion.map((e) => JSON.stringify(e)).join(", ")}],` : "";
+  return fill(template("chant.config.ts.tmpl"), { environments });
+}
+
+/** Whether a chant.config.ts is the one plywood init writes, so init may write it again. */
+export function chantConfigWrittenByPlywood(text: string): boolean {
+  return /^\s*\*\s*Written by plywood init\./m.test(text) && /export default \{\n {2}lexicons: \["pulumi"\],(?:\n {2}environments: \[[^\]\n]*\],)?\n\} satisfies ChantConfig;\n?$/.test(text);
 }
 
 /** A component name chant takes: lowercase letters, digits and `-`. */
@@ -110,6 +121,74 @@ export function componentsFile(stacks: readonly InitStack[], after: Readonly<Rec
     const step = { kind: "pulumi-up", ...stepInput(s), ...(opts.reviewSuffix ? { reviewSuffix: opts.reviewSuffix } : {}) };
     const component = { name: componentName(s), dependsOn, deploy: [{ phase: "up", steps: [step] }] };
     lines.push(`export const ${exportName(s, taken)} = ${JSON.stringify(component)};`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+/** The release gate a promote, rollback or redeploy waits at (chant's component gate, recorded under the release op). */
+export const RELEASE_GATE = "release";
+
+/** The line that approves a promote waiting at the release gate, as plywood prints it. */
+export const releaseApproveLine = `${PRODUCT} approve ${RELEASE_GATE} --plan <digest>`;
+
+/** One project under plywood.yml's `promotion`: its stack in each environment and each environment's gate. */
+export interface PromotionComponentInput {
+  project: string;
+  /** Environment to the stack it updates there, in promotion's order. */
+  byEnv: Record<string, InitStack>;
+  /** Environment to its gate. */
+  gates: Record<string, ChantGatePolicy>;
+}
+
+/**
+ * plywood.component.ts under plywood.yml's `promotion`: one chant component
+ * per project. Its `pulumi-up` step keeps the inputs every environment shares
+ * and carries the rest, the stack first, in an `environments` map keyed by
+ * environment name, which chant resolves for the environment a run, promote,
+ * rollback or redeploy acts on. Each environment whose gate is not `never`
+ * waits at the release gate, which binds the release, the environment and
+ * the preview's digest. When only some environments of a project gate, the
+ * gate step names them in its own `environments` list.
+ */
+export function promotionComponentsFile(
+  projects: readonly PromotionComponentInput[],
+  promotion: readonly string[],
+  after: Readonly<Record<string, readonly string[]>> = {},
+  opts: { reviewSuffix?: string } = {},
+): string {
+  const taken = new Set<string>();
+  const lines = [
+    "// Written by plywood init from the stacks it found and plywood.yml's promotion;",
+    "// running it again rewrites this file. Each project is a chant component whose",
+    "// pulumi-up step updates the stack of the environment it runs in, and a promote",
+    `// waits at the release gate: ${releaseApproveLine}.`,
+    "",
+  ];
+  const projectOf = new Map(projects.flatMap((p) => Object.values(p.byEnv).map((s) => [s.key, p.project] as const)));
+  for (const p of projects) {
+    const envs = promotion.filter((e) => p.byEnv[e] !== undefined);
+    const inputs = envs.map((e) => stepInput(p.byEnv[e]!));
+    const keys = [...new Set(inputs.flatMap((i) => Object.keys(i)))];
+    // An input every environment gives the same value stays on the step; the rest go per environment.
+    const shared = keys.filter((k) => k !== "stack" && inputs.every((i) => k in i && JSON.stringify(i[k]) === JSON.stringify(inputs[0]![k])));
+    const step: Record<string, unknown> = { kind: "pulumi-up" };
+    for (const k of shared) step[k] = inputs[0]![k];
+    if (opts.reviewSuffix) step.reviewSuffix = opts.reviewSuffix;
+    step.environments = Object.fromEntries(envs.map((e, i) => [e, Object.fromEntries(Object.entries(inputs[i]!).filter(([k]) => !shared.includes(k)))]));
+    const gated = envs.filter((e) => (p.gates[e] ?? "on-destructive") !== "never");
+    const gate = gated.length === 0
+      ? []
+      : [{ kind: "gate", gate: RELEASE_GATE, description: `approve with ${releaseApproveLine}`, ...(gated.length < envs.length ? { environments: gated } : {}) }];
+    // plywood.yml's waves.after, as project order; chant adds each StackReference itself (chant#4547).
+    const upstream = new Set<string>();
+    for (const s of Object.values(p.byEnv)) {
+      for (const u of after[s.key] ?? []) {
+        const other = projectOf.get(u);
+        if (other !== undefined && other !== p.project) upstream.add(componentName({ key: other }));
+      }
+    }
+    const component = { name: componentName({ key: p.project }), dependsOn: [...upstream].sort(), deploy: [{ phase: "up", steps: [...gate, step] }] };
+    lines.push(`export const ${exportName({ key: p.project }, taken)} = ${JSON.stringify(component)};`);
   }
   return lines.join("\n") + "\n";
 }

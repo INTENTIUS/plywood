@@ -1449,32 +1449,63 @@
       }
     },
     "environments": {
-      "description": "The earlier spelling of forge_environments: stack glob to a name, or a map with name and url.",
+      "description": "Each environment of promotion to its stage keys, such as targets: each project to the stack it updates there. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
       "type": "object",
       "additionalProperties": {
         "anyOf": [
           {
-            "type": "string",
-            "minLength": 1
-          },
-          {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "name"
+              "targets"
             ],
             "properties": {
-              "name": {
+              "targets": {
+                "type": "object",
+                "description": "Each project to the stack it updates in this environment, as stack or project/stack.",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "anyOf": [
+              {
                 "type": "string",
                 "minLength": 1
               },
-              "url": {
-                "type": "string"
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
               }
-            }
+            ]
           }
         ]
       }
+    },
+    "promotion": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "description": "The order a release moves through the environments, first to last. The merge updates the first environment's stacks, and plywood promote carries a release to each next one behind its gate. Each project takes one stack per environment: the one named after it, or the one environments.<name>.targets names. Off when absent."
     },
     "control": {
       "description": "The control repo this repository tells after each update on merge: its project key or URL, or a mapping.",

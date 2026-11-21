@@ -27,6 +27,7 @@ import { approvalOf } from "./config/approval";
 import { configCheck } from "./config-check";
 import { APPLY_REQUIRES, applyRequiresOf, applyWhenOf } from "./config/apply";
 import { checkConfig, findConfig, loadConfig, type RawConfig } from "./config/index";
+import { planEnvironment, promotionOf } from "./config/promotion";
 import { controlBuildArgv } from "./config/control";
 import { locksOf } from "./config/locks";
 import { hasActions } from "./config/stacks";
@@ -181,10 +182,24 @@ export async function preview(args: string[], json: boolean, table: ExitTable, i
   const targetValues = new Set(pr.rest.filter((_, i) => pr.rest[i - 1] === "--target"));
   const rest = pr.rest.filter((a) => a !== stack || targetValues.has(a));
   const gate = rest.includes("--gate") ? [] : ["--gate", PR_GATE];
-  const argv = ["components", "pr-plan", "--base", at, "--pr", number, ...gate, ...(stack ? ["--member", stack] : []), ...rest, ...(json ? ["--json"] : [])];
+  // Under plywood.yml's promotion the preview plans the first environment's stacks, as the merge updates them.
+  const env = rest.includes("--env") ? [] : planEnvArgv(io.cwd);
+  const argv = ["components", "pr-plan", "--base", at, "--pr", number, ...gate, ...env, ...(stack ? ["--member", stack] : []), ...rest, ...(json ? ["--json"] : [])];
   return withChant(`${PRODUCT} preview`, table, io, async (chant) => {
     return chant.runChantInProcess(argv, PRODUCT_WORDS);
   });
+}
+
+/** `--env <first of promotion>` when the plywood.yml at `cwd` sets promotion; none otherwise, so chant's default stands. */
+function planEnvArgv(cwd: string): string[] {
+  const path = findConfig(cwd);
+  if (!path) return [];
+  try {
+    const first = promotionOf(loadConfig(path).doc)?.[0];
+    return first ? ["--env", first] : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Where `plywood ci` writes the workflow for each forge. */
@@ -242,7 +257,9 @@ export async function ci(args: string[], json: boolean, table: ExitTable, io: St
   const configured = (config.doc.forge as { kind?: string } | undefined)?.kind;
   const forge = (forgeFlag.value ?? configured ?? "github") as ForgeKind;
   if (!(FORGES as readonly string[]).includes(forge)) return usage(`--forge ${forge} is not one of ${FORGES.join(", ")}`, table, io);
-  const env = envFlag.value ?? "production";
+  const env = envFlag.value ?? planEnvironment(config.doc);
+  const first = promotionOf(config.doc)?.[0];
+  if (first !== undefined && env !== first) return usage(`--env ${env}: the pull request jobs plan in ${first}, the first environment of promotion, and a promote carries the release on; leave --env out`, table, io);
   const output = outFlag.value ?? WORKFLOW_FILE[forge];
 
   return withChant(`${PRODUCT} ci`, table, io, async (chant) => {

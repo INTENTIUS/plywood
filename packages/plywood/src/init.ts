@@ -18,7 +18,9 @@
  *                         picture `chant workspace graph` and behold read),
  *                         the pulumi lexicon's pin, and plywood.yml's ci keys
  *   chant.config.ts       the chant project, with the pulumi lexicon
- *   plywood.component.ts  one component per stack, through pulumi-up
+ *   plywood.component.ts  one component per stack, through pulumi-up; with
+ *                         plywood.yml's promotion, one per project whose step
+ *                         names its stack in each environment
  *   .chant/op-waves/pulumi-up.spec.json
  *                         the waves a merge updates in (chant#4550)
  *   the workflow          chant's generator output with plywood's words,
@@ -58,6 +60,7 @@ import { evidenceOf } from "./config/evidence";
 import { LOCK_GRAIN_OF, lockGrainFor } from "./config/locks";
 import { checkConfig, CONFIG_NAMES, loadConfig, parseConfig, type PlywoodConfig } from "./config/index";
 import { FORGES } from "./config/routing";
+import { planEnvironment, promotionOf, promotionTargets, stageGates, stageTargetsOf } from "./config/promotion";
 import { stacksOf as configuredStacks } from "./config/stacks";
 import { isObject, type RawConfig } from "./config/types";
 import type { ExitTable } from "./exit-codes";
@@ -71,7 +74,9 @@ import { engineStep, INIT_ENGINES, type InitEngine } from "./init/engine";
 import { DEFAULT_PRESET, gateFlag, PRESETS, PRESET_NAMES, preCommitHook, presetByName, type PresetName } from "./init/presets";
 import {
   chantConfigTs,
+  chantConfigWrittenByPlywood,
   componentsFile,
+  promotionComponentsFile,
   jsonText,
   memberOfDir,
   plywoodYml,
@@ -102,7 +107,8 @@ export interface InitOptions {
   gate?: "always" | "on-destructive" | "never";
   engine?: InitEngine;
   forge?: ForgeKind;
-  env: string;
+  /** The environment the pull request jobs plan in: `--env`, else plywood.yml's first of promotion, else production. */
+  env?: string;
   bucketCheck: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -189,7 +195,7 @@ export function parseInitArgs(args: string[]): InitOptions | { error: string } |
     ...(g ? { gate: g } : {}),
     ...(engine.value ? { engine: engine.value as InitEngine } : {}),
     ...(forge.value ? { forge: forge.value as ForgeKind } : {}),
-    env: env.value ?? "production",
+    ...(env.value !== undefined ? { env: env.value } : {}),
     bucketCheck: !rest.includes("--no-bucket-check"),
     dryRun: rest.includes("--dry-run"),
     yes: rest.includes("--yes") || rest.includes("-y"),
@@ -359,22 +365,49 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   // Review stacks (plywood#15, chant#4609): ci.prEnvironment's project/stack template and the step's reviewSuffix only on a lexicon that runs them end to end.
   const reviewSuffix = config.doc.review_stacks !== undefined ? reviewSuffixOf(settings.pipeline.reviewStackName) : undefined;
   const stacks = initStacks(detected, doc, settings.members);
+  // plywood.yml's promotion: each project's stack per environment (src/config/promotion.ts).
+  const promotion = promotionOf(doc);
+  const promoted = promotion ? promotionTargets(promotion, stacks, stageTargetsOf(doc)) : undefined;
+  if (promoted?.problems.length) return fail(promoted.problems.map((p) => `${kept ?? "plywood.yml"}: promotion: ${p}`).join("\n"), forge);
+  if (opts.env !== undefined && promotion && opts.env !== promotion[0]) {
+    return fail(`--env ${opts.env}: the pull request jobs plan in ${promotion[0]}, the first environment of promotion, and a promote carries the release on; leave --env out`, forge);
+  }
+  // Under promotion the merge updates the first environment's stacks; plywood promote carries a release to the rest.
+  const firstStacks = promoted ? new Set(promoted.projects.map((p) => p.byEnv[promotion![0]!]).filter((k): k is string => k !== undefined)) : undefined;
+  const merged = firstStacks ? stacks.filter((s) => firstStacks.has(s.key)) : stacks;
   // The merge's waves: the canary first, each wave cut by StackReferences and waves.after (plywood#18).
-  const order = await stackOrder(root, stacks, settings.pipeline.after);
-  const ordered = orderWaves(wavesOf(stacks, settings.pipeline.waves), order.edges, settings.pipeline.canary);
+  const order = await stackOrder(root, merged, settings.pipeline.after);
+  const ordered = orderWaves(wavesOf(merged, settings.pipeline.waves), order.edges, settings.pipeline.canary);
   const waves = ordered.waves;
   if (order.edges.length || order.outside.length || ordered.unmet.length) notes.push(...orderLines(order, ordered.unmet));
 
   // The member picture and the chant project.
   const declaration = declarationStep(root, detected, settings, opts.dryRun);
   files.push(declaration.file);
-  if (existsSync(join(root, CHANT_CONFIG_FILE))) {
-    const text = readFileSync(join(root, CHANT_CONFIG_FILE), "utf8");
-    if (!/["']pulumi["']/.test(text)) {
-      files.push({ file: CHANT_CONFIG_FILE, status: "kept", note: 'add "pulumi" to its lexicons so chant previews and updates the stacks' });
-    } else files.push({ file: CHANT_CONFIG_FILE, status: "kept" });
-  } else files.push(put(root, CHANT_CONFIG_FILE, chantConfigTs(), opts.dryRun));
-  files.push(put(root, COMPONENTS_FILE, componentsFile(stacks, settings.pipeline.after, reviewSuffix ? { reviewSuffix } : {}), opts.dryRun));
+  const configText = existsSync(join(root, CHANT_CONFIG_FILE)) ? readFileSync(join(root, CHANT_CONFIG_FILE), "utf8") : undefined;
+  if (configText === undefined || chantConfigWrittenByPlywood(configText)) {
+    files.push(put(root, CHANT_CONFIG_FILE, chantConfigTs(promotion), opts.dryRun));
+  } else {
+    const missing = [
+      ...(!/["']pulumi["']/.test(configText) ? ['add "pulumi" to its lexicons so chant previews and updates the stacks'] : []),
+      ...(promotion ? [`list environments: [${promotion.map((e) => JSON.stringify(e)).join(", ")}] in it, so chant promotes in promotion's order`] : []),
+    ];
+    files.push({ file: CHANT_CONFIG_FILE, status: "kept", ...(missing.length ? { note: missing.join("; ") } : {}) });
+  }
+  const byKey = new Map(stacks.map((s) => [s.key, s]));
+  const componentsText = promoted
+    ? promotionComponentsFile(
+        promoted.projects.map((p) => ({
+          project: p.project,
+          byEnv: Object.fromEntries(Object.entries(p.byEnv).map(([env, key]) => [env, byKey.get(key)!])),
+          gates: stageGates(doc, p),
+        })),
+        promotion!,
+        settings.pipeline.after,
+        reviewSuffix ? { reviewSuffix } : {},
+      )
+    : componentsFile(stacks, settings.pipeline.after, reviewSuffix ? { reviewSuffix } : {});
+  files.push(put(root, COMPONENTS_FILE, componentsText, opts.dryRun));
 
   // plywood#31: the provider allowlist, as a Rego rule in policy.rego and as a CrossGuard pack.
   files.push(...providersPresetStep(root, doc, opts.dryRun, notes));
@@ -627,7 +660,7 @@ async function workflowStep(
     // plywood#28: with a control repo, the note job reads its records for the cross-stack edges (chant#4619).
     const { noteControlTarget } = await import("./control");
     const control = await noteControlTarget(doc, root);
-    plan = workflowPlan(chant, doc, forge, opts.env, spec, chantBuildFlags(chantPipelineOptions(settings.pipeline)), { prJobs, ...(control ? { control } : {}) });
+    plan = workflowPlan(chant, doc, forge, opts.env ?? planEnvironment(doc), spec, chantBuildFlags(chantPipelineOptions(settings.pipeline)), { prJobs, ...(control ? { control } : {}) });
   } catch (e) {
     return [{ file: output, status: "failed", note: (e as Error).message }];
   }

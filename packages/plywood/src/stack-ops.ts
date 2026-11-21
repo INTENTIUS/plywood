@@ -27,6 +27,10 @@
  *       chant components rollback (chant#4542): the release's recorded
  *       program previews against the stack, the release gate binds that
  *       preview, and the update runs once it is approved.
+ *   plywood promote --to <env> [--release <name>]
+ *       chant components promote: the release the environment before runs,
+ *       or the one named, previews against --to's stacks, the release gate
+ *       binds that preview, and the update runs once it is approved.
  *   plywood action <stack> <name>
  *       gatedStackAction (chant#4654), in src/actions.ts: the replacement of
  *       a command resource plywood.yml names under the stack's actions.
@@ -47,13 +51,14 @@ import type { PulumiStackExportResult, PulumiStackMoveResult, PulumiStackOpOutco
 import { toChantSettings, type ChantMemberSettings } from "./chant-config";
 import { pulumiCloudOf } from "./config/identity";
 import { checkConfig, findConfig, loadConfig, type PlywoodConfig } from "./config/index";
+import { listedPromotionStacks, promotionOf, promotionTargets, stageTargetsOf } from "./config/promotion";
 import { stacksOf } from "./config/stacks";
 import type { ExitTable } from "./exit-codes";
 import { ADOPT_OP, ADOPT_OP_FILE } from "./init/adopt";
 import { detectForge, environmentOf, slug } from "./init/detect";
 import { explainRefusal } from "./refusals";
 import { positionals, takeFlag, usage, withChant, type StageIo } from "./stages";
-import { PRODUCT, PRODUCT_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./words";
+import { PRODUCT, PRODUCT_WORDS, PROMOTE_WORDS, STACK_OP_WORDS, type StackOpVerb } from "./words";
 
 /** chant's op the requests are recorded under (`PULUMI_STACK_OPS_OP`). */
 export const STACK_OPS_OP = "pulumi-stack-ops";
@@ -390,6 +395,22 @@ async function moveOntoPlunge(engine: string, args: string[], json: boolean, tab
 }
 
 /**
+ * The component that updates `stack`, and the environment it does so in.
+ * plywood init names each stack's component after its key, or under
+ * plywood.yml's promotion each project's after the project, whose step
+ * names the stack in one environment (src/init/render.ts).
+ */
+export function stackComponent(config: PlywoodConfig, stack: Pick<ResolvedStack, "key" | "project" | "stack">): { component: string; env: string } {
+  const promotion = promotionOf(config.doc);
+  if (!promotion) return { component: slug(stack.key), env: environmentOf(stack.stack) };
+  const listed = listedPromotionStacks(config.doc);
+  const stacks = listed.some((s) => s.key === stack.key) ? listed : [...listed, { key: stack.key, project: stack.project, stack: stack.stack }];
+  const project = promotionTargets(promotion, stacks, stageTargetsOf(config.doc)).projects.find((p) => p.project === stack.project);
+  const env = Object.entries(project?.byEnv ?? {}).find(([, key]) => key === stack.key)?.[0];
+  return { component: slug(stack.project), env: env ?? environmentOf(stack.stack) };
+}
+
+/**
  * `plywood rollback <stack> [--digest <sha256:...>] [--env <env>]` or
  * `plywood rollback <env> --release <name>` (or `--release <name> --env
  * <env>`, its alias), each with `[--dry-run]
@@ -428,14 +449,65 @@ export async function rollbackStack(args: string[], json: boolean, table: ExitTa
     if ("error" in read) return usage(read.error, table, io);
     const stack = resolveStack(read.config, read.path, named[0]!, undefined);
     if ("error" in stack) return usage(stack.error, table, io);
-    // plywood init names each stack's component after its key (src/init/render.ts componentName).
-    argv = ["components", "rollback", env.value ?? environmentOf(stack.stack), "--component", slug(stack.key), ...(digest.value ? ["--digest", digest.value] : [])];
+    const at = stackComponent(read.config, stack);
+    argv = ["components", "rollback", env.value ?? at.env, "--component", at.component, ...(digest.value ? ["--digest", digest.value] : [])];
   }
   argv.push(...(actor.value ? ["--actor", actor.value] : []), ...switches, ...(json ? ["--json"] : []));
 
   return withChant(`${PRODUCT} rollback`, table, io, async (chant) => {
     const code = await chant.runChantInProcess(argv, PRODUCT_WORDS);
     if (code === table.waiting && !json) io.err(STACK_OP_WORDS.rollbackWaiting);
+    return code === table.waiting ? code : explainRefusal(code, table, io.err);
+  });
+}
+
+/**
+ * `plywood promote --to <env> [--release <name>] [--from <env>]
+ * [--allow-skip] [--dry-run] [--actor <name>] [--events-json] [--json]`:
+ * chant components promote with plywood's words. chant reads the order from
+ * chant.config.ts's environments, which plywood init writes from
+ * plywood.yml's promotion, so `--from` defaults to the environment before
+ * `--to` and a promote that skips one is refused unless it says
+ * `--allow-skip`. Each project's step updates the stack it names for `--to`,
+ * and an environment whose gate asks waits at the release gate, bound to the
+ * release, the environment and the preview's digest.
+ */
+export async function promoteRelease(args: string[], json: boolean, table: ExitTable, io: StageIo): Promise<number> {
+  const to = takeFlag(args, "--to");
+  const from = takeFlag(to.rest, "--from");
+  const release = takeFlag(from.rest, "--release");
+  const actor = takeFlag(release.rest, "--actor");
+  for (const [flag, f] of [["--to", to], ["--from", from], ["--release", release], ["--actor", actor]] as const) {
+    if (f.missing) return usage(`${flag} takes a value`, table, io);
+  }
+  const switches: string[] = actor.rest.filter((a) => a === "--dry-run" || a === "--events-json" || a === "--allow-skip");
+  const rest = actor.rest.filter((a) => !switches.includes(a));
+  const extra = rest.filter((a) => a.startsWith("-"));
+  if (extra.length) return usage(`promote does not take ${extra.join(" ")}`, table, io);
+  const named = positionals(rest);
+  if (named.length) return usage(`promote names its environment with --to: ${PROMOTE_WORDS.usage}`, table, io);
+  if (!to.value) return usage(`promote needs the environment it deploys to: ${PROMOTE_WORDS.usage}`, table, io);
+
+  const read = readConfig(io.cwd);
+  if ("error" in read) return usage(read.error, table, io);
+  const promotion = promotionOf(read.config.doc);
+  if (!promotion) return usage(PROMOTE_WORDS.noPromotion(read.path), table, io);
+  for (const [flag, env] of [["--to", to.value], ["--from", from.value]] as const) {
+    if (env !== undefined && !promotion.includes(env)) return usage(PROMOTE_WORDS.notAnEnvironment(flag, env, promotion), table, io);
+  }
+  if (to.value === promotion[0]) return usage(PROMOTE_WORDS.firstEnvironment(to.value), table, io);
+
+  const argv = [
+    "components", "promote", "--to", to.value,
+    ...(from.value ? ["--from", from.value] : []),
+    ...(release.value ? ["--release", release.value] : []),
+    ...(actor.value ? ["--actor", actor.value] : []),
+    ...switches,
+    ...(json ? ["--json"] : []),
+  ];
+  return withChant(`${PRODUCT} promote`, table, io, async (chant) => {
+    const code = await chant.runChantInProcess(argv, PRODUCT_WORDS);
+    if (code === table.waiting && !json) io.err(PROMOTE_WORDS.waiting);
     return code === table.waiting ? code : explainRefusal(code, table, io.err);
   });
 }

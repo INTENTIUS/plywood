@@ -57,6 +57,7 @@
  * | scenario    | claim                  | what the BREAK arm changes              |
  * |-------------|------------------------|-----------------------------------------|
  * | pw-rollback | rollback/gated-release | the earlier release's commit is revoked |
+ * | pw-promote  | promote/gated-release  | prod-us is promoted straight from dev   |
  *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
@@ -91,6 +92,7 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-estate": "estate/dora",
   "pw-mcp": "mcp/read-only",
   "pw-rollback": "rollback/gated-release",
+  "pw-promote": "promote/gated-release",
 };
 
 /** The scenario files in `dir`, by id. */

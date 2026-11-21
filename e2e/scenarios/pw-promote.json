@@ -1,0 +1,102 @@
+{
+  "$schema": "https://intentius.io/chant/schemas/e2e-harness/e2e-scenario/v1/e2e-scenario.schema.json",
+  "contract": 1,
+  "id": "pw-promote",
+  "product": "plywood",
+  "claim": "promote/gated-release",
+  "title": "A release moves dev, then staging, then prod-us, each through its release gate (Forgejo only)",
+  "tree": {
+    "base": "base",
+    "overlays": "overlays"
+  },
+  "reportUrl": "s3://plywood-tutorial-reports/shop",
+  "steps": [
+    {
+      "id": "promotion",
+      "do": "out-of-band",
+      "label": "main lists promotion dev, staging, prod-us, prod-eu, every gate always, and plywood init writes one component for shop",
+      "command": [
+        "plywood-e2e",
+        "configure",
+        "promotion"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "do": "out-of-band",
+      "label": "release shop-p1 is cut from main's tip, tagged green",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "shop-p1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "do": "out-of-band",
+      "label": "dev runs release shop-p1, its gate approved by the reviewer",
+      "command": [
+        "plywood-e2e",
+        "deploy-gated",
+        "dev",
+        "shop-p1"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "staging",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-p1 from dev to staging through its release gate",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "staging",
+        "shop-p1",
+        "dev"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "id": "applied",
+      "do": "out-of-band",
+      "label": "plywood promote carries shop-p1 from ${PLYWOOD_E2E_FROM:-staging} to prod-us through its release gate",
+      "command": [
+        "plywood-e2e",
+        "promote",
+        "prod-us",
+        "shop-p1",
+        "${PLYWOOD_E2E_FROM:-staging}"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "break": {
+    "env": {
+      "BREAK": "1",
+      "PLYWOOD_E2E_FROM": "dev"
+    },
+    "note": "the prod-us promote comes straight from dev, skipping staging, so chant refuses it before any gate, nothing is deployed to prod-us, and the applied step must fail. This runs on Forgejo only: the bench has no GitHub or GitLab, and those forges' status paths are not exercised."
+  }
+}

@@ -5,6 +5,18 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
+## In 0.4.0
+
+This release pins chant `0.124.112` and the forgejo and github lexicons `0.124.103`.
+
+`plywood promote` runs chant's `components promote` through the environments of a promotion, with a stack per environment. A stage under `environments` in `plywood.yml` carries gate and hold keys. Soak, risk and canary checks sit beside them. `plywood init` writes chant's stage pipeline from them, with `/plywood reject` on the comment job. Forge environments move to `forge_environments`, and an entry under `environments` whose value is a name or `{ name, url }` is read as that earlier spelling. `plywood rollback <env> --release <name>` takes the environment as its positional, and `--env` stays as an alias. Promotion writes `release.green: "forge-checks"` for the release cut.
+
+`agent.alert` starts an agent job from a production alert. `agent.apply-failed` does so for a failed update and `agent.schedule` on a timer. Each opens a pull request for a person to review and is off by default. `respond.wave_refused` accepts `summary`, and `agent.verify-failed` runs after a failed verify.
+
+Previews carry a cost estimate, and a cost hold can stop a wave. `plywood.yml` accepts hooks before and after preview and update, on chant's stage hooks. `reports.bucket` names the bucket where `plywood estate` writes `chant.estate/v1`, `chant.dora/v1` and `audit.jsonl` (`chant.audit/v1`). `plywood audit record` reads that record, and `plywood view` runs a pinned behold with the pulumi lexicon.
+
+`plywood.yml` reads the keys of chant's product vocabulary. The earlier spellings keep working as aliases and each gives a warning. A rule that sets both `quorum` and `count` is an error.
+
 ## In 0.3.13
 
 The chant pin moves to `0.124.106`. The lexicons now each pin their own release, since they version apart from chant: forgejo, github and gitlab at `0.124.101`, pulumi at `0.124.102`. `plywood init` pins the pulumi lexicon in `chant.workspace.json` at that release, where it used to write chant's version. In the workflows `plywood ci` writes, a multi-line `run:` block is now `run: |-`, so the first `plywood ci` after the upgrade rewrites those lines.

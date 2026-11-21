@@ -1,8 +1,6 @@
 ---
 title: 'Estimate cost and hold a wave on it'
 description: 'A command you name prices each preview; the note shows the monthly change, and a wave waits for an approval above an amount you set.'
-needs: [chant#5334, chant#5341]
-draft: true
 ---
 
 plywood prices nothing itself. You name a command that reads a stack's preview JSON and prints its monthly cost, and chant runs it on every preview and wave. The `cost` key of `plywood.yml` holds it:

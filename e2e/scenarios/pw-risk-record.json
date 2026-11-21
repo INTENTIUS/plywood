@@ -4,6 +4,7 @@
   "id": "pw-risk-record",
   "product": "plywood",
   "claim": "pipeline/risk-record",
+  "env": "dev",
   "title": "A merged change's release carries its risk score, which the dev stage reads under its risk keys (Forgejo only)",
   "tree": {
     "base": "base",

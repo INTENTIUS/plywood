@@ -47,7 +47,7 @@
     "metafile": "../../node_modules/.cache/plywood/metafile.json"
   },
   "dependencies": {
-    "@intentius/chant": "0.124.111",
+    "@intentius/chant": "0.124.112",
     "@intentius/chant-lexicon-forgejo": "0.124.103",
     "@intentius/chant-lexicon-github": "0.124.103",
     "@intentius/chant-lexicon-gitlab": "0.124.102",

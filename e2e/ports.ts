@@ -123,6 +123,8 @@ export function jobArgv(h: Pick<HarnessModule, "RUNNER_JOB_ENV">, c: JobContaine
     "cd /w",
     `git config user.name ${quote(c.person.login)}`,
     `git config user.email ${quote(`${c.person.login}@plywood-tutorial.local`)}`,
+    // chant is plywood's own dependency in the image, not the program's.
+    'export PATH="$PATH:/usr/local/lib/node_modules/@intentius/plywood/node_modules/.bin"',
     "npm ci --no-audit --no-fund >/dev/null",
     script,
   ].join("\n");
@@ -430,7 +432,7 @@ export function releaseScript(label: string, by: string): string {
   return [
     'sha="$(git rev-parse HEAD)"',
     'git rev-parse -q --verify "refs/tags/ci/green/$sha" >/dev/null || git tag -a "ci/green/$sha" -m "e2e: green"',
-    `npx chant release cut ${quote(label)} --yes --actor ${quote(by)}`,
+    `chant release cut ${quote(label)} --yes --actor ${quote(by)}`,
     "git push -q origin --tags",
   ].join("\n");
 }
@@ -439,7 +441,7 @@ export function releaseScript(label: string, by: string): string {
 export function revokeScript(label: string): string {
   if (label === "none") return 'echo "plywood-e2e: no release revoked"';
   return [
-    `tag="$(npx chant release tag ${quote(label)})"`,
+    `tag="$(chant release tag ${quote(label)})"`,
     'test -n "$tag"',
     'sha="$(git rev-list -n 1 "$tag")"',
     'git tag -a "ci/revoked/$sha" -m "e2e: revoked"',
@@ -449,7 +451,7 @@ export function revokeScript(label: string): string {
 
 /** The script `deploy` runs: `chant run --components --env <env> --release <label>` at HEAD, the commit the release was cut from, so the environment's ledger names the release. */
 export function deployScript(env: string, label: string): string {
-  return `npx chant run --components --env ${quote(env)} --release ${quote(label)} --yes`;
+  return `chant run --components --env ${quote(env)} --release ${quote(label)} --yes`;
 }
 
 /**
@@ -500,7 +502,7 @@ export function alertScript(title: string): string {
   return [
     "set -e",
     `export CHANT_RELAY_KEY=${quote(ALERT_RELAY_KEY)} CHANT_ALERT_SECRET=${quote(ALERT_SECRET)}`,
-    `npx chant notify relay --host 127.0.0.1 --port ${RELAY_PORT} > /tmp/plywood-e2e-relay.log 2>&1 &`,
+    `chant notify relay --host 127.0.0.1 --port ${RELAY_PORT} > /tmp/plywood-e2e-relay.log 2>&1 &`,
     "relay=$!",
     `for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:${RELAY_PORT}/ && break; sleep 1; done`,
     `body=${quote(body)}`,
@@ -545,13 +547,13 @@ const RELEASE_GATE_DIGEST = `digest="$(printf '%s\\n' "$out" | sed -n 's/.*relea
  * line for component `shop`, and the same run goes again.
  */
 export function deployGatedScript(env: string, label: string, by: string, approver: string): string {
-  const run = `npx chant run --components --env ${quote(env)} --release ${quote(label)} --yes --actor ${quote(by)}`;
+  const run = `chant run --components --env ${quote(env)} --release ${quote(label)} --yes --actor ${quote(by)}`;
   return [
     "code=0",
     `${run} || code=$?`,
     'if [ "$code" = 0 ]; then exit 0; fi',
     'if [ "$code" != 3 ]; then exit "$code"; fi',
-    `npx chant approve shop ${RELEASE_GATE} --env ${quote(env)} --approver ${quote(approver)} --yes`,
+    `chant approve shop ${RELEASE_GATE} --env ${quote(env)} --approver ${quote(approver)} --yes`,
     run,
   ].join("\n");
 }
@@ -633,7 +635,7 @@ export function promoteHeldScript(env: string, label: string, from: string, by: 
  * `rollback`, `release`, or `canaryHolds` holding.
  */
 export function stageStatusScript(env: string, field: string): string {
-  return [`npx chant workspace status ${quote(env)} --json > /tmp/plywood-e2e-status.json`, `node -e ${quote(STAGE_JS)} /tmp/plywood-e2e-status.json ${quote(env)} ${quote(field)}`].join("\n");
+  return [`chant workspace status ${quote(env)} --json > /tmp/plywood-e2e-status.json`, `node -e ${quote(STAGE_JS)} /tmp/plywood-e2e-status.json ${quote(env)} ${quote(field)}`].join("\n");
 }
 
 /**

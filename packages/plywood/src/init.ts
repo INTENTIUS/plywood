@@ -231,15 +231,15 @@ export async function newConfigKeys(detected: Detected, opts: InitOptions, io: I
   let forge: { kind: ForgeKind; because: string };
   if (opts.forge) {
     forge = { kind: opts.forge, because: "--forge" };
-    if (detected.forge?.kind !== opts.forge) keys.forge = { kind: opts.forge };
-    else if (detected.forge.url) keys.forge = { kind: opts.forge, url: detected.forge.url };
+    if (detected.forge?.kind !== opts.forge) keys.forge = opts.forge;
+    else if (detected.forge.url) Object.assign(keys, { forge: opts.forge, forge_url: detected.forge.url });
   } else if (detected.forge) {
     forge = { kind: detected.forge.kind, because: detected.forge.because };
-    if (detected.forge.url) keys.forge = { kind: detected.forge.kind, url: detected.forge.url };
+    if (detected.forge.url) Object.assign(keys, { forge: detected.forge.kind, forge_url: detected.forge.url });
   } else {
     const kind = (io.ask && !opts.yes ? await io.ask("Forge", FORGES, "github") : "github") as ForgeKind;
-    forge = { kind, because: io.ask && !opts.yes ? "you chose it" : "origin names no forge init knows, so github; change forge.kind in plywood.yml" };
-    keys.forge = { kind };
+    forge = { kind, because: io.ask && !opts.yes ? "you chose it" : "origin names no forge init knows, so github; change forge in plywood.yml" };
+    keys.forge = kind;
   }
 
   // A backend only init's environment names: the jobs do not see that environment.
@@ -301,7 +301,7 @@ export function initStacks(detected: Detected, doc: RawConfig, members: readonly
 function forgeFor(doc: RawConfig, detected: Detected, opts: InitOptions): { kind: ForgeKind; because: string } {
   if (opts.forge) return { kind: opts.forge, because: "--forge" };
   const kind = isObject(doc.forge) ? (doc.forge.kind as ForgeKind | undefined) : undefined;
-  if (kind) return { kind, because: "plywood.yml says forge.kind" };
+  if (kind) return { kind, because: "plywood.yml says forge" };
   if (detected.forge) return { kind: detected.forge.kind, because: detected.forge.because };
   return { kind: "github", because: "origin names no forge init knows, so github" };
 }

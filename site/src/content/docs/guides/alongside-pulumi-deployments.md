@@ -21,7 +21,7 @@ Pulumi Deployments and plywood share one Pulumi Cloud organisation well. Each st
 | Environment variables | your forge's variables and secrets |
 | Pre-run commands | the stack's program, or a prepared image named in `image` |
 | OIDC | `identity`, with a preview identity beside the up one |
-| Pull request template | `review_stacks.template` |
+| Pull request template | `ephemeral.template` |
 | ESC environment | stays in the stack config; stock Pulumi resolves it with the job's Pulumi Cloud token |
 
 Stacks that suit Deployments, such as review stacks driven from Pulumi Cloud, keep working there.

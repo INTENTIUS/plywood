@@ -20,5 +20,5 @@ branches:
   main:
     - shop/prod
 image: ghcr.io/acme/pulumi-runner:3.272.0
-review_stacks:
+ephemeral:
   template: shop/prod

@@ -102,6 +102,9 @@ export function telemetryOf(doc: RawConfig): TelemetrySettings {
   };
 }
 
+/** `notify.events` words. */
+const EVENT_WORDS_OF = { waiting: 1, refused: 1, failed: 1, drift: 1 };
+
 const WEBHOOK_VAR = { type: "object", additionalProperties: false, required: ["webhook"], properties: { webhook: { type: "string", pattern: VARIABLE.source, description: "The variable holding the incoming webhook's URL." } } };
 
 export const observe: ConfigGroup = {
@@ -113,18 +116,26 @@ export const observe: ConfigGroup = {
       additionalProperties: false,
       description: "Chat and webhook messages when a wave waits, an update is refused or fails, or drift is found. Each value names a variable.",
       properties: {
-        slack: WEBHOOK_VAR,
-        teams: WEBHOOK_VAR,
+        slack: { oneOf: [{ type: "string", pattern: VARIABLE.source, description: "The variable holding the incoming webhook's URL." }, WEBHOOK_VAR] },
+        teams: { oneOf: [{ type: "string", pattern: VARIABLE.source, description: "The variable holding the incoming webhook's URL." }, WEBHOOK_VAR] },
         webhook: {
-          type: "object",
-          additionalProperties: false,
-          required: ["url", "key"],
-          description: "A generic webhook; each chant.notify/v1 event is signed with the key.",
-          properties: {
-            url: { type: "string", pattern: VARIABLE.source, description: "The variable holding the webhook's URL." },
-            key: { type: "string", pattern: VARIABLE.source, description: "The variable holding the signing key." },
-          },
+          description: "A generic webhook; each chant.notify/v1 event is signed with webhook_key. The variable holding the webhook's URL, or { url, key }.",
+          oneOf: [
+            { type: "string", pattern: VARIABLE.source },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["url", "key"],
+              properties: {
+                url: { type: "string", pattern: VARIABLE.source, description: "The variable holding the webhook's URL." },
+                key: { type: "string", pattern: VARIABLE.source, description: "The variable holding the signing key." },
+              },
+            },
+          ],
         },
+        webhook_key: { type: "string", pattern: VARIABLE.source, description: "The variable holding the key the webhook's events are signed with." },
+        events: { type: "array", items: { type: "string", enum: Object.keys(EVENT_WORDS_OF) }, description: "The events to send: waiting, refused, failed, drift. Default: all of them." },
+        relay_key: { type: "string", pattern: VARIABLE.source, description: "The variable holding the relay key." },
         on: { type: "array", items: { type: "string", enum: Object.keys(NOTIFY_EVENTS) }, description: "The events to send. Default: all of them." },
         relay: { type: "string", pattern: VARIABLE.source, description: "The variable holding the relay key. A waiting wave's Slack and Teams messages then carry the approval that plywood notify relay records." },
       },
@@ -135,6 +146,7 @@ export const observe: ConfigGroup = {
       description: "One OpenTelemetry trace per run over OTLP/HTTP, with a span per stack. OTEL_* variables in the job win over these.",
       properties: {
         endpoint: { type: "string", description: "The OTLP/HTTP base URL; /v1/traces is added." },
+        headers_secret: { type: "string", pattern: VARIABLE.source, description: "The variable holding the OTLP headers, k=v,k2=v2." },
         headers_env: { type: "string", pattern: VARIABLE.source, description: "The variable holding the OTLP headers, k=v,k2=v2." },
         service_name: { type: "string", default: DEFAULT_SERVICE_NAME, description: "The trace's service.name." },
         traces: { type: "boolean", default: true, description: "false turns traces off." },

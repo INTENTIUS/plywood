@@ -6,7 +6,7 @@ description: 'Each open pull request gets its own stack from a template stack''s
 plywood switches on chant's [pull request environments](https://intentius.io/chant/guide/pr-environments/) with Pulumi review stacks.
 
 ```yaml
-review_stacks:
+ephemeral:
   template: shop/dev
   name: pr-{number}
   ttl: 72h

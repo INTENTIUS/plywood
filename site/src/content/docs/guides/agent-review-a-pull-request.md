@@ -17,5 +17,5 @@ As a mapping, `review` takes four keys:
 |---|---|
 | `instructions`: the instructions file on the base branch | `.chant/review.md` |
 | `command`: the model command, prompt on stdin and answer on stdout | chant's |
-| `key_env`: the variable holding the model's key | `ANTHROPIC_API_KEY` |
+| `key_secret`: the variable holding the model's key | `ANTHROPIC_API_KEY` |
 | `timeout`: minutes the command may run | chant's |

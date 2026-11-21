@@ -11,7 +11,7 @@
  *   gitHub.paths                     stacks.<key>.paths
  *   gitHub.previewPullRequests       plywood previews every pull request
  *   gitHub.deployCommits             plywood updates on merge
- *   gitHub.pullRequestTemplate       review_stacks.template
+ *   gitHub.pullRequestTemplate       ephemeral.template
  *   operationContext.oidc            listed with the identity it names, for
  *                                    identity.stacks.<key>.up: plywood needs a
  *                                    preview identity beside it
@@ -100,7 +100,7 @@ export const importDeployments: Importer = (root, detected, named) => {
     if (Array.isArray(gh.paths) && gh.paths.some((p) => String(p).startsWith("!"))) not(file, "gitHub.paths", "an exclusion (!path) has no plywood form; list only the paths that preview the stack");
     if (gh.previewPullRequests === false) not(file, "gitHub.previewPullRequests", "plywood previews every pull request that touches the stack; leave the stack out of plywood.yml to skip it");
     if (gh.deployCommits === false) not(file, "gitHub.deployCommits", "plywood updates the stack on merge; set gate: always to hold each update for an approval");
-    if (gh.pullRequestTemplate === true) keys = mergeKeys(keys, { review_stacks: { template: key } });
+    if (gh.pullRequestTemplate === true) keys = mergeKeys(keys, { ephemeral: { template: key } });
     for (const k of Object.keys(gh).filter((x) => !["paths", "previewPullRequests", "deployCommits", "pullRequestTemplate"].includes(x))) not(file, `gitHub.${k}`);
 
     const op = isObject(settings.operationContext) ? settings.operationContext : {};

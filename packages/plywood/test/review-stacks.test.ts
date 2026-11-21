@@ -39,7 +39,7 @@ describe("review_stacks", () => {
 
   it("needs the template as project/stack, and warns when stacks does not list it", () => {
     expect(errors("review_stacks: { template: dev }")[0]!.key).toBe("review_stacks.template");
-    const problems = checkConfig(parseConfig("stacks:\n  shop/dev: { dir: infra }\nreview_stacks: { template: shop/staging }\n"));
+    const problems = checkConfig(parseConfig("stacks:\n  shop/dev: { dir: infra }\nephemeral: { template: shop/staging }\n"));
     expect(problems).toEqual([expect.objectContaining({ key: "review_stacks.template", severity: "warning" })]);
   });
 

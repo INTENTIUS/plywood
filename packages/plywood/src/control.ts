@@ -383,7 +383,8 @@ async function controlEntries(chant: ChantControl, sub: string, args: string[], 
  * written from those keys alone, so init fills the rest.
  */
 export function controlledConfigText(existing: string | undefined, settings: Settings): string | undefined {
-  const doc: RawConfig = existing ? parseConfig(existing).doc : {};
+  const parsed = existing ? parseConfig(existing) : undefined;
+  const doc: RawConfig = parsed ? (parsed.written ?? parsed.doc) : {};
   const changed = CONTROLLED_KEYS.some((k) => k in settings && JSON.stringify(doc[k]) !== JSON.stringify(settings[k]));
   if (!changed && existing !== undefined) return undefined;
   const next: RawConfig = { ...doc };

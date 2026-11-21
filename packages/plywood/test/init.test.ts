@@ -307,11 +307,11 @@ describe("golden files", () => {
     setChantProductForTests(fakeChant().api);
     const hosted = repo("ssh://git@gitlab.acme.internal/acme/shop.git", ONE_PROJECT);
     await runInit(OPTS, EXIT, io(hosted));
-    expect(readFileSync(join(hosted, "plywood.yml"), "utf8")).toContain("forge:\n  kind: gitlab\n  url: https://gitlab.acme.internal");
+    expect(readFileSync(join(hosted, "plywood.yml"), "utf8")).toContain("forge: gitlab\nforge_url: https://gitlab.acme.internal");
     const unknown = repo("https://git.example.com/acme/shop.git", ONE_PROJECT);
     const r = await runInit(OPTS, EXIT, io(unknown));
     expect(r.forge.kind).toBe("github");
-    expect(readFileSync(join(unknown, "plywood.yml"), "utf8")).toContain("forge:\n  kind: github");
+    expect(readFileSync(join(unknown, "plywood.yml"), "utf8")).toContain("forge: github");
   });
 
   it("writes a preset's keys, the gate flag and a backend only the environment names", async () => {

@@ -65,8 +65,8 @@ describe("the checks", () => {
   });
 
   it("warns on a glob that matches no stack", () => {
-    const warnings = checkConfig(parseConfig("stacks: { shop/dev: {} }\nenvironments: { 'other/*': production }\n")).filter((p) => p.severity === "warning");
-    expect(warnings.map((w) => w.key)).toEqual(["environments.other/*"]);
+    const warnings = checkConfig(parseConfig("stacks: { shop/dev: {} }\nforge_environments: { 'other/*': production }\n")).filter((p) => p.severity === "warning");
+    expect(warnings.map((w) => w.key)).toEqual(["forge_environments.other/*"]);
   });
 });
 

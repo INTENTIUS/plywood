@@ -153,8 +153,9 @@ describe("notify words and the relay (chant#4610, #4611)", () => {
 
   it("turns notify.relay into chant's relay setting, beside a chat channel", () => {
     expect(chantNotifyOf(parseConfig("notify: { slack: { webhook: SLACK_URL }, relay: RELAY_KEY }").doc)).toEqual({ slack: "SLACK_URL", relay: "RELAY_KEY" });
-    // The pin carries the relay (chant#4611), so the setting is passed on with no warning.
-    expect(checkConfig(parseConfig("notify: { slack: { webhook: SLACK_URL }, relay: RELAY_KEY }")).filter((p) => p.key === "notify.relay")).toEqual([]);
+    // The pin carries the relay (chant#4611), so the setting, under the vocabulary's key, is passed on with no warning.
+    expect(chantNotifyOf(parseConfig("notify: { slack: SLACK_URL, relay_key: RELAY_KEY }").doc)).toEqual({ slack: "SLACK_URL", relay: "RELAY_KEY" });
+    expect(checkConfig(parseConfig("notify: { slack: SLACK_URL, relay_key: RELAY_KEY }")).filter((p) => p.key.startsWith("notify."))).toEqual([]);
     expect(errors("notify: { slack: { webhook: S }, relay: https://relay.acme.internal }").map((p) => p.key)).toEqual(["notify.relay"]);
     expect(errors("notify: { webhook: { url: U, key: K }, relay: RELAY_KEY }").map((p) => p.key)).toEqual(["notify.relay"]);
   });

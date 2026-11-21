@@ -75,7 +75,7 @@ describe("reports", () => {
   it("is chant's ci.reportUrl, on s3, gs, az and file", () => {
     expect(toChantSettings(parseConfig("reports: { url: s3://acme-reports/plywood }")).ci.reportUrl).toBe("s3://acme-reports/plywood");
     expect(errors("reports: { url: https://x }")[0]!.key).toBe("reports.url");
-    expect(checkConfig(parseConfig("reports: { url: gs://acme/plywood }"))).toEqual([]);
+    expect(checkConfig(parseConfig("reports: { bucket: gs://acme/plywood }"))).toEqual([]);
   });
 });
 

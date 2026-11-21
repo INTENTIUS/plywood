@@ -161,6 +161,7 @@ export const policy: ConfigGroup = {
       additionalProperties: false,
       description: "Rego rules and CrossGuard policy packs in the preview job, feeding chant's gate. Read at base.",
       properties: {
+        path: { type: "string", description: "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line." },
         rego: { type: "string", description: "The directory of Rego rules, relative to the repository root. deny_* denies, hold_* waits for a person, warn_* is a note line." },
         engine: { type: "string", enum: [...POLICY_ENGINES], default: "conftest", description: "The result shape the rules' engine prints: conftest or opa. A hold needs opa." },
         namespace: { type: "string", description: "The Rego package to read. conftest: every package; opa: main." },

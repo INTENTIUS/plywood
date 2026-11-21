@@ -165,12 +165,13 @@ export const drift: ConfigGroup = {
       properties: {
         drift: {
           type: "string",
-          enum: [...DRIFT_RESPONSES],
+          enum: [...DRIFT_RESPONSES, "off"],
           default: DEFAULT_DRIFT_RESPONSE,
           description: "issue: one issue per drifted stack; pull-request: the issue and the drift agent's pull request; up: the issue and a gated update; none: the exit code only.",
         },
+        "wave-refused": { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], default: "diff", description: "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing." },
+        "apply-failed": { type: "string", enum: [...EVENT_RESPONSES.apply_failed.modes], default: "triage", description: "triage: a failed update posts the stacks and resources that failed, with the error; off: nothing." },
         wave_refused: { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], default: "diff", description: "diff: a refused wave posts the diff against the approved preview; summary: the diff with a model's summary above it, the model set under agent.wave-refused; off: nothing." },
-        "wave-refused": { type: "string", enum: [...EVENT_RESPONSES.wave_refused.modes], description: "The vocabulary's spelling of wave_refused." },
         apply_failed: { type: "string", enum: [...EVENT_RESPONSES.apply_failed.modes], default: "triage", description: "triage: a failed update posts the stacks and resources that failed, with the error; off: nothing." },
         description: { type: "string", enum: [...EVENT_RESPONSES.description.modes], default: "off", description: "check: flag a pull request whose description leaves out what its preview deletes or replaces. Needs decide." },
       },

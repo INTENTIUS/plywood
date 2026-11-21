@@ -88,7 +88,7 @@ describe("control entries", () => {
   it("checks an entry's settings as plywood.yml's keys, and only the keys a control repo sets", () => {
     expect(validateControlSettings("project", "github.com/acme/shop", { gate: "always", approval_rules: { "shop/*": { role: "sre", quorum: 2 } } })).toEqual([]);
     expect(validateControlSettings("project", "github.com/acme/shop", { stacks: {} })[0]).toContain("is not a key a control repo sets");
-    expect(validateControlSettings("defaults", undefined, { gate: "sometimes" }).length).toBe(1);
+    expect(validateControlSettings("defaults", undefined, { gate: "sometimes" })).toEqual([expect.stringContaining("gate ")]);
   });
 
   it("lays approvers and pins from flags over the current settings", () => {

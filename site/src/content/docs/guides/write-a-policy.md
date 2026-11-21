@@ -18,7 +18,7 @@ deny_bucket_delete contains msg if {
 
 ```yaml
 policy:
-  rego: policy
+  path: policy
 ```
 
 Each entry of `input.changeSet.entries` is one change a preview proposes, with its `member`, `address` (the URN), `type` and `action`.
@@ -37,7 +37,7 @@ A denied Rego rule is `<package>.<rule>`, such as `plywood.deny_bucket_delete`. 
 
 ```yaml
 policy:
-  rego: policy
+  path: policy
   providers: [aws, random]
   packs:
     - { dir: policy/plywood-providers, config: policy/plywood-providers.json }

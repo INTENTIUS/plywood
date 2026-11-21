@@ -92,6 +92,22 @@ console.log(hit.length ? hit.length + " record(s) restore a release in " + env :
 process.exit(hit.length ? 0 : 1);
 `;
 
+/**
+ * `promote <file> <env>`: the JSON document `plywood promote --json` printed must hold a release record
+ * in <env> with a digest, which chant appends only for a deploy that ran. A document that is not JSON, or
+ * that holds no such record, exits 1.
+ */
+export const PROMOTE_JS = `
+let doc;
+try { doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { console.log("the promote printed no JSON document: " + e.message); process.exit(1); }
+const env = process.argv[2];
+const found = [];
+const walk = (v) => { if (v && typeof v === "object") { if (typeof v.component === "string" && typeof v.digest === "string" && v.env === env) found.push(v); for (const x of Object.values(v)) walk(x); } };
+walk(doc);
+console.log(found.length ? found.length + " record(s) deploy the release in " + env : "no record in the promote's document deploys a release in " + env);
+process.exit(found.length ? 0 : 1);
+`;
+
 /** `rows <file> <path=value>...`: a dotted path into a row; an array holds the value when one element equals it. */
 export const ROWS_JS = `
 const doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));

@@ -32,7 +32,7 @@ import { tipById, tipLines, TIPS } from "./tips";
 import { approve, override, resume, up } from "./up";
 import { upgrade } from "./upgrade";
 import { viewCommand } from "./view";
-import { cancelStack, exportStack, moveStack, rollbackStack } from "./stack-ops";
+import { cancelStack, exportStack, moveStack, promoteRelease, rollbackStack } from "./stack-ops";
 import { PRODUCT, TAGLINE, VERBS, type Verb } from "./words";
 
 declare const __PLYWOOD_VERSION__: string | undefined;
@@ -94,6 +94,8 @@ export function helpText(): string {
     "  cancel <stack> [--lock <id>]                        release a stuck stack lock; on file:// it reads the id",
     "  move <urn>... --from <stack> --to <stack>           move resources; both stacks preview no change",
     "  move <stack> --onto plunge                          adopt the stacks onto plunge (plywood.adopt.op.ts)",
+    "  promote --to <env> [--release <name>] [--from <env>] [--allow-skip]",
+    "                                                      carry a release to the next environment of promotion, behind its gate",
     "  rollback <stack> [--digest <d>] | <env> --release <name>",
     "                                                      preview a release's program, then update behind its gate",
     "  action <stack> <name> [--anew]                      run an action plywood.yml declares: replace its command resource",
@@ -185,6 +187,7 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
   if (verb === "cancel") return cancelStack(args.slice(1), json, table, stageIo);
   if (verb === "move") return moveStack(args.slice(1), json, table, stageIo);
   if (verb === "rollback") return rollbackStack(args.slice(1), json, table, stageIo);
+  if (verb === "promote") return promoteRelease(args.slice(1), json, table, stageIo);
   if (verb === "action") return action(args.slice(1), json, table, stageIo);
   if (verb === "drift") return drift(args.slice(1), json, table, stageIo);
   if (verb === "mcp") return mcp(args.slice(1), json, table, stageIo);

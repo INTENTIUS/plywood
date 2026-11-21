@@ -197,13 +197,25 @@ export const STACK_OP_WORDS = {
   adoptAll: (stack: string): string =>
     `${PRODUCT} move --onto plunge runs the adopt Op over every stack it lists, ${stack} among them. Each stack waits at its own gate.`,
   adoptWaiting: `Each stack's adoption waits for an approval of its preview's digest. Approve it with the line chant printed (${PRODUCT} approve <gate> --op plywood-adopt --plan <digest>), then run this command again.`,
-  rollbackWaiting: `The rollback's preview waits at the release gate. Approve its digest with the line chant printed, then run this command again.`,
+  rollbackWaiting: `The rollback waits at the release gate. Someone other than you approves the change set its 'release gate: change set <digest>' line names, with '${PRODUCT} approve release --plan <digest>', and then you run this command again.`,
   releaseIsEnvWide: (stack: string, env: string): string =>
     `--release rolls back every stack the release records in an environment, so it takes an environment, not a stack. Run '${PRODUCT} rollback ${env} --release <name>', or '${PRODUCT} rollback ${stack}' for this stack's previous release.`,
   envNeedsRelease: (env: string): string =>
     `rollback reads ${env} as an environment, which goes back to a release: run '${PRODUCT} rollback ${env} --release <name>'. A single stack is project/stack, as plywood.yml lists it.`,
   twoEnvironments: (positional: string, env: string): string =>
     `rollback names two environments, ${positional} and --env ${env}. --env is the positional's alias, so give one of them.`,
+} as const;
+
+/** `plywood promote`'s words (src/stack-ops.ts promoteRelease). */
+export const PROMOTE_WORDS = {
+  usage: `${PRODUCT} promote --to <env> [--release <name>] [--from <env>] [--allow-skip] [--dry-run]`,
+  waiting: `The promote waits at the release gate. Someone other than you approves the change set its 'release gate: change set <digest>' line names, with '${PRODUCT} approve release --plan <digest>', and then you run this command again.`,
+  noPromotion: (path: string): string =>
+    `${path} sets no promotion, so there is no order to promote in. List the environments first to last, as promotion: [dev, staging, prod], and run '${PRODUCT} init' again.`,
+  notAnEnvironment: (flag: string, env: string, promotion: readonly string[]): string =>
+    `${flag} ${env} is not an environment of promotion; they are ${promotion.join(", ")}`,
+  firstEnvironment: (env: string): string =>
+    `${env} is the first environment of promotion, which the merge updates; promote carries a release from it to the next. To go back to a release there, run '${PRODUCT} rollback ${env} --release <name>'.`,
 } as const;
 
 /**

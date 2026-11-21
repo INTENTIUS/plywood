@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doraCounts, overrideRecorded, reportHolds } from "../checks";
 import { dryRun } from "../main";
-import { auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext } from "../ports";
-import { RECEIVER, RECEIVER_URL, ROLLBACK_JS } from "../probes";
+import { auditScript, deployGatedScript, deployScript, promoteScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext } from "../ports";
+import { PROMOTE_JS, RECEIVER, RECEIVER_URL, ROLLBACK_JS } from "../probes";
 import { readScenario } from "../scenarios";
 
 describe("the checks", () => {
@@ -173,6 +173,7 @@ describe("the scenarios' BREAK arms", () => {
       ["pw-traces", "PLYWOOD_E2E_TELEMETRY", "telemetry-off"],
       ["pw-estate", "PLYWOOD_E2E_TELEMETRY", "telemetry-none"],
       ["pw-rollback", "PLYWOOD_E2E_REVOKED", "shop-a"],
+      ["pw-promote", "PLYWOOD_E2E_FROM", "dev"],
     ];
     for (const [id, key, value] of cases) {
       const s = readScenario(id);
@@ -236,5 +237,56 @@ describe("pw-rollback", () => {
     expect(lines).toContain("run plywood-e2e revoke shop-a");
     expect(s.steps.map((x) => x.id).slice(-2)).toEqual(["revoke", "applied"]);
     expect(s.steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "rollback", "prod", "shop-a"], expect: [{ exit: 0 }] });
+  });
+});
+
+describe("pw-promote", () => {
+  it("deploys dev and promotes through the commands, each with the forge's ledger under it", async () => {
+    const t = ctx();
+    for (const words of [["deploy-gated", "dev", "shop-p1"], ["promote", "staging", "shop-p1", "dev"]]) expect(await runCommand(t.c, words)).toBe(0);
+    expect(t.ran).toHaveLength(2);
+    for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
+    expect(last(t.ran[0]!)).toContain("npx chant run --components --env 'dev' --release 'shop-p1' --yes --actor 'tutor'");
+    expect(last(t.ran[1]!)).toContain("plywood promote --to 'staging' --release 'shop-p1' --from 'dev' --actor 'tutor'");
+    await expect(runCommand(t.c, ["promote", "staging", "shop-p1"])).rejects.toThrow(/takes <env> <label> <from>/);
+  });
+
+  it("approves the change set the release gate names as the reviewer, and reads the deploy from the second run", () => {
+    const script = promoteScript("prod-us", "shop-p1", "staging", "tutor", "reviewer");
+    expect(script).toContain('if [ "$code" != 3 ]; then exit "$code"; fi');
+    expect(script).toContain(`plywood approve release --plan "$digest" --approver 'reviewer' --yes`);
+    expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
+    const gated = deployGatedScript("dev", "shop-p1", "tutor", "reviewer");
+    expect(gated).toContain("npx chant approve shop release --env 'dev' --approver 'reviewer' --yes");
+  });
+
+  it("reads the digest off the release gate's line", () => {
+    const script = promoteScript("prod-us", "shop-p1", "staging", "tutor", "reviewer");
+    const line = script.split("\n").find((l) => l.startsWith("digest="))!;
+    const out = 'release gate: change set jcs1-sha256:ab12 for "prod-us", 1 entry, 0 hole(s)';
+    const r = spawnSync("sh", ["-c", `out=${JSON.stringify(out)}\n${line}\nprintf '%s' "$digest"`], { encoding: "utf8" });
+    expect(r.stdout).toBe("jcs1-sha256:ab12");
+  });
+
+  it("holds when the document records a deploy in the environment, and fails on a refusal or another environment", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pw-promote-154-"));
+    const run = (doc: string, env: string) => {
+      const file = join(dir, `${env}.json`);
+      writeFileSync(file, doc);
+      return spawnSync("node", ["-e", PROMOTE_JS, file, env]).status;
+    };
+    const record = { component: "shop", env: "prod-us", digest: "sha256:ab", runId: "4790" };
+    expect(run(JSON.stringify({ plan: {}, records: [record] }), "prod-us")).toBe(0);
+    expect(run(JSON.stringify({ records: [{ ...record, env: "staging" }] }), "prod-us")).toBe(1);
+    expect(run(JSON.stringify({ error: "promote-skips-environment" }), "prod-us")).toBe(1);
+    expect(run("promote-skips-environment", "prod-us")).toBe(1);
+  });
+
+  it("promotes prod-us from staging in the plain arm and from dev in the BREAK arm, last", () => {
+    const s = readScenario("pw-promote");
+    const lines = dryRun(s).join("\n");
+    expect(lines).toContain("run plywood-e2e promote prod-us shop-p1 staging");
+    expect(lines).toContain("run plywood-e2e promote prod-us shop-p1 dev");
+    expect(s.steps.map((x) => x.id)).toEqual(["promotion", "release", "dev", "staging", "applied"]);
   });
 });

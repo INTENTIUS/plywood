@@ -34,6 +34,8 @@ import { join } from "node:path";
 import { applyMergeOf, applyWhenOf } from "./config/apply";
 import type { RawConfig } from "./config/types";
 import { checkConfig, findConfig, loadConfig } from "./config/index";
+import { planEnvironment } from "./config/promotion";
+import { RELEASE_GATE } from "./init/render";
 import { FORGES } from "./config/routing";
 import type { ExitTable } from "./exit-codes";
 import { explainRefusal } from "./refusals";
@@ -55,11 +57,16 @@ export const UP_STEP_KIND = "pulumi-up";
 const PR_OP = /^pr-(\d+)(?:-([a-z0-9][a-z0-9-]*))?$/;
 
 /** chant's op and gate for what a person typed after `plywood approve`. */
+/** chant's op for the release gate a promote, rollback or redeploy binds (`RELEASE_GATE_OP`). */
+export const RELEASE_GATE_OP = "release";
+
 export function approveTarget(
   gate: string,
   opts: { pr?: string; stack?: string; op?: string },
 ): { op: string; gate: string } | { error: string } {
   if (opts.op) return { op: opts.op, gate };
+  // A promote, rollback or redeploy waits at the release gate, which chant records under its release op.
+  if (gate === RELEASE_GATE) return { op: RELEASE_GATE_OP, gate };
   // `plywood approve pr-12` names the pull request's op; its gate is `up`.
   if (PR_OP.test(gate)) return { op: gate, gate: PR_GATE };
   // `plywood approve review --pr 12`: the review stack's update, chant's gate pr-env under op pr-12 (plywood#15).
@@ -388,7 +395,7 @@ async function upBeforeMerge(number: string, args: string[], json: boolean, tabl
     // chant#4607: apply.requires as --requires.
     const argv = [
       "components", "pr-apply", "--before-merge", "--base", at, "--pr", number,
-      "--env", envFlag.value ?? "production", "--gate", PR_GATE, "--forge", forge,
+      "--env", envFlag.value ?? planEnvironment(config.doc), "--gate", PR_GATE, "--forge", forge,
       ...requiresArgv(chant, config.doc),
       ...mergeArgv(config.doc),
       ...(json ? ["--json"] : []),

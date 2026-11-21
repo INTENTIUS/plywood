@@ -28,7 +28,7 @@ export const GUARD: AgentGuardSpec = {
   words: { product: PRODUCT, refusal: `an agent session does not run '{what}'. Open a pull request; ${PRODUCT} previews it, and the update runs after a person approves the digest.` },
   rules: {
     engines: { pulumi: engine, plunge: engine },
-    product: { commands: [["up"], ["resume"], ["approve"], ["override"], ["cancel"], ["move"], ["rollback"], ["action"]], flagValues: [["--respond", "up"]] },
+    product: { commands: [["up"], ["resume"], ["approve"], ["override"], ["cancel"], ["move"], ["rollback"], ["promote"], ["action"]], flagValues: [["--respond", "up"]] },
     wrapperExit: 1,
   },
 };

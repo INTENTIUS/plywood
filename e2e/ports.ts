@@ -52,7 +52,8 @@ import {
 import { driftIssueTitle, driftOpName } from "../packages/plywood/src/words";
 import type { ApproveInput, Arm, BucketPort, Clock, HarnessModule, LedgerRecord, Person, SafeRunInstance } from "./harness";
 import { overlayFiles, readOverlay } from "./overlays";
-import { MCP_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROLLBACK_JS, ROWS_JS } from "./probes";
+import { MCP_JS, PROMOTE_JS, RECEIVED_FILE, RECEIVED_JS, RECEIVER, RECEIVER_JS, RECEIVER_PORT, RECEIVER_URL, ROLLBACK_JS, ROWS_JS } from "./probes";
+import { RELEASE_GATE } from "../packages/plywood/src/init/render";
 
 // ── reports ─────────────────────────────────────────────────────────────
 
@@ -475,6 +476,51 @@ export function rollbackScript(env: string, label: string, by: string, approver:
   ].join("\n");
 }
 
+/** The digest a waiting release gate names on its `release gate: change set <digest> for "<env>"` line, read from `$out`. */
+const RELEASE_GATE_DIGEST = `digest="$(printf '%s\\n' "$out" | sed -n 's/.*release gate: change set \\([^ ]*\\) for .*/\\1/p' | head -n 1)"`;
+
+/**
+ * The script `deploy-gated` runs: `chant run --components --env <env>
+ * --release <label>` as `by`, as the merge's stand-in for the first
+ * environment of promotion. Under a gate that asks, the run waits at the
+ * project's component gate (exit 3); `approver` approves it with chant's own
+ * line for component `shop`, and the same run goes again.
+ */
+export function deployGatedScript(env: string, label: string, by: string, approver: string): string {
+  const run = `npx chant run --components --env ${quote(env)} --release ${quote(label)} --yes --actor ${quote(by)}`;
+  return [
+    "code=0",
+    `${run} || code=$?`,
+    'if [ "$code" = 0 ]; then exit 0; fi',
+    'if [ "$code" != 3 ]; then exit "$code"; fi',
+    `npx chant approve shop ${RELEASE_GATE} --env ${quote(env)} --approver ${quote(approver)} --yes`,
+    run,
+  ].join("\n");
+}
+
+/**
+ * The script `promote` runs: `plywood promote --to <env> --release <label>
+ * --from <from>` as `by`. The release gate must wait (exit 3) and name the
+ * change set it binds; `approver` approves that digest, and the same command
+ * runs again with --json, whose document must record the deploy in <env>
+ * (./probes.ts PROMOTE_JS). Any other exit of the first call, such as
+ * chant's refusal of a promote that skips an environment, is the script's own.
+ */
+export function promoteScript(env: string, label: string, from: string, by: string, approver: string): string {
+  const ask = `plywood promote --to ${quote(env)} --release ${quote(label)} --from ${quote(from)} --actor ${quote(by)}`;
+  return [
+    "code=0",
+    `out="$(${ask} 2>&1)" || code=$?`,
+    `printf '%s\\n' "$out"`,
+    'if [ "$code" != 3 ]; then exit "$code"; fi',
+    RELEASE_GATE_DIGEST,
+    `test -n "$digest" || { echo ${quote("plywood promote waited without naming the change set its release gate binds")} >&2; exit 1; }`,
+    `plywood approve ${RELEASE_GATE} --plan "$digest" --approver ${quote(approver)} --yes`,
+    `${ask} --json > /tmp/plywood-e2e-promote.json`,
+    `node -e ${quote(PROMOTE_JS)} /tmp/plywood-e2e-promote.json ${quote(env)}`,
+  ].join("\n");
+}
+
 /** The commands `plywood-e2e` takes, with their arguments. */
 export const COMMANDS: Record<string, string> = {
   "wait-runs": "<op> <count> [<stack>]: wait until the ledger holds <count> wave jobs of <op> since the arm started, only those that targeted <stack> when given",
@@ -509,6 +555,8 @@ export const COMMANDS: Record<string, string> = {
   release: "<label>: cut release <label> from main's tip, tagged green first, in a job container as the author",
   revoke: "<label|none>: tag the commit <label> was cut from ci/revoked and push it; none revokes nothing",
   deploy: "<env> <label>: chant run --components --env <env> --release <label> at main's tip, in a job container, with the forge's ledger under it",
+  "deploy-gated": "<env> <label>: chant run --components --env <env> --release <label> as the author, its component gate approved by the reviewer with chant's own line",
+  promote: "<env> <label> <from>: plywood promote --to <env> --release <label> --from <from> as the author, the release gate approved by the reviewer, and the deploy recorded (./probes.ts PROMOTE_JS)",
   rollback: "<env> <label>: plywood rollback <env> --release <label> as the author, the release gate approved by the reviewer, and the restore recorded (./probes.ts ROLLBACK_JS)",
   mcp: "<read-only|propose>: a stdio client over plywood mcp in a job container: the tools listed, none that writes, and plywood:stacks called (./probes.ts MCP_JS)",
 };
@@ -593,6 +641,12 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     case "deploy":
       need(2);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployScript(a[0]!, a[1]!))));
+    case "deploy-gated":
+      need(2);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployGatedScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));
+    case "promote":
+      need(3);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteScript(a[0]!, a[1]!, a[2]!, c.author.login, c.reviewer.login))));
     case "rollback":
       need(2);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(rollbackScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));

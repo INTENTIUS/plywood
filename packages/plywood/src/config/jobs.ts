@@ -1,5 +1,5 @@
 /**
- * `env`, `pass`, `parallelism` and `forge_environments`: what the jobs run with
+ * `env`, `pass`, `parallelism` and `environments`: what the jobs run with
  * (plywood#29).
  *
  *   env           variable to value         each job's variables: the waves,
@@ -12,9 +12,11 @@
  *                                           (chant#4625)
  *   forge_environments  stack glob to a     each update job's deployment
  *                 forge environment         environment, and the forge check's.
- *                                           `environments` with a glob's name
- *                                           or { name, url } is its earlier
- *                                           spelling (./vocabulary.ts)
+ *                                           A name or a { name, url } entry
+ *                                           under `environments` is its
+ *                                           earlier spelling; a mapping of
+ *                                           stage keys there is a stage
+ *                                           (src/config/promotion.ts)
  *
  * The translation is in src/jobs.ts, which puts the settings on the waves
  * spec, the drift Ops and the pull request pipeline.
@@ -22,6 +24,7 @@
 import type { JsonSchema } from "./types";
 import { error, isObject, warning, type ConfigGroup, type ConfigProblem } from "./types";
 import { globMatches } from "./images";
+import { isForgeEnvironmentEntry, isStageEntry } from "./promotion";
 
 /** A variable name, as every forge reads one. */
 export const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -46,7 +49,7 @@ export interface JobSettings {
   /** `pass`: variable to the forge secret it is read from. */
   secrets: Record<string, string>;
   parallelism?: number;
-  /** `forge_environments`, in file order: the first glob that matches a stack wins. */
+  /** `forge_environments`, then the globs `environments` names in the earlier spelling, in file order: the first glob that matches a stack wins. */
   environments: Array<{ glob: string; environment: ForgeEnvironment }>;
 }
 
@@ -55,6 +58,20 @@ const environmentSchema: JsonSchema = {
     { type: "string", minLength: 1 },
     { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string", minLength: 1 }, url: { type: "string" } } },
   ],
+};
+
+/** `environments.<name>` as a stage of promotion (src/config/promotion.ts): each project's stack there. */
+const stageSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targets"],
+  properties: {
+    targets: {
+      type: "object",
+      description: "Each project to the stack it updates in this environment, as stack or project/stack.",
+      additionalProperties: { type: "string", minLength: 1 },
+    },
+  },
 };
 
 function variableProblems(name: string, key: string): ConfigProblem[] {
@@ -70,10 +87,26 @@ export function passedSecrets(v: unknown): Record<string, string> {
   return {};
 }
 
-/** `forge_environments` in file order. */
-export function environmentsOf(v: unknown): JobSettings["environments"] {
-  if (!isObject(v)) return [];
-  return Object.entries(v).flatMap(([glob, e]) => {
+/**
+ * Each stack glob's forge environment, with the key it was written under:
+ * `forge_environments`, then each glob entry of `environments` (the earlier
+ * spelling) that `forge_environments` does not name. A stage entry under
+ * `environments` is promotion's (src/config/promotion.ts), not a glob's.
+ */
+export function forgeEnvironmentEntries(doc: Record<string, unknown>): Array<{ key: string; glob: string; value: unknown }> {
+  const own = isObject(doc.forge_environments) ? Object.entries(doc.forge_environments).map(([glob, value]) => ({ key: `forge_environments.${glob}`, glob, value })) : [];
+  const named = new Set(own.map((e) => e.glob));
+  const earlier = isObject(doc.environments)
+    ? Object.entries(doc.environments)
+        .filter(([glob, value]) => !isStageEntry(value) && !named.has(glob))
+        .map(([glob, value]) => ({ key: `environments.${glob}`, glob, value }))
+    : [];
+  return [...own, ...earlier];
+}
+
+/** Each stack glob's forge environment in file order, from `forge_environments` and the earlier spelling under `environments`. */
+export function environmentsOf(doc: Record<string, unknown>): JobSettings["environments"] {
+  return forgeEnvironmentEntries(doc).flatMap(({ glob, value: e }) => {
     if (typeof e === "string") return [{ glob, environment: { name: e } }];
     if (isObject(e) && typeof e.name === "string") return [{ glob, environment: { name: e.name, ...(typeof e.url === "string" ? { url: e.url } : {}) } }];
     return [];
@@ -87,7 +120,7 @@ export function jobSettingsOf(doc: Record<string, unknown>): JobSettings {
     variables,
     secrets: passedSecrets(doc.pass),
     ...(typeof doc.parallelism === "number" ? { parallelism: doc.parallelism } : {}),
-    environments: environmentsOf(doc.forge_environments),
+    environments: environmentsOf(doc),
   };
 }
 
@@ -120,9 +153,9 @@ export const jobs: ConfigGroup = {
       additionalProperties: environmentSchema,
     },
     environments: {
-      description: "The earlier spelling of forge_environments: stack glob to a name, or a map with name and url.",
+      description: "Each environment of promotion to its stage keys, such as targets: each project to the stack it updates there. An entry that is a name, or a map with name and url, is read as forge_environments, its earlier spelling.",
       type: "object",
-      additionalProperties: environmentSchema,
+      additionalProperties: { anyOf: [stageSchema, environmentSchema] },
     },
   },
   check(doc) {
@@ -149,21 +182,23 @@ export const jobs: ConfigGroup = {
     if (doc.parallelism !== undefined && !(typeof doc.parallelism === "number" && Number.isInteger(doc.parallelism) && doc.parallelism >= 1)) {
       out.push(error("parallelism", "must be a whole number of 1 or more"));
     }
-    // ./vocabulary.ts has moved environments' glob entries here; an entry left under environments is no glob's.
-    if (doc.environments !== undefined) out.push(error("environments", "maps a stack glob to a name, or to a mapping with name and url; write it as forge_environments"));
-    if (doc.forge_environments !== undefined) {
-      if (!isObject(doc.forge_environments)) out.push(error("forge_environments", "must be a mapping of stack glob to environment"));
-      else {
-        const forge = isObject(doc.forge) ? doc.forge.kind : undefined;
-        if (forge === "forgejo") out.push(error("forge_environments", "Forgejo has no deployment environments; leave forge_environments out, or give forge.kind github or gitlab"));
-        const listed = isObject(doc.stacks) ? Object.keys(doc.stacks) : [];
-        for (const [glob, e] of Object.entries(doc.forge_environments)) {
-          const named = typeof e === "string" ? e : isObject(e) ? e.name : undefined;
-          if (typeof named !== "string" || named.trim() === "") out.push(error(`forge_environments.${glob}`, "must name the environment, as the forge spells it, or be a mapping with name and url"));
-          else if (isObject(e) && Object.keys(e).some((k) => k !== "name" && k !== "url")) out.push(error(`forge_environments.${glob}`, "takes name and url"));
-          if (listed.length > 0 && !listed.some((s) => globMatches(glob, s))) out.push(warning(`forge_environments.${glob}`, "matches no stack under stacks"));
-        }
+    if (doc.forge_environments !== undefined && !isObject(doc.forge_environments)) out.push(error("forge_environments", "must be a mapping of stack glob to environment"));
+    if (doc.environments !== undefined && !isObject(doc.environments)) out.push(error("environments", "must be a mapping of environment to its stage keys"));
+    // A stage entry under environments is promotion's, checked in src/config/promotion.ts; a name or { name, url } there is forge_environments' earlier spelling.
+    const globs = forgeEnvironmentEntries(doc);
+    if (globs.length > 0) {
+      const forge = isObject(doc.forge) ? doc.forge.kind : undefined;
+      if (forge === "forgejo") out.push(error(globs[0]!.key.split(".")[0]!, "Forgejo has no deployment environments; leave forge_environments out, or give forge.kind github or gitlab"));
+      const listed = isObject(doc.stacks) ? Object.keys(doc.stacks) : [];
+      for (const { key, glob, value: e } of globs) {
+        const named = typeof e === "string" ? e : isObject(e) ? e.name : undefined;
+        if (typeof named !== "string" || named.trim() === "") out.push(error(key, "must name the environment, as the forge spells it, or be a mapping with name and url"));
+        else if (isObject(e) && !isForgeEnvironmentEntry(e)) out.push(error(key, "takes name and url"));
+        if (listed.length > 0 && !listed.some((s) => globMatches(glob, s))) out.push(warning(key, "matches no stack under stacks"));
       }
+    }
+    if (isObject(doc.forge_environments) && isObject(doc.environments)) {
+      for (const glob of Object.keys(doc.forge_environments)) if (isForgeEnvironmentEntry(doc.environments[glob])) out.push(error(`environments.${glob}`, "is forge_environments' earlier spelling, and forge_environments names the same glob; keep one"));
     }
     return out;
   },

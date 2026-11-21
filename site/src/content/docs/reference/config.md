@@ -38,6 +38,10 @@ drift: { schedule: "0 6 * * *" }
 | `policy.source` | none | a shared rule set from another repository: `repo`, `ref` and `path` (default `policy`); `packs` are then paths inside it |
 | `policy.providers` | none | the provider packages a stack may use; `plywood init` writes them as `deny_provider_package` in `policy.rego` and as the CrossGuard pack `policy/plywood-providers` |
 | `policy.packs` | none | CrossGuard packs the preview and the update run with `--policy-pack`; mandatory violations deny, advisory ones are note lines |
+| `cost.command` | none | the estimator: a command line or a list of arguments that names `{planJson}`, the stack's preview JSON, and prints the stack's monthly cost; plywood ships none |
+| `cost.format` | `chant` | the format of the estimator's output: `chant`, a JSON object with `monthlyDelta`, or `infracost`'s JSON |
+| `cost.currency` | the estimate's, else `USD` | the currency of the amounts, a three-letter code |
+| `cost.approve_above` | off | the monthly change above which a preview needs an approval of its own and a wave waits for one; a stack the estimator could not price counts as over |
 | `identity.preview`, `identity.up` | the job's own credentials | each job's identity per cloud: `aws` a role ARN, `gcp` a service account, `azure` a client id, `pulumi` a Pulumi Cloud token (`team:<name>`, `user:<login>`, `organization` or `organization:admin`) |
 | `identity.stacks` | none | stack glob to its own `preview` and `up` identities; the first glob that matches wins |
 | `identity.aws`, `identity.gcp`, `identity.azure` | none | each cloud's trade settings: `region`, `audience`, `endpoint`; `provider`, `audience`, `sts_endpoint`, `iam_endpoint`; `tenant_id`, `subscription_id`, `audience`, `authority` |

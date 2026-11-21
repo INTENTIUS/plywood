@@ -27,6 +27,7 @@ import type { AgentSettings, ReviewSettings } from "./config/agents";
 import type { DriftSettings } from "./config/drift";
 import type { JobSettings } from "./config/jobs";
 import type { ChantIdentitySettings } from "./config/identity";
+import type { CostSettings } from "./config/cost";
 import type { ChantNotifyConfig } from "./config/observe";
 import type { ChantPolicySettings, PolicyPack } from "./config/policy";
 
@@ -57,6 +58,8 @@ export interface ChantCiSettings {
   policy?: ChantPolicySettings;
   /** chant's plan and apply identities per cloud, Pulumi Cloud's included (chant#4296, #4549). */
   identity?: ChantIdentitySettings;
+  /** The cost estimate of each preview, read at base (chant#5334 `ci.cost`; plywood.yml `cost`). */
+  cost?: CostSettings;
   /** Where chant keeps each run's HTML report (chant#4554). */
   reportUrl?: string;
   branches?: Record<string, string[]>;
@@ -113,6 +116,8 @@ export interface ChantPipelineSettings {
   runner?: ChantRunner;
   /** CrossGuard packs every stack's pulumi-up step runs, relative to the repository root (chant#4541). */
   policyPacks?: PolicyPack[];
+  /** The wave cost hold, set when `cost.approve_above` is (chant#5341 `holds.cost`). */
+  cost?: CostSettings;
   /** The waves spec's notify (chant `NotifyConfig`): the variables holding each webhook. */
   notify?: ChantNotifyConfig;
   /** The scheduled drift check and its response (plywood#8): chant's scheduled Op jobs and `plywood drift`. */

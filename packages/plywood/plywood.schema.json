@@ -343,6 +343,49 @@
         }
       }
     },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "The estimator: a command line, or a list of arguments. It names {planJson}, the stack's preview JSON, and prints the stack's monthly cost on standard output. {target} is the stack."
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "chant",
+            "infracost"
+          ],
+          "default": "chant",
+          "description": "What the estimator prints: chant, { monthlyDelta, monthlyTotal?, pastMonthlyTotal?, currency? }, or infracost's JSON."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "The currency the amounts are in, as a three-letter code. Absent, the estimate's own, else USD."
+        },
+        "approve_above": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The monthly change above which a preview needs an approval of its own and a wave waits for one. A stack the estimator could not price counts as over. Absent, the estimate is shown and holds nothing."
+        }
+      }
+    },
     "identity": {
       "type": "object",
       "additionalProperties": false,

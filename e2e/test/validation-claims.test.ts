@@ -199,10 +199,10 @@ describe("pw-rollback", () => {
     for (const words of [["release", "shop-a"], ["revoke", "shop-a"], ["revoke", "none"], ["deploy", "prod", "shop-a"], ["rollback", "prod", "shop-a"]]) expect(await runCommand(t.c, words)).toBe(0);
     expect(t.ran).toHaveLength(5);
     for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
-    expect(last(t.ran[0]!)).toContain("npx chant release cut 'shop-a' --yes --actor 'tutor'");
+    expect(last(t.ran[0]!)).toContain("chant release cut 'shop-a' --yes --actor 'tutor'");
     expect(last(t.ran[1]!)).toContain('git tag -a "ci/revoked/$sha"');
     expect(last(t.ran[2]!)).toContain("no release revoked");
-    expect(last(t.ran[3]!)).toContain("npx chant run --components --env 'prod' --release 'shop-a'");
+    expect(last(t.ran[3]!)).toContain("chant run --components --env 'prod' --release 'shop-a'");
     await expect(runCommand(t.c, ["rollback", "prod"])).rejects.toThrow(/takes <env> <label>/);
   });
 
@@ -213,7 +213,7 @@ describe("pw-rollback", () => {
     expect(script).toContain(`plywood "$@" --approver 'reviewer' --yes`);
     expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
     expect(releaseScript("shop-b", "tutor")).toContain('git tag -a "ci/green/$sha"');
-    expect(deployScript("prod", "shop-b")).toBe("npx chant run --components --env 'prod' --release 'shop-b' --yes");
+    expect(deployScript("prod", "shop-b")).toBe("chant run --components --env 'prod' --release 'shop-b' --yes");
     expect(revokeScript("none")).not.toContain("git tag");
   });
 
@@ -244,7 +244,7 @@ describe("pw-rollback", () => {
 describe("pw-alert-agent", () => {
   it("posts one signed generic alert to a relay on loopback and reads its fact from chant/lifecycle", () => {
     const script = alertScript("e2e checkout latency");
-    expect(script).toContain("npx chant notify relay --host 127.0.0.1 --port 8787");
+    expect(script).toContain("chant notify relay --host 127.0.0.1 --port 8787");
     expect(script).toContain("X-Chant-Signature: sha256=$sig");
     expect(script).toContain("/alert/generic");
     expect(script).toContain("git show FETCH_HEAD:_alerts/alert.jsonl | grep -F 'e2e checkout latency'");
@@ -280,7 +280,7 @@ describe("pw-promote", () => {
     for (const words of [["deploy-gated", "dev", "shop-p1"], ["promote", "staging", "shop-p1", "dev"]]) expect(await runCommand(t.c, words)).toBe(0);
     expect(t.ran).toHaveLength(2);
     for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
-    expect(last(t.ran[0]!)).toContain("npx chant run --components --env 'dev' --release 'shop-p1' --yes --actor 'tutor'");
+    expect(last(t.ran[0]!)).toContain("chant run --components --env 'dev' --release 'shop-p1' --yes --actor 'tutor'");
     expect(last(t.ran[1]!)).toContain("plywood promote --to 'staging' --release 'shop-p1' --from 'dev' --actor 'tutor'");
     await expect(runCommand(t.c, ["promote", "staging", "shop-p1"])).rejects.toThrow(/takes <env> <label> <from>/);
   });
@@ -292,7 +292,7 @@ describe("pw-promote", () => {
     expect(script).toContain(`plywood approve release --plan "$digest" --approver 'reviewer' --yes`);
     expect(script.lastIndexOf("--approver")).toBeLessThan(script.indexOf("node -e"));
     const gated = deployGatedScript("dev", "shop-p1", "tutor", "reviewer");
-    expect(gated).toContain("npx chant approve shop release --env 'dev' --approver 'reviewer' --yes");
+    expect(gated).toContain("chant approve shop release --env 'dev' --approver 'reviewer' --yes");
   });
 
   it("reads the digest off the release gate's line", () => {

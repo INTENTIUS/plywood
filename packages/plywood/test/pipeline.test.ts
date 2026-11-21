@@ -363,6 +363,11 @@ describe("the merge's waves under approval rules", () => {
     writeFileSync(join(dir, "Pulumi.yaml"), "name: shop\nruntime: yaml\n");
     for (const s of ["dev", "prod"]) writeFileSync(join(dir, `Pulumi.${s}.yaml`), "config: {}\n");
     writeFileSync(join(dir, "plywood.yml"), `stacks:\n  shop/dev: { dir: . }\n  shop/prod: { dir: . }\nforge: { kind: github }\n${yml}`);
+    // chant's check step runs `pulumi install` for each member; a stand-in keeps the test off the runner's installed tools.
+    const bin = mkdtempSync(join(tmpdir(), "plywood-fake-pulumi-"));
+    writeFileSync(join(bin, "pulumi"), "#!/bin/sh\necho '{}'\n", { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path ?? ""}`;
     const was = process.cwd();
     process.chdir(dir);
     try {
@@ -376,6 +381,8 @@ describe("the merge's waves under approval rules", () => {
       return { init, code, said: out.stderr.join("\n"), waves };
     } finally {
       process.chdir(was);
+      if (path === undefined) delete process.env.PATH;
+      else process.env.PATH = path;
     }
   }
 

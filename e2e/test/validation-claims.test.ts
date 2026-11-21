@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doraCounts, overrideRecorded, reportHolds } from "../checks";
 import { dryRun } from "../main";
-import { agentRunScript, agentSecretsScript, armLabel, alertScript, auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext, deployGatedScript, promoteHeldScript, promoteScript } from "../ports";
+import { agentRunScript, agentSecretsScript, armLabel, alertScript, auditScript, deployScript, mcpScript, releaseEnv, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext, deployGatedScript, promoteHeldScript, promoteScript } from "../ports";
 import { RECEIVER, RECEIVER_URL, ROLLBACK_JS, PROMOTE_JS } from "../probes";
 import { readScenario } from "../scenarios";
 
@@ -202,7 +202,7 @@ describe("pw-rollback", () => {
     for (const words of [["release", "shop-a"], ["revoke", "shop-a"], ["revoke", "none"], ["deploy", "prod", "shop-a"], ["rollback", "prod", "shop-a"]]) expect(await runCommand(t.c, words)).toBe(0);
     expect(t.ran).toHaveLength(5);
     for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
-    expect(last(t.ran[0]!)).toContain(`chant release cut '${armLabel("shop-a", ARM_START)}' --yes --actor 'tutor'`);
+    expect(last(t.ran[0]!)).toContain(`chant release cut '${armLabel("shop-a", ARM_START)}' --yes --wait-checks --actor 'tutor'`);
     expect(last(t.ran[1]!)).toContain('git tag -a "ci/revoked/$sha"');
     expect(last(t.ran[2]!)).toContain("no release revoked");
     expect(last(t.ran[3]!)).toContain(`chant run --components all --env 'prod' --release '${armLabel("shop-a", ARM_START)}'`);
@@ -222,7 +222,9 @@ describe("pw-rollback", () => {
     expect(script).toContain('if [ "$code" != 3 ]; then exit "$code"; fi');
     expect(script).toContain(`plywood "$@" --approver 'reviewer' --yes`);
     expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
-    expect(releaseScript("shop-b", "tutor")).toContain('git tag -a "ci/green/$sha"');
+    expect(releaseScript("shop-b", "tutor")).not.toContain("ci/green");
+    expect(releaseScript("shop-b", "tutor")).toContain("--wait-checks");
+    expect(releaseEnv("tok")).toMatchObject({ FORGEJO_TOKEN: "tok" });
     // A refused cut is the step's exit, not hidden behind the tag push after it.
     expect(releaseScript("shop-b", "tutor")).toContain("--actor 'tutor' &&\ngit push -q origin --tags");
     expect(deployScript("prod", "shop-b")).toBe("chant run --components all --env 'prod' --release 'shop-b' --yes");

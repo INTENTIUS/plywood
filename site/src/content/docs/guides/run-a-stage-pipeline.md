@@ -9,6 +9,8 @@ With `promotion` in `plywood.yml`, each environment is a stage. The merge update
 
 `plywood ci` writes `.chant/pipeline.ts` from `plywood.yml`, with chant's pipeline workflows: the first stage's waves on merge, and a promote job per later stage. Every job of the pipeline runs in plywood's image with the engine install lines `plywood.yml` sets, as the waves do outside a pipeline. On GitHub and Forgejo it also writes `plywood-reject.yml`, which answers a `/plywood reject` comment. The pull request's plans job reads the first stage's spec from `.chant/op-waves/plywood-<stage>.spec.json`, which `plywood ci` writes too. The release cut on merge needs a clean tree, so it also adds `.chant/op-waves/*/` to `.gitignore`. The first stage's workflow takes over the merge, so `plywood ci` deletes the `pulumi-up` workflows it wrote before `promotion` was set. Commit the files with the workflows. The wave jobs read the committed file at the base commit, so an edited gate applies once its pull request merges.
 
+`plywood init` and `plywood ci` write `release: { green: "forge-checks" }` into `chant.config.ts` when `promotion` is set. The release cut on merge then takes the merge commit's checks on the forge as its green gate: it waits while they run and cuts once they pass, so the repository needs no `ci/green` tag. The cut reads the checks with the pipeline job's forge token.
+
 ```sh
 plywood ci           # writes .chant/pipeline.ts and the workflows
 plywood ci --check   # exits 1 with a diff when .chant/pipeline.ts differs from what plywood.yml writes

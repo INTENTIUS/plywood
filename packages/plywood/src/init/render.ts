@@ -60,16 +60,19 @@ export function plywoodYml(keys: RawConfig): string {
  * The chant project's config, from the template. With plywood.yml's
  * `promotion` it lists the environments in that order, which chant's
  * promotion order reads: `promote --to` takes the environment before as
- * `--from` and refuses one that skips a step.
+ * `--from` and refuses one that skips a step. It also writes
+ * `release: { green: "forge-checks" }`, so the cut on merge waits for the merge
+ * commit's checks on the forge (chant#5438) and needs no `ci/green` tag.
  */
 export function chantConfigTs(promotion?: readonly string[]): string {
   const environments = promotion?.length ? `\n  environments: [${promotion.map((e) => JSON.stringify(e)).join(", ")}],` : "";
-  return fill(template("chant.config.ts.tmpl"), { environments });
+  const release = promotion?.length ? `\n  release: { green: "forge-checks" },` : "";
+  return fill(template("chant.config.ts.tmpl"), { environments: environments + release });
 }
 
 /** Whether a chant.config.ts is the one plywood init writes, so init may write it again. */
 export function chantConfigWrittenByPlywood(text: string): boolean {
-  return /^\s*\*\s*Written by plywood init\./m.test(text) && /export default \{\n {2}lexicons: \["pulumi"\],(?:\n {2}environments: \[[^\]\n]*\],)?\n\} satisfies ChantConfig;\n?$/.test(text);
+  return /^\s*\*\s*Written by plywood init\./m.test(text) && /export default \{\n {2}lexicons: \["pulumi"\],(?:\n {2}environments: \[[^\]\n]*\],)?(?:\n {2}release: \{ green: "forge-checks" \},)?\n\} satisfies ChantConfig;\n?$/.test(text);
 }
 
 /** A component name chant takes: lowercase letters, digits and `-`. */

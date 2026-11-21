@@ -423,20 +423,26 @@ export function receivedArgv(args: readonly string[]): string[] {
 }
 
 /**
- * The script `release` runs in a job container on a clone of main: tag HEAD
- * green the way `chant ci tick` would (an annotated, unsigned `ci/green/<sha>`),
- * cut the release `label` from it, and push the tags. The ledger's push is
- * withForgeLedger's. The cut is a release of the shop repository's
+ * The script `release` runs in a job container on a clone of main: cut the
+ * release `label` from HEAD and push the tags. The cut's green gate is the
+ * commit's checks on the forge (`release.green: forge-checks`, which `plywood
+ * init` writes under `promotion`), so the job carries the author's Forgejo
+ * token (see `releaseEnv`) and the cut waits for pending checks with
+ * `--wait-checks`; no `ci/green/<sha>` tag is written by hand. The ledger's push
+ * is withForgeLedger's. The cut is a release of the shop repository's
  * components, so it is what `plywood rollback --release` restores. Each line
  * runs only after the one before succeeds, so a refused cut is the step's exit.
  */
 export function releaseScript(label: string, by: string): string {
   return [
-    'sha="$(git rev-parse HEAD)"',
-    'git rev-parse -q --verify "refs/tags/ci/green/$sha" >/dev/null || git tag -a "ci/green/$sha" -m "e2e: green"',
-    `chant release cut ${quote(label)} --yes --actor ${quote(by)}`,
+    `chant release cut ${quote(label)} --yes --wait-checks --actor ${quote(by)}`,
     "git push -q origin --tags",
   ].join(" &&\n");
+}
+
+/** The environment of the release job: the Forgejo server, repository and token the cut's `forge-checks` gate reads the commit's checks with. */
+export function releaseEnv(token: string): Record<string, string> {
+  return { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: token };
 }
 
 /**
@@ -792,7 +798,7 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     }
     case "release":
       need(1);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(releaseScript(armLabel(a[0]!, c.since()), c.author.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: releaseEnv(c.author.token) }, withForgeLedger(releaseScript(armLabel(a[0]!, c.since()), c.author.login))));
     case "revoke":
       need(1);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(revokeScript(armLabel(a[0]!, c.since())))));

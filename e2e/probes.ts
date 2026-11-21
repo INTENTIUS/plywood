@@ -109,16 +109,19 @@ process.exit(found.length ? 0 : 1);
 `;
 
 /**
- * `stage <file> <env> <field>` (plywood#156): in `chant workspace status --json`, a member's pipeline stage
- * named <env> must have <field> set: not null and not absent, and for `canaryHolds` one entry holding.
+ * `stage <file> <env> <field> [<since>]` (plywood#156): in `chant workspace status --json`, a member's pipeline stage
+ * named <env> must have <field> set: not null and not absent, and for `canaryHolds` one entry holding. With
+ * <since>, a value stamped (`requestedAt`, `recordedAt`) before it is an earlier arm's, since the ledger
+ * outlives each arm's reset, and counts as unset.
  */
 export const STAGE_JS = `
 let doc;
 try { doc = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { console.log("workspace status printed no JSON document: " + e.message); process.exit(1); }
-const [env, field] = [process.argv[2], process.argv[3]];
+const [env, field, since] = [process.argv[2], process.argv[3], process.argv[4]];
 const stages = (doc.members || []).flatMap((m) => (m.pipeline && m.pipeline.stages) || []).filter((s) => s.name === env);
 if (!stages.length) { console.log("no member's pipeline has a stage " + env); process.exit(1); }
-const set = (s) => field === "canaryHolds" ? (s.canaryHolds || []).some((h) => h.holding) : s[field] !== null && s[field] !== undefined;
+const fresh = (v) => !since || v === null || typeof v !== "object" || [v.requestedAt, v.recordedAt].filter(Boolean).every((t) => t >= since);
+const set = (s) => field === "canaryHolds" ? (s.canaryHolds || []).some((h) => h.holding) : s[field] !== null && s[field] !== undefined && fresh(s[field]);
 const hit = stages.filter(set);
 console.log(hit.length ? "stage " + env + " has " + field + ": " + JSON.stringify(hit[0][field]) : "stage " + env + " has no " + field);
 process.exit(hit.length ? 0 : 1);

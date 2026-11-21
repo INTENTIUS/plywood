@@ -347,17 +347,18 @@ const WRITE_FILES = `node -e 'const fs=require("fs"),p=require("path");const f=J
 /**
  * The script `configure` runs in a job container on a clone of main: lay
  * the base overlay's files, run `plywood init --forge forgejo --yes` on them
- * (the waves spec, the workflow and any drift jobs written again, with
- * plywood.yml's image and engine lines), and push main. It is not `plywood
- * ci`: that verb writes the workflow without plywood.yml's image, so every
- * job runs in node:22, which has no plywood (the first pw-canary run on
- * 2026-10-30, stalled at its plan; filed on INTENTIUS/plywood). The commit says [skip ci] so the push starts no
- * waves job of its own.
+ * (the waves spec and the workflows written again, with plywood.yml's image
+ * and engine lines), then `plywood ci --forge forgejo`, which also writes the
+ * drift, review and agent workflows plywood.yml turns on with the same image
+ * (plywood#48), and push main. The commit says [skip ci] so the push starts
+ * no waves job of its own.
  */
 export function configureScript(name: string): string {
   return [
     WRITE_FILES,
     `PULUMI_BACKEND_URL=${quote(s3BackendUrl(BUCKETS.state, FLOCI_NET))} plywood init --forge forgejo --yes`,
+    // init writes the pull request and merge workflows; ci writes the rest plywood.yml turns on, such as the agents' workflows.
+    `PULUMI_BACKEND_URL=${quote(s3BackendUrl(BUCKETS.state, FLOCI_NET))} plywood ci --forge forgejo`,
     "git add -A",
     `git commit -q -m ${quote(`e2e: plywood.yml from base overlay ${name}, and plywood init [skip ci]`)} || true`,
     "git push -q origin HEAD:main",
@@ -438,6 +439,20 @@ export function releaseScript(label: string, by: string): string {
   ].join(" &&\n");
 }
 
+/**
+ * The release label a scenario names, as this arm cuts it: chant's ledger and
+ * the release tags outlive each arm's reset, and a label names one commit, so
+ * the arm's start (seconds since the epoch) goes into it. A version label
+ * keeps its shape with that number as its major, so `chant release cut auto`
+ * has a version to bump. `none` stays `none`.
+ */
+export function armLabel(label: string, since: string): string {
+  if (label === "none") return label;
+  const stamp = Math.floor(Date.parse(since) / 1000);
+  const version = /^\d+\.(\d+)\.(\d+)$/.exec(label);
+  return version ? `${stamp}.${version[1]}.${version[2]}` : `${label}-${stamp}`;
+}
+
 /** The script `revoke` runs: tag the commit release `label` was cut from `ci/revoked/<sha>` and push it, as `chant ci tick` revokes a commit that later fails. `none` revokes nothing. */
 export function revokeScript(label: string): string {
   if (label === "none") return 'echo "plywood-e2e: no release revoked"';
@@ -470,7 +485,8 @@ export function rollbackScript(env: string, label: string, by: string, approver:
     `out="$(${ask} 2>&1)" || code=$?`,
     `printf '%s\\n' "$out"`,
     'if [ "$code" != 3 ]; then exit "$code"; fi',
-    `line="$(printf '%s\\n' "$out" | grep -m1 -F 'plywood approve ')"`,
+    // The line as chant prints it to a terminal carries colour codes; the words alone are the command.
+    `line="$(printf '%s\\n' "$out" | grep -m1 -F 'plywood approve ' | sed "s/$(printf '\\033')\\[[0-9;]*m//g")"`,
     `test -n "$line" || { echo ${quote(`plywood rollback waited without the line that approves it`)} >&2; exit 1; }`,
     'set -- ${line#*plywood }',
     `plywood "$@" --approver ${quote(approver)} --yes`,
@@ -516,9 +532,12 @@ export function alertScript(title: string): string {
   ].join("\n");
 }
 
+/** The workspace member whose agent workflow chant writes as `<member>-<op>.yml`. */
+const AGENT_MEMBER = "shop";
+
 /**
  * The script `agent-run` runs as the author: start the alert agent's
- * workflow on main through Forgejo's dispatch API, then wait up to five
+ * workflow (`shop-<op>.yml`) on main through Forgejo's dispatch API, then wait up to five
  * minutes for its pull request from `plywood/agent/<op>-<member>`. A
  * repository whose plywood.yml leaves agent.alert off has no such workflow,
  * so the dispatch is refused and the script exits non-zero.
@@ -527,7 +546,7 @@ export function agentRunScript(op: string): string {
   const api = '"$FORGEJO_SERVER_URL/api/v1/repos/$FORGEJO_REPOSITORY';
   return [
     "set -e",
-    `curl -fsS -X POST -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' -d '{"ref":"main"}' ${api}/actions/workflows/${op}.yml/dispatches"`,
+    `curl -fsS -X POST -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' -d '{"ref":"main"}' ${api}/actions/workflows/${AGENT_MEMBER}-${op}.yml/dispatches"`,
     "for i in $(seq 1 60); do",
     `  if curl -fsS -H "Authorization: token $FORGEJO_TOKEN" ${api}/pulls?state=open" | grep -q ${quote(`plywood/agent/${op}`)}; then echo "plywood-e2e: the agent opened its pull request"; exit 0; fi`,
     "  sleep 5",
@@ -562,15 +581,18 @@ export function deployGatedScript(env: string, label: string, by: string, approv
 /**
  * The lines that approve whichever gate a promote waits at, from `$out`:
  * the stage's gate of the pipeline plywood writes under promotion (chant's
- * own `chant approve <pipeline> <stage> ... --plan <digest>` line), else the
+ * `chant approve <pipeline> <stage> ... --plan <digest>` line, or the
+ * `plywood approve <stage> --plan <digest>` line plywood prints), else the
  * project's release gate (`release gate: change set <digest>`). Exits 1 when
  * the promote waited and named neither.
  */
 function approveWaitingGate(what: string, approver: string): string[] {
   return [
-    `line="$(printf '%s\\n' "$out" | grep -o 'chant approve [a-z0-9_-]* [a-z0-9_-]*[^\`]*--plan sha256:[0-9a-f]*' | head -n 1)"`,
+    `line="$(printf '%s\\n' "$out" | grep -o 'chant approve [a-z0-9_-]* [a-z0-9_-]*[^\`]*--plan [a-z0-9-]*sha256:[0-9a-f]*' | head -n 1)"`,
+    `own="$(printf '%s\\n' "$out" | grep -o 'plywood approve [a-z0-9_-]* --plan [a-z0-9-]*sha256:[0-9a-f]*' | head -n 1)"`,
     RELEASE_GATE_DIGEST,
     `if [ -n "$line" ]; then npx $line --approver ${quote(approver)} --yes;`,
+    `elif [ -n "$own" ]; then plywood \${own#plywood } --approver ${quote(approver)} --yes;`,
     `elif [ -n "$digest" ]; then plywood approve ${RELEASE_GATE} --plan "$digest" --approver ${quote(approver)} --yes;`,
     `else echo ${quote(`${what} waited without naming the gate and digest it binds`)} >&2; exit 1; fi`,
   ];
@@ -607,8 +629,8 @@ export function promoteScript(env: string, label: string, from: string, by: stri
 /**
  * The script `promote-held` runs (plywood#156): `plywood promote --to <env>
  * --release <label> --from <from>` as `by`, approving the gates it waits at
- * as `promote` does, until a soak holds it: the promote must exit 3 with a
- * line naming the soak, and nothing deploys to <env>. A promote that goes
+ * as `promote` does, until a soak holds it: the promote must exit 3 with
+ * chant's `pipeline-soak-waiting` refusal, and nothing deploys to <env>. A promote that goes
  * through, or stops for another reason, fails the step.
  */
 export function promoteHeldScript(env: string, label: string, from: string, by: string, approver: string): string {
@@ -621,7 +643,8 @@ export function promoteHeldScript(env: string, label: string, from: string, by: 
     `  out="$(${ask} 2>&1)" || code=$?`,
     `  printf '%s\\n' "$out"`,
     '  if [ "$code" != 3 ]; then echo "plywood promote exited $code, and a soak holds a promote with 3" >&2; exit 1; fi',
-    `  if printf '%s\\n' "$out" | grep -qi 'soak'; then echo ${quote(`a soak holds the promote into ${env}`)}; exit 0; fi`,
+    // chant's refusal code for a promote a soak holds; a line that only reports a finished soak is not one.
+    `  if printf '%s\\n' "$out" | grep -q 'pipeline-soak-waiting'; then echo ${quote(`a soak holds the promote into ${env}`)}; exit 0; fi`,
     ...approveWaitingGate("plywood promote", approver).map((l) => `  ${l}`),
     "done",
     `echo ${quote(`plywood promote into ${env} waited at its gates and no soak held it`)} >&2`,
@@ -633,10 +656,11 @@ export function promoteHeldScript(env: string, label: string, from: string, by: 
  * The script `stage-status` runs (plywood#156): `chant workspace status
  * <env> --json` on the forge's ledger, and the stage <env>'s <field> in the
  * member's pipeline must be set (./probes.ts STAGE_JS): `soak`, `risk`,
- * `rollback`, `release`, or `canaryHolds` holding.
+ * `rollback`, `release`, or `canaryHolds` holding; a value stamped before
+ * the arm started is an earlier arm's.
  */
-export function stageStatusScript(env: string, field: string): string {
-  return [`chant workspace status ${quote(env)} --json > /tmp/plywood-e2e-status.json`, `node -e ${quote(STAGE_JS)} /tmp/plywood-e2e-status.json ${quote(env)} ${quote(field)}`].join("\n");
+export function stageStatusScript(env: string, field: string, since?: string): string {
+  return [`chant workspace status ${quote(env)} --json > /tmp/plywood-e2e-status.json`, `node -e ${quote(STAGE_JS)} /tmp/plywood-e2e-status.json ${quote(env)} ${quote(field)}${since ? ` ${quote(since)}` : ""}`].join("\n");
 }
 
 /**
@@ -661,7 +685,7 @@ export const COMMANDS: Record<string, string> = {
   "plunge-up": "<stack> <key=value>...: plunge up of <stack> on its store with config set, in a job container; up=false previews instead and writes no record",
   action: "<stack> <name>: plywood action shop/<stack> <name> as the author on the stack's backend, in a job container; a call that waits must print the approve line",
   "approve-pending": "<op>: the reviewer approves the newest pending gate of <op> with the plan it binds",
-  configure: "<base overlay>: lay it over main, run plywood init and push main, in a job container as the admin",
+  configure: "<base overlay>: lay it over main, run plywood init and plywood ci, and push main, in a job container as the admin",
   push: "<branch> <overlay>: push the overlay as one more commit on the arm's pull request branch",
   note: "<branch> <once> <text>...: one comment on the branch's pull request holds <once> and every <text>, and <once> appears once (./checks.ts oneNote)",
   "wait-stacks": "<op> <stack>...: wait until a wave job of <op> since the arm started settled each stack, or one stopped",
@@ -768,31 +792,31 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
     }
     case "release":
       need(1);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(releaseScript(a[0]!, c.author.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(releaseScript(armLabel(a[0]!, c.since()), c.author.login))));
     case "revoke":
       need(1);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(revokeScript(a[0]!))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(revokeScript(armLabel(a[0]!, c.since())))));
     case "deploy":
       need(2);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployScript(a[0]!, a[1]!))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployScript(a[0]!, armLabel(a[1]!, c.since())))));
     case "deploy-gated":
       need(2);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployGatedScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(deployGatedScript(a[0]!, armLabel(a[1]!, c.since()), c.author.login, c.reviewer.login))));
     case "promote":
       need(3);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteScript(a[0]!, a[1]!, a[2]!, c.author.login, c.reviewer.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteScript(a[0]!, armLabel(a[1]!, c.since()), a[2]!, c.author.login, c.reviewer.login))));
     case "promote-held":
       need(3);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteHeldScript(a[0]!, a[1]!, a[2]!, c.author.login, c.reviewer.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(promoteHeldScript(a[0]!, armLabel(a[1]!, c.since()), a[2]!, c.author.login, c.reviewer.login))));
     case "stage-status":
       need(2);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(stageStatusScript(a[0]!, a[1]!))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(stageStatusScript(a[0]!, a[1]!, c.since()))));
     case "pipeline-canary":
       need(1);
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, pipelineCanaryScript(a[0]!)));
     case "rollback":
       need(2);
-      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(rollbackScript(a[0]!, a[1]!, c.author.login, c.reviewer.login))));
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env: { PULUMI_BACKEND_URL: stockBackend("prod-us") } }, withForgeLedger(rollbackScript(a[0]!, armLabel(a[1]!, c.since()), c.author.login, c.reviewer.login))));
     case "approve-pending": {
       need(1);
       const p = await c.ledger.pending(a[0]!, c.since());

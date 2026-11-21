@@ -158,6 +158,8 @@ describe("the stock claims' plywood-e2e commands", () => {
     expect(argv.at(-1)).toContain("http://plywood-admin:adm@forgejo:3000/tutor/shop.git");
     const script = configureScript("stock-first");
     expect(script).toContain("plywood init --forge forgejo --yes");
+    // ci after init writes the agent and drift workflows init leaves to it.
+    expect(script.indexOf("plywood ci --forge forgejo")).toBeGreaterThan(script.indexOf("plywood init --forge forgejo --yes"));
     expect(script).toContain("[skip ci]");
     expect(script).toContain("git push -q origin HEAD:main");
     expect(script).toMatch(/PULUMI_BACKEND_URL='s3:\/\/plywood-tutorial-state\?/);

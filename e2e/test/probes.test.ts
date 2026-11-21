@@ -10,7 +10,7 @@ import { webhookRequest } from "@intentius/chant/notify";
 import { overlayFiles, readOverlay } from "../overlays";
 import { BASE_OVERLAYS_DIR, readScenario } from "../scenarios";
 import { checkConfig, parseConfig } from "../../packages/plywood/src/config/index";
-import { MCP_JS, PLYWOOD_READ_TOOLS, RECEIVED_JS, RECEIVER_JS, RECEIVER_URL, ROWS_JS, WRITE_TOOLS } from "../probes";
+import { MCP_JS, PLYWOOD_READ_TOOLS, RECEIVED_JS, RECEIVER_JS, RECEIVER_URL, ROWS_JS, STAGE_JS, WRITE_TOOLS } from "../probes";
 
 const run = promisify(execFile);
 const node = async (js: string, ...args: string[]): Promise<number> => {
@@ -84,6 +84,18 @@ describe("rows", () => {
     expect(await node(ROWS_JS, file, "op=pulumi-up", "wave.applied=shop/prod-eu")).toBe(0);
     expect(await node(ROWS_JS, file, "status=ok", "wave.applied=shop/prod-us")).toBe(1);
     expect(await node(ROWS_JS, file, "no.such=x")).toBe(1);
+  });
+});
+
+describe("a stage's field in workspace status", () => {
+  it("counts a value stamped before the arm started as unset", async () => {
+    const file = join(tmp(), "status.json");
+    const rollback = { requestedAt: "2026-11-21T10:58:55.952Z", gate: "staging-rollback" };
+    writeFileSync(file, JSON.stringify({ members: [{ pipeline: { stages: [{ name: "staging", rollback, soak: { recordedAt: null, state: "unread" } }] } }] }));
+    expect(await node(STAGE_JS, file, "staging", "rollback")).toBe(0);
+    expect(await node(STAGE_JS, file, "staging", "rollback", "2026-11-21T10:50:00.000Z")).toBe(0);
+    expect(await node(STAGE_JS, file, "staging", "rollback", "2026-11-21T11:00:00.000Z")).toBe(1);
+    expect(await node(STAGE_JS, file, "staging", "soak", "2026-11-21T11:00:00.000Z")).toBe(0);
   });
 });
 

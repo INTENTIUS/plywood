@@ -1,0 +1,1 @@
+{"append":{"plywood.yml":"gate: always\npromotion: [dev, staging, prod-us, prod-eu]\n"},"set":{"Pulumi.prod-us.yaml":{"corpus:eventsRetentionSeconds":"7200"}}}

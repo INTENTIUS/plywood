@@ -1,8 +1,6 @@
 ---
 title: 'Run the environments as a stage pipeline'
 description: 'Give each environment of promotion settings of its own, and let plywood write the pipeline chant runs.'
-needs: [plywood#156]
-draft: true
 ---
 
 With `promotion` in `plywood.yml`, each environment is a stage. The merge updates the first environment's stacks and cuts a release, and `plywood promote` carries that release into each later environment through its gate. The keys on this page sit under `environments.<name>` beside `targets`, and each is off by default.

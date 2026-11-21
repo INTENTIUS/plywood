@@ -6,7 +6,7 @@
  * chant's `pipelineSource` and `checkPipelineFile`; approval rule groups and
  * `proven`; `agent.verify-failed`; and the stage commands' argv.
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -401,5 +401,48 @@ describe("the merge's waves under approval rules", () => {
     expect(r.waves.map((w) => w.approval)).toEqual(r.waves.map(() => "pull-request"));
     expect(r.said).toContain("nothing can prove one");
     expect(r.code).toBe(EXIT.failed);
+  }, 120_000);
+});
+
+describe("plywood init under promotion, on a repository it set up before", () => {
+  it("writes the first stage's spec the plans job reads, and removes the waves workflow the stage replaces", async () => {
+    setChantProductForTests("reset");
+    const dir = mkdtempSync(join(tmpdir(), "plywood-stage-spec-"));
+    writeFileSync(join(dir, "Pulumi.yaml"), "name: shop\nruntime: yaml\n");
+    for (const s of ["dev", "staging", "prod"]) writeFileSync(join(dir, `Pulumi.${s}.yaml`), "config: {}\n");
+    const yml = "stacks:\n  shop/dev: { dir: . }\n  shop/staging: { dir: . }\n  shop/prod: { dir: . }\nforge: { kind: forgejo }\n";
+    writeFileSync(join(dir, "plywood.yml"), yml);
+    const was = process.cwd();
+    process.chdir(dir);
+    try {
+      const init = () => runInit({ bucketCheck: false, dryRun: false, yes: true }, EXIT, { cwd: dir, env: {}, out: () => {}, err: () => {} });
+      const before = await init();
+      expect(before.ok, before.notes.join("\n")).toBe(true);
+      const workflows = join(dir, ".forgejo", "workflows");
+      expect(readdirSync(workflows)).toEqual(expect.arrayContaining(["pulumi-up.yml", "pulumi-up-plans.yml"]));
+
+      writeFileSync(join(dir, "plywood.yml"), `${yml}promotion: [dev, staging, prod]\n`);
+      const after = await init();
+      expect(after.ok, after.notes.join("\n")).toBe(true);
+      const files = readdirSync(workflows);
+      expect(files).toEqual(expect.arrayContaining(["plywood-dev.yml", "plywood-dev-plans.yml"]));
+      expect(files).not.toContain("pulumi-up.yml");
+      expect(files).not.toContain("pulumi-up-plans.yml");
+
+      // The plans job reads the stage's spec from the path its command names, as `plywood pipeline spec --stage dev` prints it.
+      const plans = readFileSync(join(workflows, "plywood-dev-plans.yml"), "utf8");
+      const path = /--spec (\S+) --record-plans/.exec(plans)?.[1];
+      expect(path).toBe(".chant/op-waves/plywood-dev.spec.json");
+      const spec = JSON.parse(readFileSync(join(dir, path!), "utf8")) as { name: string; waves: Array<{ name: string; runs: Array<{ target: string }> }> };
+      expect(spec.name).toBe("plywood-dev");
+      expect(spec.waves.flatMap((w) => w.runs.map((r) => r.target))).toEqual(["shop/dev"]);
+
+      // The wave's plans and outcomes under .chant/op-waves/<op>/ stay out of the tree the release cut reads, once.
+      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n")).toContain(".chant/op-waves/*/");
+      await init();
+      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n").filter((l) => l === ".chant/op-waves/*/")).toHaveLength(1);
+    } finally {
+      process.chdir(was);
+    }
   }, 120_000);
 });

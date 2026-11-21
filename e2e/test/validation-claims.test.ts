@@ -10,9 +10,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doraCounts, overrideRecorded, reportHolds } from "../checks";
 import { dryRun } from "../main";
-import { agentRunScript, agentSecretsScript, alertScript, auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext, deployGatedScript, promoteScript } from "../ports";
+import { agentRunScript, agentSecretsScript, armLabel, alertScript, auditScript, deployScript, mcpScript, releaseScript, revokeScript, rollbackScript, queueRetentionScript, receivedArgv, receiverArgv, runCommand, type CommandContext, deployGatedScript, promoteHeldScript, promoteScript } from "../ports";
 import { RECEIVER, RECEIVER_URL, ROLLBACK_JS, PROMOTE_JS } from "../probes";
 import { readScenario } from "../scenarios";
+
+/** When the stand-in arm started. */
+const ARM_START = "2026-11-01T00:00:00.000Z";
 
 describe("the checks", () => {
   it("reportHolds reads dotted paths and arrays, and says what differs", () => {
@@ -58,7 +61,7 @@ function ctx(o: { reports?: Array<unknown>; plan?: unknown; arm?: Record<string,
     ledger: { runs: async () => [], pending: async () => undefined, overrides: async () => ({ resolutions: [{ gate: "pr-7-shop", resolvedBy: "reviewer", note: "why", planDigest: "d" }], applied: [{ gate: "pr-7-shop", planDigest: "d" }] }) },
     observer: { result: () => ({ code: 0, line: "" }) },
     env: "local",
-    since: () => "2026-11-01T00:00:00.000Z",
+    since: () => ARM_START,
     armEnv: () => o.arm ?? {},
     floci: "http://127.0.0.1:4590",
     jobImage: "plywood-tutorial-job:local",
@@ -199,11 +202,18 @@ describe("pw-rollback", () => {
     for (const words of [["release", "shop-a"], ["revoke", "shop-a"], ["revoke", "none"], ["deploy", "prod", "shop-a"], ["rollback", "prod", "shop-a"]]) expect(await runCommand(t.c, words)).toBe(0);
     expect(t.ran).toHaveLength(5);
     for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
-    expect(last(t.ran[0]!)).toContain("chant release cut 'shop-a' --yes --actor 'tutor'");
+    expect(last(t.ran[0]!)).toContain(`chant release cut '${armLabel("shop-a", ARM_START)}' --yes --actor 'tutor'`);
     expect(last(t.ran[1]!)).toContain('git tag -a "ci/revoked/$sha"');
     expect(last(t.ran[2]!)).toContain("no release revoked");
-    expect(last(t.ran[3]!)).toContain("chant run --components --env 'prod' --release 'shop-a'");
+    expect(last(t.ran[3]!)).toContain(`chant run --components all --env 'prod' --release '${armLabel("shop-a", ARM_START)}'`);
     await expect(runCommand(t.c, ["rollback", "prod"])).rejects.toThrow(/takes <env> <label>/);
+  });
+
+  it("approves the line without the colour codes chant prints around it", () => {
+    const line = rollbackScript("prod-us", "shop-a", "tutor", "reviewer").split("\n").find((l) => l.startsWith("line="))!;
+    const out = "\u001b[90mapprove : plywood approve release --plan jcs1-sha256:72ab\u001b[0m";
+    const r = spawnSync("sh", ["-c", `out="$(printf '%b' ${JSON.stringify(out.replace(/\u001b/g, "\\033"))})"\n${line}\nset -- \${line#*plywood }\nprintf '%s ' "$@"`], { encoding: "utf8" });
+    expect(r.stdout.trim()).toBe("approve release --plan jcs1-sha256:72ab");
   });
 
   it("asks as the author, has the reviewer approve the line it prints, and reads the restore from the second run", () => {
@@ -213,7 +223,9 @@ describe("pw-rollback", () => {
     expect(script).toContain(`plywood "$@" --approver 'reviewer' --yes`);
     expect(script.indexOf("--approver")).toBeLessThan(script.indexOf("--json"));
     expect(releaseScript("shop-b", "tutor")).toContain('git tag -a "ci/green/$sha"');
-    expect(deployScript("prod", "shop-b")).toBe("chant run --components --env 'prod' --release 'shop-b' --yes");
+    // A refused cut is the step's exit, not hidden behind the tag push after it.
+    expect(releaseScript("shop-b", "tutor")).toContain("--actor 'tutor' &&\ngit push -q origin --tags");
+    expect(deployScript("prod", "shop-b")).toBe("chant run --components all --env 'prod' --release 'shop-b' --yes");
     expect(revokeScript("none")).not.toContain("git tag");
   });
 
@@ -237,7 +249,7 @@ describe("pw-rollback", () => {
     expect(lines).toContain("run plywood-e2e revoke none");
     expect(lines).toContain("run plywood-e2e revoke shop-a");
     expect(s.steps.map((x) => x.id).slice(-2)).toEqual(["revoke", "applied"]);
-    expect(s.steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "rollback", "prod", "shop-a"], expect: [{ exit: 0 }] });
+    expect(s.steps.at(-1)).toMatchObject({ command: ["plywood-e2e", "rollback", "prod-us", "shop-a"], expect: [{ exit: 0 }] });
   });
 });
 
@@ -254,7 +266,7 @@ describe("pw-alert-agent", () => {
   it("sets the two secrets as the admin, and starts the workflow by the dispatch API before it looks for the pull request", () => {
     expect(agentSecretsScript()).toContain("actions/secrets/CHANT_RELAY_KEY");
     const run = agentRunScript("plywood-alert-agent");
-    expect(run).toContain("actions/workflows/plywood-alert-agent.yml/dispatches");
+    expect(run).toContain("actions/workflows/shop-plywood-alert-agent.yml/dispatches");
     expect(run.indexOf("dispatches")).toBeLessThan(run.indexOf("pulls?state=open"));
     expect(run).toContain("plywood/agent/plywood-alert-agent");
   });
@@ -280,8 +292,8 @@ describe("pw-promote", () => {
     for (const words of [["deploy-gated", "dev", "shop-p1"], ["promote", "staging", "shop-p1", "dev"]]) expect(await runCommand(t.c, words)).toBe(0);
     expect(t.ran).toHaveLength(2);
     for (const argv of t.ran) expect(last(argv)).toContain("git push -q origin chant/lifecycle");
-    expect(last(t.ran[0]!)).toContain("chant run --components --env 'dev' --release 'shop-p1' --yes --actor 'tutor'");
-    expect(last(t.ran[1]!)).toContain("plywood promote --to 'staging' --release 'shop-p1' --from 'dev' --actor 'tutor'");
+    expect(last(t.ran[0]!)).toContain(`chant run --components all --env 'dev' --release '${armLabel("shop-p1", ARM_START)}' --yes --actor 'tutor'`);
+    expect(last(t.ran[1]!)).toContain(`plywood promote --to 'staging' --release '${armLabel("shop-p1", ARM_START)}' --from 'dev' --actor 'tutor'`);
     await expect(runCommand(t.c, ["promote", "staging", "shop-p1"])).rejects.toThrow(/takes <env> <label> <from>/);
   });
 
@@ -301,6 +313,31 @@ describe("pw-promote", () => {
     const out = 'release gate: change set jcs1-sha256:ab12 for "prod-us", 1 entry, 0 hole(s)';
     const r = spawnSync("sh", ["-c", `out=${JSON.stringify(out)}\n${line}\nprintf '%s' "$digest"`], { encoding: "utf8" });
     expect(r.stdout).toBe("jcs1-sha256:ab12");
+  });
+
+  it("holds on chant's soak refusal, and not on a line that reports a finished soak", () => {
+    const script = promoteHeldScript("prod-us", "shop-s1", "staging", "tutor", "reviewer");
+    const check = script.split("\n").map((l) => l.trim()).find((l) => l.includes("a soak holds the promote"))!;
+    const held = (out: string) => spawnSync("sh", ["-c", `out=${JSON.stringify(out)}\n${check}\nexit 9`], { encoding: "utf8" }).status;
+    expect(held("error: stage prod-us waits for the soak of staging: 1h 59m left [pipeline-soak-waiting]")).toBe(0);
+    expect(held("staging soaked since 2026-11-21T10:55:02Z, and its checks pass")).toBe(9);
+  });
+
+  it("gives each arm its own release labels, a version keeping its shape", () => {
+    const stamp = String(Date.parse(ARM_START) / 1000);
+    expect(armLabel("shop-p1", ARM_START)).toBe(`shop-p1-${stamp}`);
+    expect(armLabel("1.0.0", ARM_START)).toBe(`${stamp}.0.0`);
+    expect(armLabel("none", ARM_START)).toBe("none");
+    expect(armLabel("shop-p1", "2026-11-01T00:00:01.000Z")).not.toBe(armLabel("shop-p1", ARM_START));
+  });
+
+  it("approves the stage gate plywood names on its own approve line", () => {
+    const script = promoteScript("staging", "shop-p1", "dev", "tutor", "reviewer");
+    const line = script.split("\n").map((l) => l.trim()).find((l) => l.startsWith("own="))!;
+    const out = "  Approve it with: plywood approve staging --plan jcs1-sha256:811f7f11";
+    const r = spawnSync("sh", ["-c", `out=${JSON.stringify(out)}\n${line}\nprintf '%s' "$own"`], { encoding: "utf8" });
+    expect(r.stdout).toBe("plywood approve staging --plan jcs1-sha256:811f7f11");
+    expect(script).toContain("elif [ -n \"$own\" ]; then plywood ${own#plywood } --approver 'reviewer' --yes;");
   });
 
   it("holds when the document records a deploy in the environment, and fails on a refusal or another environment", () => {

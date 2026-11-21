@@ -191,8 +191,9 @@ export function jobImageDockerfile(o: { plungeImage: string; pulumiImage: string
         [`RUN set -e; ln -sf ${dir}/pulumi /usr/local/bin/pulumi; plunge version; ${release}/plunge version; pulumi version`]),
     // plywood's images carry bookworm's git 2.39.5, which has no `git merge-tree --write-tree --merge-base`
     // (git 2.40), which chant's lifecycle push replays with when two jobs push chant/lifecycle at once
-    // (plywood#49). The bench takes git from trixie so the scenarios measure their claims.
-    'RUN set -e; echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && printf "Package: *\\nPin: release n=trixie\\nPin-Priority: 100\\n" > /etc/apt/preferences.d/trixie && apt-get update && apt-get install -y --no-install-recommends -t trixie git && rm -rf /var/lib/apt/lists/* && git --version',
+    // (plywood#49). The bench takes git from trixie so the scenarios measure their claims. curl is the
+    // bench's own: the alert scenario's scripts (./ports.ts) call the relay and Forgejo's API with it.
+    'RUN set -e; echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && printf "Package: *\\nPin: release n=trixie\\nPin-Priority: 100\\n" > /etc/apt/preferences.d/trixie && apt-get update && apt-get install -y --no-install-recommends -t trixie git && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* && git --version && curl --version',
     ...chant,
     "",
   ].join("\n");

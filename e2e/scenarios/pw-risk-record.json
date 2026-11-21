@@ -27,6 +27,21 @@
       ]
     },
     {
+      "id": "first-release",
+      "do": "out-of-band",
+      "label": "release 1.0.0 is cut from main's tip, so the merge's cut has a version to bump",
+      "command": [
+        "plywood-e2e",
+        "release",
+        "1.0.0"
+      ],
+      "expect": [
+        {
+          "exit": 0
+        }
+      ]
+    },
+    {
       "id": "events",
       "do": "open",
       "branch": "e2e/risk-events",
@@ -58,11 +73,11 @@
     {
       "id": "update",
       "do": "out-of-band",
-      "label": "the merge's dev wave settled shop/dev",
+      "label": "the dev stage's wave on merge settled shop/dev",
       "command": [
         "plywood-e2e",
         "wait-stacks",
-        "pulumi-up",
+        "plywood-dev",
         "dev"
       ],
       "expect": [

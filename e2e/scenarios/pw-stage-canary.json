@@ -14,7 +14,7 @@
     {
       "id": "pipeline",
       "do": "out-of-band",
-      "label": "main sets promotion and waves.canary, and plywood init writes .chant/pipeline.ts",
+      "label": "main sets promotion, waves.canary and a soak check in dev and prod-us, adds a second project so a wave follows the canary, and plywood init writes .chant/pipeline.ts",
       "command": [
         "plywood-e2e",
         "configure",

@@ -12,13 +12,13 @@
   "reportUrl": "s3://plywood-tutorial-reports/shop",
   "steps": [
     {
-      "id": "waves",
+      "id": "promotion",
       "do": "out-of-band",
-      "label": "main puts prod-us first in the waves",
+      "label": "main sets promotion, and plywood init writes the component with each environment's stack",
       "command": [
         "plywood-e2e",
         "configure",
-        "stock-first"
+        "promotion"
       ],
       "expect": [
         {
@@ -44,11 +44,11 @@
     {
       "id": "deploy-a",
       "do": "out-of-band",
-      "label": "prod runs release shop-a",
+      "label": "prod-us runs release shop-a, its release gate approved by the reviewer",
       "command": [
         "plywood-e2e",
-        "deploy",
-        "prod",
+        "deploy-gated",
+        "prod-us",
         "shop-a"
       ],
       "expect": [
@@ -59,42 +59,12 @@
     },
     {
       "id": "events",
-      "do": "open",
-      "branch": "e2e/rollback-events",
-      "overlay": "prod-us-events-7200",
-      "title": "prod-us: keep events for two hours"
-    },
-    {
-      "id": "events-plan",
-      "do": "plan",
-      "pull": "events",
-      "expect": [
-        {
-          "report": {
-            "status": "planned"
-          }
-        }
-      ]
-    },
-    {
-      "id": "events-approve",
-      "do": "approve",
-      "pull": "events"
-    },
-    {
-      "id": "events-merge",
-      "do": "merge",
-      "pull": "events"
-    },
-    {
-      "id": "update",
       "do": "out-of-band",
-      "label": "the merge's first wave job is on the ledger",
+      "label": "main keeps prod-us events for two hours",
       "command": [
         "plywood-e2e",
-        "wait-runs",
-        "pulumi-up",
-        "1"
+        "configure",
+        "promotion-prod-us-events-7200"
       ],
       "expect": [
         {
@@ -105,7 +75,7 @@
     {
       "id": "release-b",
       "do": "out-of-band",
-      "label": "release shop-b is cut from the merge commit",
+      "label": "release shop-b is cut from that commit",
       "command": [
         "plywood-e2e",
         "release",
@@ -120,11 +90,11 @@
     {
       "id": "deploy-b",
       "do": "out-of-band",
-      "label": "prod runs release shop-b",
+      "label": "prod-us runs release shop-b",
       "command": [
         "plywood-e2e",
-        "deploy",
-        "prod",
+        "deploy-gated",
+        "prod-us",
         "shop-b"
       ],
       "expect": [
@@ -151,11 +121,11 @@
     {
       "id": "applied",
       "do": "out-of-band",
-      "label": "plywood rollback prod to shop-a waits at the release gate, the reviewer approves it, and the restore is recorded",
+      "label": "plywood rollback prod-us to shop-a waits at the release gate, the reviewer approves it, and the restore is recorded",
       "command": [
         "plywood-e2e",
         "rollback",
-        "prod",
+        "prod-us",
         "shop-a"
       ],
       "expect": [

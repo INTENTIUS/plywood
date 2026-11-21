@@ -155,7 +155,7 @@ export function writeUpOp(cwd: string, spec: unknown): boolean {
 }
 
 /** The files chant's generator wrote for `specFile`: those whose header names `--spec <specFile>`. */
-function generatedFor(dir: string, specFile: string): string[] {
+export function generatedFor(dir: string, specFile: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => /\.ya?ml$/.test(f))

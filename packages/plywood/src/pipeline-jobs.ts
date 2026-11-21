@@ -14,8 +14,8 @@
  *
  * `plywood ci --check` runs chant's `checkPipelineFile` and changes nothing.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import type { ChantProduct, ForgeKind } from "./chant-product";
 import type { ChantSettings } from "./chant-config";
 import { agentOf } from "./config/agents";
@@ -29,8 +29,8 @@ import { chantPipeline, PIPELINE_FILE, PIPELINE_SOURCE, pipelineFile, stagesByEn
 import type { StageIo } from "./stages";
 import { verifyFailedFacts } from "./agent-triggers";
 import { rejectCommentWorkflow, REJECT_WORKFLOW } from "./reject-comment";
-import { WAVES_OUTPUT_DIR } from "./waves-workflow";
-import { BIN, PRODUCT, type ProductWordsInput } from "./words";
+import { generatedFor, WAVES_OUTPUT_DIR } from "./waves-workflow";
+import { BIN, OP_NAME, PRODUCT, type ProductWordsInput } from "./words";
 
 export interface PipelineJobsInput {
   doc: RawConfig;
@@ -123,7 +123,7 @@ export function pipelineGenerateOptions(i: Pick<PipelineJobsInput, "doc" | "sett
 
 /** chant's pipeline generator, in process with plywood's words and bin, and the workflows it returns written under the forge's directory. */
 async function generatePipelineJobs(chant: ChantProduct, declaration: unknown, i: PipelineJobsInput, table: ExitTable, io: StageIo): Promise<number> {
-  const { asPipelineSpec } = await chantPipeline();
+  const { asPipelineSpec, pipelineStageSpecFile, stageWavesSpec } = await chantPipeline();
   const { generatePipeline } = await import("@intentius/chant/pipeline/generate");
   const { GENERATED_MARKER } = await import("@intentius/chant/discovery/files");
   const { declaredCloudIdentityDeclaration, declaredEnvironmentSets } = await import("@intentius/chant/workspace/ci-cloud-identity");
@@ -147,6 +147,20 @@ async function generatePipelineJobs(chant: ChantProduct, declaration: unknown, i
     writeFileSync(at, text);
     io.err(`${PRODUCT} ci: pipeline workflow at ${path.replace(/^\.\//, "")}`);
   }
+  const first = declarationFirst(declaration);
+  const stageSpec = stageSpecFile(asPipelineSpec(structuredClone(declaration)), first, { pipelineStageSpecFile, stageWavesSpec });
+  const stageAt = join(io.cwd, stageSpec.path);
+  if (!existsSync(stageAt) || readFileSync(stageAt, "utf8") !== stageSpec.text) {
+    mkdirSync(dirname(stageAt), { recursive: true });
+    writeFileSync(stageAt, stageSpec.text);
+    io.err(`${PRODUCT} ci: wrote ${stageSpec.path}, the ${first} stage's waves its pull request plans job reads; commit it with the workflow`);
+  }
+  if (ignoreWaveWorkDirs(io.cwd)) io.err(`${PRODUCT} ci: added ${WAVE_WORK_DIRS} to .gitignore, so the release cut after the ${first} stage's last wave reads a clean tree; commit it with the workflow`);
+  // The waves workflow `plywood ci` wrote before promotion: the first stage's workflow runs the merge in its place.
+  for (const replaced of generatedFor(join(io.cwd, outDir), WAVES_SPEC)) {
+    unlinkSync(replaced);
+    io.err(`${PRODUCT} ci: removed ${relative(io.cwd, replaced)}, the waves workflow the ${first} stage's workflow replaces`);
+  }
   // chant#5354: `/plywood reject` on a pull request, answered by chant's comment job (src/reject-comment.ts); on GitLab the note poll answers it.
   const engine = chantPipelineOptions(i.settings.pipeline);
   let reject: string | undefined;
@@ -169,6 +183,41 @@ async function generatePipelineJobs(chant: ChantProduct, declaration: unknown, i
   if (i.forge === "gitlab") io.err(`${PRODUCT} ci: GitLab reads one root file; include the pipeline's files from .gitlab-ci.yml (include: local: <file>)`);
   io.err(`${PRODUCT} ci: the merge updates ${declarationFirst(declaration)} and cuts a release; '${PRODUCT} promote --to <env>' carries it on through each stage's gate`);
   return table.done;
+}
+
+/** The waves spec `plywood init` writes, whose workflow the pipeline's first stage replaces. */
+const WAVES_SPEC = `.chant/op-waves/${OP_NAME}.spec.json`;
+
+/**
+ * The first stage's op-waves spec at the path its workflows name, as
+ * `plywood pipeline spec --stage <first>` prints it. The merge's wave jobs
+ * render it there with `--render-spec`; the pull request's plans job reads
+ * the file as it is (chant `opWavesRecordPlansCommand`), so plywood writes it
+ * with `.chant/pipeline.ts`.
+ */
+export function stageSpecFile<S>(
+  spec: S,
+  first: string,
+  chant: { pipelineStageSpecFile: (spec: S, stage: string) => string; stageWavesSpec: (spec: S, stage: string) => unknown },
+): { path: string; text: string } {
+  return { path: chant.pipelineStageSpecFile(spec, first), text: `${JSON.stringify(chant.stageWavesSpec(spec, first), null, 2)}\n` };
+}
+
+/** The directories a wave job writes its plans and outcomes under, beside each spec file. */
+export const WAVE_WORK_DIRS = ".chant/op-waves/*/";
+
+/**
+ * Add {@link WAVE_WORK_DIRS} to the repository's .gitignore. The first
+ * stage's last wave cuts the release in the same job, after the apply, and
+ * chant's cut refuses a tree with an untracked file (release-worktree-dirty),
+ * which the wave's own plans would be. True when the file changed.
+ */
+export function ignoreWaveWorkDirs(cwd: string): boolean {
+  const path = join(cwd, ".gitignore");
+  const before = existsSync(path) ? readFileSync(path, "utf8") : "";
+  if (before.split(/\r?\n/).some((l) => l.trim() === WAVE_WORK_DIRS)) return false;
+  writeFileSync(path, `${before}${before === "" || before.endsWith("\n") ? "" : "\n"}${WAVE_WORK_DIRS}\n`);
+  return true;
 }
 
 function declarationFirst(declaration: unknown): string {

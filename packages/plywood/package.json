@@ -41,7 +41,8 @@
       "@intentius/chant-lexicon-pulumi",
       "@intentius/chant-lexicon-forgejo",
       "@intentius/chant-lexicon-github",
-      "@intentius/chant-lexicon-gitlab"
+      "@intentius/chant-lexicon-gitlab",
+      "tsx"
     ],
     "metafile": "../../node_modules/.cache/plywood/metafile.json"
   },
@@ -50,6 +51,7 @@
     "@intentius/chant-lexicon-forgejo": "0.124.102",
     "@intentius/chant-lexicon-github": "0.124.102",
     "@intentius/chant-lexicon-gitlab": "0.124.102",
-    "@intentius/chant-lexicon-pulumi": "0.124.103"
+    "@intentius/chant-lexicon-pulumi": "0.124.103",
+    "tsx": "^4.23.15"
   }
 }

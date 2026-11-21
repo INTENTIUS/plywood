@@ -426,7 +426,8 @@ export function receivedArgv(args: readonly string[]): string[] {
  * green the way `chant ci tick` would (an annotated, unsigned `ci/green/<sha>`),
  * cut the release `label` from it, and push the tags. The ledger's push is
  * withForgeLedger's. The cut is a release of the shop repository's
- * components, so it is what `plywood rollback --release` restores.
+ * components, so it is what `plywood rollback --release` restores. Each line
+ * runs only after the one before succeeds, so a refused cut is the step's exit.
  */
 export function releaseScript(label: string, by: string): string {
   return [
@@ -434,7 +435,7 @@ export function releaseScript(label: string, by: string): string {
     'git rev-parse -q --verify "refs/tags/ci/green/$sha" >/dev/null || git tag -a "ci/green/$sha" -m "e2e: green"',
     `chant release cut ${quote(label)} --yes --actor ${quote(by)}`,
     "git push -q origin --tags",
-  ].join("\n");
+  ].join(" &&\n");
 }
 
 /** The script `revoke` runs: tag the commit release `label` was cut from `ci/revoked/<sha>` and push it, as `chant ci tick` revokes a commit that later fails. `none` revokes nothing. */
@@ -446,12 +447,12 @@ export function revokeScript(label: string): string {
     'sha="$(git rev-list -n 1 "$tag")"',
     'git tag -a "ci/revoked/$sha" -m "e2e: revoked"',
     'git push -q origin "refs/tags/ci/revoked/$sha"',
-  ].join("\n");
+  ].join(" &&\n");
 }
 
-/** The script `deploy` runs: `chant run --components --env <env> --release <label>` at HEAD, the commit the release was cut from, so the environment's ledger names the release. */
+/** The script `deploy` runs: `chant run --components all --env <env> --release <label>` at HEAD, the commit the release was cut from, so the environment's ledger names the release. */
 export function deployScript(env: string, label: string): string {
-  return `chant run --components --env ${quote(env)} --release ${quote(label)} --yes`;
+  return `chant run --components all --env ${quote(env)} --release ${quote(label)} --yes`;
 }
 
 /**
@@ -540,14 +541,14 @@ export function agentRunScript(op: string): string {
 const RELEASE_GATE_DIGEST = `digest="$(printf '%s\\n' "$out" | sed -n 's/.*release gate: change set \\([^ ]*\\) for .*/\\1/p' | head -n 1)"`;
 
 /**
- * The script `deploy-gated` runs: `chant run --components --env <env>
+ * The script `deploy-gated` runs: `chant run --components all --env <env>
  * --release <label>` as `by`, as the merge's stand-in for the first
  * environment of promotion. Under a gate that asks, the run waits at the
  * project's component gate (exit 3); `approver` approves it with chant's own
  * line for component `shop`, and the same run goes again.
  */
 export function deployGatedScript(env: string, label: string, by: string, approver: string): string {
-  const run = `chant run --components --env ${quote(env)} --release ${quote(label)} --yes --actor ${quote(by)}`;
+  const run = `chant run --components all --env ${quote(env)} --release ${quote(label)} --yes --actor ${quote(by)}`;
   return [
     "code=0",
     `${run} || code=$?`,
@@ -681,8 +682,8 @@ export const COMMANDS: Record<string, string> = {
   "notify-drift-job": "<stack> <signing key>: the drift-job command with notify's webhook at the receiver, signed with <key>",
   release: "<label>: cut release <label> from main's tip, tagged green first, in a job container as the author",
   revoke: "<label|none>: tag the commit <label> was cut from ci/revoked and push it; none revokes nothing",
-  deploy: "<env> <label>: chant run --components --env <env> --release <label> at main's tip, in a job container, with the forge's ledger under it",
-  "deploy-gated": "<env> <label>: chant run --components --env <env> --release <label> as the author, its component gate approved by the reviewer with chant's own line",
+  deploy: "<env> <label>: chant run --components all --env <env> --release <label> at main's tip, in a job container, with the forge's ledger under it",
+  "deploy-gated": "<env> <label>: chant run --components all --env <env> --release <label> as the author, its component gate approved by the reviewer with chant's own line",
   promote: "<env> <label> <from>: plywood promote --to <env> --release <label> --from <from> as the author, each gate it waits at approved by the reviewer, and the deploy recorded (./probes.ts PROMOTE_JS)",
   "promote-held": "<env> <label> <from>: plywood promote --to <env> as the author, its gates approved by the reviewer, until a soak holds it with exit 3",
   "stage-status": "<env> <field>: chant workspace status <env> --json, and stage <env>'s <field> set in the member's pipeline (./probes.ts STAGE_JS)",

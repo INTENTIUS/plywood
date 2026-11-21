@@ -94,6 +94,8 @@ describe("plywood audit", () => {
 
   it("passes chant query and chant ledger through with plywood's words", () => {
     expect(CHANT_PASSTHROUGH).toEqual(expect.arrayContaining(["query", "ledger"]));
+    // The agent jobs' workflows run `plywood agent prepare` and `plywood agent run`.
+    expect(CHANT_PASSTHROUGH).toContain("agent");
   });
 });
 

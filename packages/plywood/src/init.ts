@@ -391,7 +391,7 @@ export async function runInit(opts: InitOptions, table: ExitTable, io: InitIo): 
   } else {
     const missing = [
       ...(!/["']pulumi["']/.test(configText) ? ['add "pulumi" to its lexicons so chant previews and updates the stacks'] : []),
-      ...(promotion ? [`list environments: [${promotion.map((e) => JSON.stringify(e)).join(", ")}] in it, so chant promotes in promotion's order`] : []),
+      ...(promotion ? [`list environments: [${promotion.map((e) => JSON.stringify(e)).join(", ")}] in it, so chant promotes in promotion's order`, 'set release: { green: "forge-checks" } in it, so the release cut waits for the merge commit\'s checks'] : []),
     ];
     files.push({ file: CHANT_CONFIG_FILE, status: "kept", ...(missing.length ? { note: missing.join("; ") } : {}) });
   }

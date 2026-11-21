@@ -26,8 +26,8 @@
     ]
   },
   "devDependencies": {
-    "@intentius/chant": "0.124.110",
-    "@intentius/chant-lexicon-github": "0.124.102",
+    "@intentius/chant": "0.124.111",
+    "@intentius/chant-lexicon-github": "0.124.103",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
     "tsx": "^4.23.15",

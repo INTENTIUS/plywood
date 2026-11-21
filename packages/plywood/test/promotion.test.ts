@@ -115,6 +115,10 @@ describe("the component per project", () => {
     expect(chantConfigWrittenByPlywood(text)).toBe(true);
     expect(chantConfigWrittenByPlywood(chantConfigTs())).toBe(true);
     expect(chantConfigTs()).not.toContain("environments");
+    expect(text).toContain('  release: { green: "forge-checks" },');
+    expect(chantConfigTs()).not.toContain("release");
+    expect(chantConfigTs([])).not.toContain("forge-checks");
+    expect(text.indexOf("environments")).toBeLessThan(text.indexOf("release:"));
     expect(chantConfigWrittenByPlywood(text.replace('lexicons: ["pulumi"],', 'lexicons: ["pulumi", "aws"],'))).toBe(false);
   });
 });
@@ -253,6 +257,10 @@ describe.runIf(hasPulumi)("a release carried dev, staging, prod on the installed
       const init = await runInit({ bucketCheck: false, dryRun: false, yes: true }, T, { cwd: dir, env: {}, out: () => {}, err: () => {} });
       expect(init.ok, init.notes.join("\n")).toBe(true);
       expect(init.waves).toEqual([{ name: "dev", stacks: ["shop/dev"] }]);
+      // init wrote the forge-checks gate; this origin is a bare directory with no forge, so the cut here reads the ci/green tag below.
+      const configFile = join(dir, "chant.config.ts");
+      expect(readFileSync(configFile, "utf8")).toContain('release: { green: "forge-checks" }');
+      writeFileSync(configFile, readFileSync(configFile, "utf8").replace('green: "forge-checks"', 'green: "chant"'));
       git("add", "-A");
       git("commit", "-qm", "plywood init");
       git("push", "-q", "origin", "main");

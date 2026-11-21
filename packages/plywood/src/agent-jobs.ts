@@ -125,9 +125,9 @@ export function agentOpSpec(spec: Record<string, unknown>, doc: RawConfig): { op
   };
 }
 
-const OP_OUTPUT_DIR: Readonly<Record<ForgeKind, string>> = { github: ".github/workflows", forgejo: ".forgejo/workflows", gitlab: "." };
+export const OP_OUTPUT_DIR: Readonly<Record<ForgeKind, string>> = { github: ".github/workflows", forgejo: ".forgejo/workflows", gitlab: "." };
 
-function writeIfChanged(cwd: string, file: string, text: string): boolean {
+export function writeIfChanged(cwd: string, file: string, text: string): boolean {
   const path = join(cwd, file);
   if (existsSync(path) && readFileSync(path, "utf8") === text) return false;
   mkdirSync(dirname(path), { recursive: true });

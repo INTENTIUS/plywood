@@ -93,6 +93,12 @@ export interface ChantProduct {
   productWavesSpec(spec: Record<string, unknown>, words: ProductWordsInput | ProductWords): Record<string, unknown>;
   /** The `agent` of a scheduled drift Op (chant#4616). */
   productDriftAgent(words: ProductWordsInput | ProductWords, op: string, options?: Record<string, unknown>): Record<string, unknown>;
+  /** The alert agent's Op spec (chant#5329): its own workflow, started by the relay and on a schedule. */
+  productAlertAgent(words: ProductWordsInput | ProductWords, options?: Record<string, unknown>): Record<string, unknown>;
+  /** The failed-apply agent's Op spec (chant#5357): its own workflow, on a schedule and by hand. */
+  productApplyFailedAgent(words: ProductWordsInput | ProductWords, options?: Record<string, unknown>): Record<string, unknown>;
+  /** The scheduled agent's Op spec (chant#5357): `schedule` is a cron and `task` what each run does. */
+  productScheduleAgent(words: ProductWordsInput | ProductWords, options: Record<string, unknown> & { schedule: string; task: string }): Record<string, unknown>;
   /** The standing pending gates waiting on a plan digest, with the pull request a `pr-<n>` op names (chant#4607). */
   pendingGatesByPlan(digest: string, options?: { op?: string; pullRequestsOnly?: boolean; cwd?: string }): Promise<PendingGateByPlan[]>;
   /** Checks a `--requires` list for `pr-apply --before-merge` (chant#4607). */

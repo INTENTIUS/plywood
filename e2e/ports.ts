@@ -476,6 +476,64 @@ export function rollbackScript(env: string, label: string, by: string, approver:
   ].join("\n");
 }
 
+/** The relay key the bench's alert and agent jobs sign and check facts with. The bench's own, like its passphrase. */
+export const ALERT_RELAY_KEY = "plywood-e2e-relay-key";
+const ALERT_SECRET = "plywood-e2e-alert-secret";
+const RELAY_PORT = 8787;
+
+/** The script `agent-secrets` runs as the admin: the repository's Actions secrets the alert agent's workflow reads (a model key it never uses, and the relay key). */
+export function agentSecretsScript(): string {
+  const put = (name: string, value: string) =>
+    `curl -fsS -X PUT -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' -d ${quote(JSON.stringify({ data: value }))} "$FORGEJO_SERVER_URL/api/v1/repos/$FORGEJO_REPOSITORY/actions/secrets/${name}"`;
+  return ["set -e", put("ANTHROPIC_API_KEY", "unused"), put("CHANT_RELAY_KEY", ALERT_RELAY_KEY)].join("\n");
+}
+
+/**
+ * The script `alert` runs in a job container on a clone of main: chant's
+ * relay on loopback, one signed generic alert posted to it, and the fact the
+ * relay recorded read back from chant/lifecycle (`_alerts/alert.jsonl`).
+ * The relay has no dispatch token here, so the workflow is started by
+ * `agent-run`, as the schedule would start it.
+ */
+export function alertScript(title: string): string {
+  const body = JSON.stringify({ id: "e2e-alert-1", title, severity: "critical", url: "http://alerts.example/e2e-alert-1" });
+  return [
+    "set -e",
+    `export CHANT_RELAY_KEY=${quote(ALERT_RELAY_KEY)} CHANT_ALERT_SECRET=${quote(ALERT_SECRET)}`,
+    `npx chant notify relay --host 127.0.0.1 --port ${RELAY_PORT} > /tmp/plywood-e2e-relay.log 2>&1 &`,
+    "relay=$!",
+    `for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:${RELAY_PORT}/ && break; sleep 1; done`,
+    `body=${quote(body)}`,
+    'ts="$(date +%s)"',
+    `sig="$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$CHANT_ALERT_SECRET" -hex | sed 's/^.* //')"`,
+    `curl -fsS -X POST -H "X-Chant-Timestamp: $ts" -H "X-Chant-Signature: sha256=$sig" -H 'Content-Type: application/json' -d "$body" http://127.0.0.1:${RELAY_PORT}/alert/generic`,
+    'kill "$relay" || true',
+    "git fetch -q origin chant/lifecycle",
+    `git show FETCH_HEAD:_alerts/alert.jsonl | grep -F ${quote(title)}`,
+  ].join("\n");
+}
+
+/**
+ * The script `agent-run` runs as the author: start the alert agent's
+ * workflow on main through Forgejo's dispatch API, then wait up to five
+ * minutes for its pull request from `plywood/agent/<op>-<member>`. A
+ * repository whose plywood.yml leaves agent.alert off has no such workflow,
+ * so the dispatch is refused and the script exits non-zero.
+ */
+export function agentRunScript(op: string): string {
+  const api = '"$FORGEJO_SERVER_URL/api/v1/repos/$FORGEJO_REPOSITORY';
+  return [
+    "set -e",
+    `curl -fsS -X POST -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' -d '{"ref":"main"}' ${api}/actions/workflows/${op}.yml/dispatches"`,
+    "for i in $(seq 1 60); do",
+    `  if curl -fsS -H "Authorization: token $FORGEJO_TOKEN" ${api}/pulls?state=open" | grep -q ${quote(`plywood/agent/${op}`)}; then echo "plywood-e2e: the agent opened its pull request"; exit 0; fi`,
+    "  sleep 5",
+    "done",
+    `echo ${quote(`no pull request from plywood/agent/${op} after five minutes`)} >&2`,
+    "exit 1",
+  ].join("\n");
+}
+
 /** The digest a waiting release gate names on its `release gate: change set <digest> for "<env>"` line, read from `$out`. */
 const RELEASE_GATE_DIGEST = `digest="$(printf '%s\\n' "$out" | sed -n 's/.*release gate: change set \\([^ ]*\\) for .*/\\1/p' | head -n 1)"`;
 
@@ -558,6 +616,9 @@ export const COMMANDS: Record<string, string> = {
   "deploy-gated": "<env> <label>: chant run --components --env <env> --release <label> as the author, its component gate approved by the reviewer with chant's own line",
   promote: "<env> <label> <from>: plywood promote --to <env> --release <label> --from <from> as the author, the release gate approved by the reviewer, and the deploy recorded (./probes.ts PROMOTE_JS)",
   rollback: "<env> <label>: plywood rollback <env> --release <label> as the author, the release gate approved by the reviewer, and the restore recorded (./probes.ts ROLLBACK_JS)",
+  "agent-secrets": ": the repository's Actions secrets the alert agent's workflow reads, set as the admin",
+  alert: "<title>: chant's relay on loopback in a job container takes one signed generic alert, and its fact is on chant/lifecycle (./ports.ts alertScript)",
+  "agent-run": "<op>: start the workflow of agent Op <op> on main and wait for its pull request from plywood/agent/<op> (./ports.ts agentRunScript)",
   mcp: "<read-only|propose>: a stdio client over plywood mcp in a job container: the tools listed, none that writes, and plywood:stacks called (./probes.ts MCP_JS)",
 };
 
@@ -784,6 +845,18 @@ export async function runCommand(c: CommandContext, words: string[]): Promise<nu
       need(2);
       const env = { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: c.author.token, PLYWOOD_E2E_HOOK_URL: `${RECEIVER_URL}/hook`, PLYWOOD_E2E_HOOK_KEY: a[1]! };
       return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, driftJobScript(a[0]!)));
+    }
+    case "agent-secrets": {
+      if (!c.admin) throw new Error("plywood-e2e agent-secrets needs the admin");
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.admin, env: { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: c.admin.token } }, agentSecretsScript()));
+    }
+    case "alert":
+      need(1);
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author }, withForgeLedger(alertScript(a.join(" ")))));
+    case "agent-run": {
+      need(1);
+      const env = { FORGEJO_SERVER_URL: FORGEJO_NET, FORGEJO_REPOSITORY: `${ORG}/${REPO}`, FORGEJO_TOKEN: c.author.token };
+      return c.safe.run(jobArgv(c.h, { image: c.jobImage, person: c.author, env }, agentRunScript(a[0]!)));
     }
     case "mcp":
       need(1);

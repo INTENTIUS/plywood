@@ -59,6 +59,12 @@
  * | pw-rollback | rollback/gated-release | the earlier release's commit is revoked |
  * | pw-promote  | promote/gated-release  | prod-us is promoted straight from dev   |
  *
+ * plywood#157's alert scenario, on Forgejo alone:
+ *
+ * | scenario       | claim                    | what the BREAK arm changes                     |
+ * |----------------|--------------------------|------------------------------------------------|
+ * | pw-alert-agent | agent/alert-pull-request | main leaves agent.alert off, so no workflow    |
+ *
  * plywood#22's `pulumi-cloud/token` is a real-account maintainer run and
  * stays out of the harness.
  */
@@ -92,6 +98,7 @@ export const SCENARIO_CLAIMS: Readonly<Record<string, string>> = {
   "pw-estate": "estate/dora",
   "pw-mcp": "mcp/read-only",
   "pw-rollback": "rollback/gated-release",
+  "pw-alert-agent": "agent/alert-pull-request",
   "pw-promote": "promote/gated-release",
 };
 

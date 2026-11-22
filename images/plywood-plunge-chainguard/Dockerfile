@@ -7,7 +7,7 @@ ARG TARGETARCH
 ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.0/plunge-v0.2.0-checksums.txt
 RUN apk add --no-cache ca-certificates=20261020-r0 curl=8.23.0-r4 unzip=6.0-r9 || { echo "apk add failed. If Wolfi no longer serves a pinned version, move the pin: a newer chant moves its own (WOLFI_PACKAGE_PINS), and chant release images --repin <file> moves an apk:<name>=<version> entry in your source; then render this Dockerfile again." >&2; exit 1; }
 RUN set -e; a="$TARGETARCH" && case "$a" in (amd64) w=x64 ;; (arm64) w=arm64 ;; (*) echo "plunge 0.2.0: chant fetches it for amd64 and arm64, not $a" >&2; exit 1 ;; esac && f="plunge-v0.2.0-linux-$w.tar.gz" && t="$(mktemp -d)" && curl -fsSLo "$t/$f" "https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.0/$f" && case "$a" in (amd64) want=c9c73d05cca9ad214b7f44230a6162cdcb6ad64bbfc725bc94688b997b191495 ;; (arm64) want=c176a82f038164085aa19c8ad6530d6022e560e124050e535dbe364ae0473357 ;; (*) want= ;; esac && curl -fsSLo "$t/sums" "$CHECKSUMS_URL" && line="$(sed -n "s#^\([0-9a-f]\{64\}\)  *[*.]*/*$f\$#\1#p" "$t/sums")" && { [ -n "$line" ] || { echo "plunge 0.2.0: $f is not in plunge-v0.2.0-checksums.txt" >&2; exit 1; }; } && { [ -z "$want" ] || [ "$line" = "$want" ] || { echo "plunge 0.2.0: plunge-v0.2.0-checksums.txt lists $line for $f; chant records $want" >&2; exit 1; }; } && want="$line" && echo "$want  $t/$f" | sha256sum -c - >/dev/null && mkdir -p "/opt/plywood/plunge-0.2.0" && tar -xzf "$t/$f" -C "/opt/plywood/plunge-0.2.0" --strip-components=1
-RUN set -e; a="$TARGETARCH" && case "$a" in (amd64) w=x86_64 ;; (arm64) w=aarch64 ;; (*) echo "aws-cli 2.22.0: chant fetches it for amd64 and arm64, not $a" >&2; exit 1 ;; esac && f="awscli-exe-linux-$w-2.22.0.zip" && t="$(mktemp -d)" && curl -fsSLo "$t/$f" "https://awscli.amazonaws.com/$f" && case "$a" in (amd64) want=f315aa564190a12ae05a05bd8ab7b0645dd4a1ad71ce9e47dae4ff3dfeee8ceb ;; (arm64) want=c932ac00901ea3c430f3829140b8dc00fa6e9b8b99d6891929a4795947de7f3e ;; (*) want= ;; esac && { [ -n "$want" ] || { echo "aws-cli 2.22.0: no sha256 is recorded for $f" >&2; exit 1; }; } && echo "$want  $t/$f" | sha256sum -c - >/dev/null && mkdir -p "/opt/plywood/aws-cli-2.22.0" && unzip -q "$t/$f" -d "$t" && "$t/aws/install" -i "/opt/plywood/aws-cli-2.22.0" -b "/opt/plywood/aws-cli-2.22.0/bin"
+RUN set -e; a="$TARGETARCH" && case "$a" in (amd64) w=x86_64 ;; (arm64) w=aarch64 ;; (*) echo "aws-cli 2.42.1: chant fetches it for amd64 and arm64, not $a" >&2; exit 1 ;; esac && f="awscli-exe-linux-$w-2.42.1.zip" && t="$(mktemp -d)" && curl -fsSLo "$t/$f" "https://awscli.amazonaws.com/$f" && case "$a" in (amd64) want=ff2631c32c5db291b099600f404bc493454ec66c125ff4604625da90480c1f47 ;; (arm64) want=98f5f03bb6508a06ce9d9d6d2db97932dce735f3b7ad85616324a95edf4b815f ;; (*) want= ;; esac && { [ -n "$want" ] || { echo "aws-cli 2.42.1: no sha256 is recorded for $f" >&2; exit 1; }; } && echo "$want  $t/$f" | sha256sum -c - >/dev/null && mkdir -p "/opt/plywood/aws-cli-2.42.1" && unzip -q "$t/$f" -d "$t" && "$t/aws/install" -i "/opt/plywood/aws-cli-2.42.1" -b "/opt/plywood/aws-cli-2.42.1/bin"
 FROM cgr.dev/chainguard/node:latest-dev@sha256:cd993dc8ec644f8f35e8356f6b442e807cdc5e42f303da5ce19a55d7cf660b51
 USER root
 ARG CHANT_RELEASE_LABEL
@@ -22,14 +22,14 @@ ENV PATH=/opt/plywood/bin:$PATH
 RUN apk add --no-cache git=2.56.1-r1 ca-certificates=20261020-r0 || { echo "apk add failed. If Wolfi no longer serves a pinned version, move the pin: a newer chant moves its own (WOLFI_PACKAGE_PINS), and chant release images --repin <file> moves an apk:<name>=<version> entry in your source; then render this Dockerfile again." >&2; exit 1; } && mkdir -p /usr/local/bin
 RUN git config --system --add safe.directory '*'
 COPY --from=fetch /opt/plywood/ /opt/plywood/
-RUN ln -sf /opt/plywood/plunge-0.2.0/plunge /usr/local/bin/plunge && ln -sf /opt/plywood/aws-cli-2.22.0/v2/current/bin/aws /usr/local/bin/aws
+RUN ln -sf /opt/plywood/plunge-0.2.0/plunge /usr/local/bin/plunge && ln -sf /opt/plywood/aws-cli-2.42.1/v2/current/bin/aws /usr/local/bin/aws
 RUN mkdir -p /opt/plywood && chown 65532:65532 /opt/plywood
 RUN mkdir -p /opt/plywood/pulumi-home && chmod 1777 /opt/plywood/pulumi-home && plunge version && aws --version
-RUN plunge plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home
+RUN plunge plugin install resource command 1.3.0 && chmod -R a+rX /opt/plywood/pulumi-home
 COPY images/pack/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz
 RUN npm install -g --omit=dev --no-audit --no-fund /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz && rm -f /tmp/intentius-plywood-${CHANT_RELEASE_LABEL}.tgz && npm cache clean --force && plywood --version
 LABEL org.opencontainers.image.title="plywood-plunge"
-LABEL org.opencontainers.image.description="plunge 0.2.0, the AWS CLI 2.22.0 and the plywood CLI, on Chainguard images"
+LABEL org.opencontainers.image.description="plunge 0.2.0, the AWS CLI 2.42.1 and the plywood CLI, on Chainguard images"
 LABEL org.opencontainers.image.version="${CHANT_RELEASE_LABEL}"
 LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"
 LABEL org.opencontainers.image.licenses="Apache-2.0"

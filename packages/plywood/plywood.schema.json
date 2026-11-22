@@ -1188,7 +1188,7 @@
       "description": "The forge's base URL, for a self-hosted forge."
     },
     "pulumi": {
-      "description": "The Pulumi CLI release the jobs run, such as 3.272.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
+      "description": "The Pulumi CLI release the jobs run, such as 3.277.0: one for every stack, or a map of stack glob to release. plywood's image's release when absent.",
       "anyOf": [
         {
           "type": "string",

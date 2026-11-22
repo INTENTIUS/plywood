@@ -26,6 +26,7 @@ import {
   imageReference,
   installLine,
   parsePlugin,
+  recordedSha256,
   TOOL_VERSIONS,
 } from "../src/images";
 import { publishedImage } from "./published-image";
@@ -34,24 +35,27 @@ const ROOT = join(import.meta.dirname, "../../..");
 const settings = (text: string) => toChantSettings(parseConfig(text));
 const problems = (text: string) => checkConfig(parseConfig(text));
 const errors = (text: string) => problems(text).filter((p) => p.severity === "error");
+/** The sums a pin is checked against: plywood's record for a release chant records none for, else chant's. */
+const sumsOf = (tool: "pulumi" | "plunge" | "aws-cli", version: string) => recordedSha256(tool, version) ?? ciToolSha256(tool, version);
 
 describe("engine pins", () => {
-  it("pins stock Pulumi at the corpus's release and plunge at a published one", () => {
-    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.272.0", plunge: "0.2.0" });
-    // chant records the sums of both pins (CI_TOOL_SHA256), for both architectures.
+  it("pins stock Pulumi and plunge at published releases", () => {
+    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.277.0", plunge: "0.2.0" });
+    // Both pins have recorded sums for both architectures: chant's (CI_TOOL_SHA256), or plywood's for a release chant lacks.
     for (const engine of ["pulumi", "plunge"] as const) {
-      const sums = ciToolSha256(engine, TOOL_VERSIONS[engine]);
+      const sums = sumsOf(engine, TOOL_VERSIONS[engine]);
       for (const arch of ["amd64", "arm64"] as const) expect(sums[arch], `${engine} ${arch}`).toMatch(/^[0-9a-f]{64}$/);
     }
   });
 
   it("installs Pulumi with no pin, linked onto PATH, skipping when the image has it", () => {
     const s = settings("");
-    expect(s.pipeline.engineSetup).toEqual([installLine("pulumi", "3.272.0")]);
+    expect(s.pipeline.engineSetup).toEqual([installLine("pulumi", "3.277.0")]);
     const line = s.pipeline.engineSetup![0];
-    expect(line).toContain('[ -x "/opt/plywood/pulumi-3.272.0/pulumi" ] ||');
-    expect(line).toContain("pulumi-3.272.0-checksums.txt");
-    expect(line).toContain(ciToolSha256("pulumi", "3.272.0").amd64!);
+    expect(line).toContain('[ -x "/opt/plywood/pulumi-3.277.0/pulumi" ] ||');
+    expect(line).toContain("pulumi-3.277.0-checksums.txt");
+    expect(line).toContain(sumsOf("pulumi", "3.277.0").amd64!);
+    expect(line).toContain(sumsOf("pulumi", "3.277.0").arm64!);
     expect(line).toContain("sha256sum -c");
     // The release's own image, by digest, in a release's build (CHANT_RELEASE_DIGESTS); by tag in any other.
     expect(s.pipeline.image).toBe(publishedImage("pulumi"));
@@ -108,7 +112,7 @@ describe("image", () => {
     const table = { [`${ref.repository}:${ref.tag}`]: digest };
     expect(imageReference(imageFor("pulumi", table))).toBe(`${ref.repository}:${ref.tag}@${digest}`);
     expect(ref.repository).toBe("ghcr.io/intentius/plywood-pulumi");
-    expect(ref.tag).toMatch(/-pulumi3\.272\.0$/);
+    expect(ref.tag).toMatch(/-pulumi3\.277\.0$/);
   });
 
   it("checks image.plugins and writes a recipe FROM plywood's image", () => {
@@ -143,10 +147,10 @@ describe("Dockerfiles", () => {
   });
 
   it("carry the command provider at its pin in the Pulumi home, installed by the image's engine once it is on PATH", () => {
-    expect(IMAGE_PLUGINS).toEqual([{ kind: "resource", name: "command", version: "1.0.1" }]);
+    expect(IMAGE_PLUGINS).toEqual([{ kind: "resource", name: "command", version: "1.3.0" }]);
     for (const engine of ["pulumi", "plunge"] as const) {
       const lines = dockerfile(engine).split("\n");
-      const install = lines.findIndex((l) => l === `RUN ${engine} plugin install resource command 1.0.1 && chmod -R a+rX /opt/plywood/pulumi-home`);
+      const install = lines.findIndex((l) => l === `RUN ${engine} plugin install resource command 1.3.0 && chmod -R a+rX /opt/plywood/pulumi-home`);
       expect(install, engine).toBeGreaterThan(lines.findIndex((l) => l.startsWith(`RUN ln -s /opt/plywood/${engine}-`)));
       expect(install, engine).toBeGreaterThan(lines.findIndex((l) => l.startsWith("ENV ") && l.includes("PULUMI_HOME=/opt/plywood/pulumi-home")));
     }
@@ -161,8 +165,8 @@ describe("Dockerfiles", () => {
     for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");
   });
 
-  it("carry the AWS CLI for s3:// reports, a release that reads AWS_ENDPOINT_URL, checked by chant's recorded sum (plywood#22)", () => {
-    const sums = ciToolSha256("aws-cli", AWS_CLI_VERSION);
+  it("carry the AWS CLI for s3:// reports, a release that reads AWS_ENDPOINT_URL, checked by its recorded sum (plywood#22)", () => {
+    const sums = sumsOf("aws-cli", AWS_CLI_VERSION);
     for (const engine of ["pulumi", "plunge"] as const) {
       const text = dockerfile(engine);
       expect(text).toContain(`f="awscli-exe-linux-$w-${AWS_CLI_VERSION}.zip"`);
@@ -230,8 +234,8 @@ describe("image sets (plywood#181)", () => {
       expect(cg.trimEnd().split("\n").at(-1)).toBe("USER 65532");
       expect(cg.split("\n").filter((l) => l.startsWith("USER "))).toEqual(["USER root", "USER 65532"]);
       // The engine and the AWS CLI are checked as they are on the Debian set.
-      expect(cg).toContain(ciToolSha256(engine, TOOL_VERSIONS[engine]).amd64!);
-      expect(cg).toContain(ciToolSha256("aws-cli", AWS_CLI_VERSION).arm64!);
+      expect(cg).toContain(sumsOf(engine, TOOL_VERSIONS[engine]).amd64!);
+      expect(cg).toContain(sumsOf("aws-cli", AWS_CLI_VERSION).arm64!);
       const deb = dockerfile(engine);
       expect(deb).toContain('LABEL io.intentius.chant.image.base="debian"');
       expect(deb).not.toMatch(/^USER /m);
@@ -254,6 +258,8 @@ describe("image sets (plywood#181)", () => {
     expect(cg).toContain("fetch(");
     expect(cg).not.toContain("curl");
     expect(cg).toContain("pulumi-3.250.0-checksums.txt");
+    // The linked pin carries plywood's recorded sums on the Chainguard set's line too.
+    expect(installLine("pulumi", TOOL_VERSIONS.pulumi, true, "chainguard")).toContain(sumsOf("pulumi", TOOL_VERSIONS.pulumi).arm64!);
     expect(installLine("plunge", "0.2.0", false, "chainguard")).not.toContain(CHAINGUARD_BIN_DIR);
     expect(installLine("pulumi", "3.250.0")).toContain("curl");
     const s = settings("image_base: chainguard\npulumi:\n  shop/legacy: 3.250.0\n  '*': 3.272.0\nstacks:\n  shop/dev: {}\n  shop/legacy: {}\n");

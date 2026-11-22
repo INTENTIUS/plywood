@@ -1,6 +1,6 @@
 ---
 title: 'Versions and pins'
-description: 'The pins for the Pulumi CLI and plunge, the two CI image sets and their digests.'
+description: 'The pins for the Pulumi CLI and plunge, and the Debian and Chainguard CI image sets with their digests.'
 ---
 
 | Pin | Where | Example |
@@ -18,10 +18,10 @@ An image tag names plywood's version and the engine release the image carries. A
 
 ## The two image sets
 
-Each release publishes both engine images in two sets under the same repositories. The Debian set is the default: Node 22 on `node:22-bookworm-slim`, with root as its user. The Chainguard set has `-chainguard` on the end of its tag and is built on Chainguard's public `node` and `wolfi-base` images, which need no login to pull. It runs Node 26, because that is the Node Chainguard's image carries, and it ends as user 65532. Each has the same Pulumi or plunge release, AWS CLI and plywood CLI, and each carries `org.opencontainers.image.base.name`, `org.opencontainers.image.base.digest` and `io.intentius.chant.image.base` labels naming its base.
+Each release publishes both engine images in two sets under the same repositories. The Debian set is the default: Node 22 on `node:22-bookworm-slim`, with root as its user. The Chainguard set has `-chainguard` on the end of its tag and is built on Chainguard's public `node` and `wolfi-base` images, which need no login to pull. It runs Node 26, the Node Chainguard's image carries. Its user is 65532. The two sets carry the same Pulumi or plunge release, AWS CLI and plywood CLI. Both are labelled with the base they were built on, in `org.opencontainers.image.base.name`, `org.opencontainers.image.base.digest` and `io.intentius.chant.image.base`.
 
-Set `image_base: chainguard` in `plywood.yml` to run the jobs in the Chainguard set. Nothing else in `plywood.yml` changes.
+To run the jobs in the Chainguard set, put `image_base: chainguard` in `plywood.yml`; nothing else there changes.
 
-The digests come from the release. Its build pushes the four images, records each one's digest, and bakes the table into the `plywood` bundle, so a pipeline `plywood ci` writes names the image of the picked set by digest. The table covers both sets, which is why a release that predates the Chainguard images has no entry for them: `plywood config check` and `plywood ci` refuse `image_base: chainguard` on it, and `plywood upgrade` moves a repository to a release that has them. A pick that names your own `image` needs no entry. Each release's images are scanned before they are pushed, carry an SBOM of their layers, and are signed with Sigstore with SLSA provenance, so `cosign verify` and `cosign verify-attestation` check an image against the release.
+The digests come from the release. The build pushes the four images and records their digests in a table that goes into the `plywood` bundle, so a pipeline `plywood ci` writes names the image of the picked set by digest. The table covers both sets, which is why a release that predates the Chainguard images has no entry for them: `plywood config check` and `plywood ci` refuse `image_base: chainguard` on it, and `plywood upgrade` moves a repository to a release that has them. A pick that names your own `image` needs no entry. A release scans its images before pushing them. They carry an SBOM of their layers. Sigstore signs them with SLSA provenance. `cosign verify` and `cosign verify-attestation` check an image against the release.
 
 The Chainguard images are the free public ones. Chainguard's own registry for an organization, which carries version tags and FIPS images, is not one of plywood's keys: build your own image FROM plywood's set ([Run in a prepared image](/plywood/guides/run-in-a-prepared-image/)) or run the jobs in an image of your own with `image`.

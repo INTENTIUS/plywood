@@ -18,7 +18,7 @@ An image tag names plywood's version and the engine release the image carries. A
 
 ## The two image sets
 
-Each release publishes both engine images in two sets under the same repositories. The Debian set is the default: Node 22 on `node:22-bookworm-slim`, with root as its user. The Chainguard set has `-chainguard` on the end of its tag and is built on Chainguard's public `node` and `wolfi-base` images, which need no login to pull. It runs Node 26, the Node Chainguard's image carries. Its user is 65532. The two sets carry the same Pulumi or plunge release, AWS CLI and plywood CLI. Both are labelled with the base they were built on, in `org.opencontainers.image.base.name`, `org.opencontainers.image.base.digest` and `io.intentius.chant.image.base`.
+Each release publishes both engine images in two sets under the same repositories. The Debian set is the default: Node 22 on `node:22-bookworm-slim`, with root as its user. The Chainguard set has `-chainguard` on the end of its tag and is built on Chainguard's public `node` and `wolfi-base` images, which need no login to pull. It runs Node 26, the Node Chainguard's image carries. Its user is 65532. The two sets carry the same Pulumi or plunge release, AWS CLI and plywood CLI. Both are labelled with the base they were built on, in `org.opencontainers.image.base.name`, `org.opencontainers.image.base.digest` and `io.intentius.chant.image.base`. The apk packages the Chainguard set installs are at versions chant pins, and they move when chant's pins move.
 
 To run the jobs in the Chainguard set, put `image_base: chainguard` in `plywood.yml`; nothing else there changes.
 

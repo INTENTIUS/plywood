@@ -40,7 +40,7 @@ const sumsOf = (tool: "pulumi" | "plunge" | "aws-cli", version: string) => recor
 
 describe("engine pins", () => {
   it("pins stock Pulumi and plunge at published releases", () => {
-    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.277.0", plunge: "0.2.0" });
+    expect(TOOL_VERSIONS).toEqual({ pulumi: "3.277.0", plunge: "0.2.2" });
     // Both pins have recorded sums for both architectures: chant's (CI_TOOL_SHA256), or plywood's for a release chant lacks.
     for (const engine of ["pulumi", "plunge"] as const) {
       const sums = sumsOf(engine, TOOL_VERSIONS[engine]);
@@ -63,9 +63,9 @@ describe("engine pins", () => {
   });
 
   it("installs plunge for plunge stacks, at the pinned release", () => {
-    const s = settings("engine: plunge\nplunge: 0.2.0\nstacks:\n  shop/dev: {}\n");
-    expect(s.pipeline.engineSetup).toEqual([installLine("plunge", "0.2.0")]);
-    expect(s.members[0]).toMatchObject({ name: "shop/dev", engine: "plunge", engineVersion: "0.2.0" });
+    const s = settings("engine: plunge\nplunge: 0.2.2\nstacks:\n  shop/dev: {}\n");
+    expect(s.pipeline.engineSetup).toEqual([installLine("plunge", "0.2.2")]);
+    expect(s.members[0]).toMatchObject({ name: "shop/dev", engine: "plunge", engineVersion: "0.2.2" });
   });
 
   it("installs another release beside the linked one for a stack a glob pins", () => {
@@ -158,8 +158,8 @@ describe("Dockerfiles", () => {
 
   it("verify each archive against the release checksums and chant's recorded sum", () => {
     const text = dockerfile("plunge");
-    expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.0/plunge-v0.2.0-checksums.txt");
-    expect(text).toContain(ciToolSha256("plunge", "0.2.0").arm64!);
+    expect(text).toContain("ARG CHECKSUMS_URL=https://github.com/INTENTIUS/plunge/releases/download/plunge-v0.2.2/plunge-v0.2.2-checksums.txt");
+    expect(text).toContain(recordedSha256("plunge", "0.2.2")!.arm64);
     expect(text).toMatch(/^FROM node:22-bookworm-slim@sha256:[0-9a-f]{64}$/m);
     // Each download is checked in the same RUN line, before the node stage copies it.
     for (const line of text.split("\n").filter((l) => l.includes("curl -fsSLo"))) expect(line).toContain("sha256sum -c");
@@ -182,7 +182,7 @@ describe("Dockerfiles", () => {
   it("fails the fetch on a tampered checksums file", () => {
     // The fetch stage's shell, run against local files in place of the release.
     const dir = mkdtempSync(join(tmpdir(), "plywood-images-"));
-    const f = "plunge-v0.2.0-linux-x64.tar.gz";
+    const f = "plunge-v0.2.2-linux-x64.tar.gz";
     writeFileSync(join(dir, f), "not the archive");
     writeFileSync(join(dir, "sums"), `${"0".repeat(64)}  ${f}\n`);
     const run = dockerfile("plunge").split("\n").find((l) => l.startsWith("RUN set -e;"))!.slice(4)
@@ -260,7 +260,7 @@ describe("image sets (plywood#181)", () => {
     expect(cg).toContain("pulumi-3.250.0-checksums.txt");
     // The linked pin carries plywood's recorded sums on the Chainguard set's line too.
     expect(installLine("pulumi", TOOL_VERSIONS.pulumi, true, "chainguard")).toContain(sumsOf("pulumi", TOOL_VERSIONS.pulumi).arm64!);
-    expect(installLine("plunge", "0.2.0", false, "chainguard")).not.toContain(CHAINGUARD_BIN_DIR);
+    expect(installLine("plunge", "0.2.2", false, "chainguard")).not.toContain(CHAINGUARD_BIN_DIR);
     expect(installLine("pulumi", "3.250.0")).toContain("curl");
     const s = settings("image_base: chainguard\npulumi:\n  shop/legacy: 3.250.0\n  '*': 3.272.0\nstacks:\n  shop/dev: {}\n  shop/legacy: {}\n");
     expect(s.pipeline.engineSetup).toEqual([installLine("pulumi", "3.250.0", false, "chainguard"), installLine("pulumi", "3.272.0", true, "chainguard")]);

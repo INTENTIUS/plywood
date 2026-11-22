@@ -28,6 +28,11 @@ describe("install lines", () => {
     expect(installLine("pulumi", TOOL_VERSIONS.pulumi)).toBe(pulumiInstallLine(TOOL_VERSIONS.pulumi, { root: ENGINE_ROOT, sha256: { x64: sums.amd64, arm64: sums.arm64 } }));
   });
 
+  it("pass plywood's recorded sums for plunge 0.2.2", () => {
+    const sums = recordedSha256("plunge", TOOL_VERSIONS.plunge)!;
+    expect(installLine("plunge", TOOL_VERSIONS.plunge)).toBe(plungeInstallLine(TOOL_VERSIONS.plunge, { root: ENGINE_ROOT, sha256: { x64: sums.amd64, arm64: sums.arm64 } }));
+  });
+
   it("take chant's unlinked line for a pin that is not linked", () => {
     expect(installLines([
       { engine: "pulumi", version: "3.272.0", linked: true },

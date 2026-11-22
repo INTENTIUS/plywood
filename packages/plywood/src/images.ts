@@ -97,12 +97,12 @@ export function requireImageBase(what: string): void {
 /**
  * The engine releases the images carry, and the version a job installs when
  * plywood.yml pins none. Pulumi is the release whose binaries and language
- * hosts the release scan passes; plunge 0.2.0 is built from Pulumi 3.272.0.
+ * hosts the release scan passes; plunge 0.2.2 is built with Go 1.27.4 and bundles the language hosts of Pulumi 3.277.0.
  */
 export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
   pulumi: "3.277.0",
   /** A plunge release (INTENTIUS/plunge, tag plunge-v<ver>), not the Pulumi version it is built from. */
-  plunge: "0.2.0",
+  plunge: "0.2.2",
 };
 
 /**
@@ -121,7 +121,7 @@ type Arch = "amd64" | "arm64";
 /**
  * The sha256 plywood records for a pinned release chant records none for
  * (chant's `CI_TOOL_SHA256` holds the others), by `<tool>-<version>` and
- * architecture. Pulumi's are copied from `pulumi-<ver>-checksums.txt` and
+ * architecture. Pulumi's and plunge's are copied from `pulumi-<ver>-checksums.txt` and `plunge-v<ver>-checksums.txt` and
  * match the downloaded archives; the AWS CLI, which publishes no checksums
  * file, has the sums of its archives, whose signatures check against the AWS
  * CLI team's key. The images' fetch stage and every install line check them.
@@ -130,6 +130,10 @@ export const RECORDED_SHA256: Readonly<Record<string, Readonly<Record<Arch, stri
   "pulumi-3.277.0": {
     amd64: "1e38f0fb69a14a326cf3acfaf975770e8de5d0771042f26292f0013d237b8393",
     arm64: "b9c2708bd13ffdcba79f555a0532893a9b5a44efca8e225d171b8f7b605b16ce",
+  },
+  "plunge-0.2.2": {
+    amd64: "8e43586f39446c37f95c0c90c2d53ecd1f3249e994ab35b9275e2f998dc9ef21",
+    arm64: "36348959f4f5bbfef16aa49ce98b96446fda155a91299edae3df9f587a599ea9",
   },
   "aws-cli-2.42.1": {
     amd64: "ff2631c32c5db291b099600f404bc493454ec66c125ff4604625da90480c1f47",

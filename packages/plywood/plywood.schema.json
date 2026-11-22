@@ -1247,6 +1247,14 @@
         }
       ]
     },
+    "image_base": {
+      "enum": [
+        "debian",
+        "chainguard"
+      ],
+      "default": "debian",
+      "description": "Which of plywood's published image sets the jobs run in: debian (Node 22 on Debian, root) or chainguard (Chainguard's images, Node 26, user 65532). With image, the set your own image was built FROM, which picks the install lines a job runs."
+    },
     "runners": {
       "description": "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
       "anyOf": [

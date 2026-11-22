@@ -4,9 +4,12 @@
  * plywood pins one stock Pulumi release and one plunge release. The two
  * images, `plywood-pulumi` and `plywood-plunge`, each carry one engine at its
  * pin plus the plywood bundle; `chant dev render` of {@link dockerfiles}
- * (npm run images) writes their Dockerfiles into images/<name>/Dockerfile. A job runs in
+ * (npm run images) writes their Dockerfiles into images/<name>/Dockerfile. Each is
+ * published in two sets (plywood#181): Debian, and Chainguard's Wolfi images
+ * (chant's `base: "chainguard"`, Dockerfiles in images/<name>-chainguard/, tags
+ * ending `-chainguard`), and `image_base` in plywood.yml picks the set. A job runs in
  * the image for its engine, by digest in a release's bundle (the digests
- * chant's release cut recorded, which scripts/build-cli.mjs bakes in), and
+ * chant's release cut recorded for both sets, which scripts/build-cli.mjs bakes in), and
  * runs the install lines for any pin the image
  * does not carry: a `pulumi:` or `plunge:` version in plywood.yml, per stack
  * glob.
@@ -47,13 +50,49 @@ import { version as PLYWOOD_VERSION } from "../package.json";
 /** The release's image digests by reference, baked in by scripts/build-cli.mjs from CHANT_RELEASE_DIGESTS; empty outside a release build. */
 declare const __PLYWOOD_IMAGE_DIGESTS__: Record<string, string> | undefined;
 const digests: Record<string, string> = typeof __PLYWOOD_IMAGE_DIGESTS__ !== "undefined" ? __PLYWOOD_IMAGE_DIGESTS__ : {};
-import { derivedImageDockerfile, productImageDockerfile, type ProductImageSpec } from "@intentius/chant/ci-image";
+import * as ciImage from "@intentius/chant/ci-image";
+import { ciToolInstallLine, derivedImageDockerfile, productImageDockerfile, type ProductImageSpec } from "@intentius/chant/ci-image";
 import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-pulumi/ci-setup";
 import type { ChantRunner } from "./chant-config";
 
 export type EngineName = "pulumi" | "plunge";
 
 export const REGISTRY = "ghcr.io/intentius";
+
+/**
+ * The two image sets a release publishes (plywood#181). `debian` is
+ * `node:22-bookworm-slim` with root as its user; `chainguard` is
+ * Chainguard's `node` and `wolfi-base` (chant's `base: "chainguard"`), which
+ * runs Node 26 and ends as user 65532. `image_base` in plywood.yml picks one.
+ */
+export type ImageSet = "debian" | "chainguard";
+export const IMAGE_SETS: readonly ImageSet[] = ["debian", "chainguard"];
+
+/** The tag suffix of the Chainguard set: the same repository, `<version>-<engine><release>-chainguard`. */
+export const CHAINGUARD_TAG_SUFFIX = "-chainguard";
+
+/** The first plywood release whose images include the Chainguard set, which a refusal names. */
+export const CHAINGUARD_IMAGES_SINCE = "0.5.0";
+
+/** The directory of the job's PATH that the Chainguard set's install lines link into: it is on the image's PATH, and the final user owns /opt/plywood. */
+export const CHAINGUARD_BIN_DIR = "/opt/plywood/bin";
+
+/**
+ * Whether the installed chant takes `base` on `ProductImageSpec`: its
+ * `CI_IMAGE_BASE_FLOOR` (chant#5445) is exported. An older chant renders a
+ * product image as Debian whatever `base` says, so anything that needs the
+ * Chainguard set refuses there, by {@link requireImageBase}.
+ */
+export function chantHasImageBase(): boolean {
+  return "CI_IMAGE_BASE_FLOOR" in ciImage;
+}
+
+/** Refuse, naming `what`, when the installed chant has no `base` for a product image. */
+export function requireImageBase(what: string): void {
+  if (!chantHasImageBase()) {
+    throw new Error(`${what} needs a chant whose CI images take base (CI_IMAGE_BASE_FLOOR in @intentius/chant/ci-image), and the installed chant has none; move the @intentius/chant pin to a release that has it`);
+  }
+}
 
 /**
  * The engine releases the images carry, and the version a job installs when
@@ -96,7 +135,10 @@ export function engineBin(engine: EngineName, version: string): string {
  * place, as in plywood's image or one built FROM it. With `link`, the
  * binary is also linked into /usr/local/bin, as the stack's default engine.
  */
-export function installLine(engine: EngineName, version: string, link = true): string {
+export function installLine(engine: EngineName, version: string, link = true, set: ImageSet = "debian"): string {
+  // The Chainguard set has no curl and its user cannot write /usr/local/bin: node downloads, and the link goes
+  // into /opt/plywood/bin, which the image puts first on PATH and its user can make (chant's ciToolInstallLine).
+  if (set === "chainguard") return ciToolInstallLine(engine, version, { root: ENGINE_ROOT, link, binDir: CHAINGUARD_BIN_DIR, download: "node" });
   const options = { root: ENGINE_ROOT, link };
   return engine === "pulumi" ? pulumiInstallLine(version, options) : plungeInstallLine(version, options);
 }
@@ -110,7 +152,7 @@ export interface EnginePin {
 }
 
 /** The install lines for `pins`, the linked one of each engine last so it wins the link. */
-export function installLines(pins: readonly EnginePin[]): string[] {
+export function installLines(pins: readonly EnginePin[], set: ImageSet = "debian"): string[] {
   const seen = new Set<string>();
   const ordered = [...pins.filter((p) => !p.linked), ...pins.filter((p) => p.linked)];
   const out: string[] = [];
@@ -118,7 +160,7 @@ export function installLines(pins: readonly EnginePin[]): string[] {
     const k = `${p.engine}@${p.version}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push(installLine(p.engine, p.version, p.linked));
+    out.push(installLine(p.engine, p.version, p.linked, set));
   }
   return out;
 }
@@ -135,17 +177,74 @@ export function imageName(engine: EngineName): string {
   return `plywood-${engine}`;
 }
 
-/** The tag: plywood's version and the engine release it carries. */
-export function imageTag(engine: EngineName, version = PLYWOOD_VERSION): string {
-  return `${version}-${engine}${TOOL_VERSIONS[engine]}`;
+/** The tag: plywood's version and the engine release it carries, with `-chainguard` on the Chainguard set's. */
+export function imageTag(engine: EngineName, version = PLYWOOD_VERSION, set: ImageSet = "debian"): string {
+  return `${version}-${engine}${TOOL_VERSIONS[engine]}${set === "chainguard" ? CHAINGUARD_TAG_SUFFIX : ""}`;
 }
 
-/** The image a job for `engine` runs in. */
-export function imageFor(engine: EngineName, table: Record<string, string> = digests): ImageRef {
+/** The image a job for `engine` runs in, from `set`. */
+export function imageFor(engine: EngineName, table: Record<string, string> = digests, set: ImageSet = "debian"): ImageRef {
   const repository = `${REGISTRY}/${imageName(engine)}`;
-  const tag = imageTag(engine);
+  const tag = imageTag(engine, PLYWOOD_VERSION, set);
   const digest = table[`${repository}:${tag}`];
   return { repository, tag, ...(digest ? { digest } : {}) };
+}
+
+/** Tests stand in a release's digest table. `reset` goes back to the one the build carries. */
+export function setImageDigestsForTests(table: Record<string, string> | "reset"): void {
+  active = table === "reset" ? digests : table;
+}
+let active: Record<string, string> = digests;
+
+/** The set's image of `engine` in the build's digest table (or the one a test set). */
+export function publishedImageFor(engine: EngineName, set: ImageSet): ImageRef {
+  return imageFor(engine, active, set);
+}
+
+/**
+ * What stops a pick of `set` when this build carries a release's digests but
+ * none for that set: a release that predates the Chainguard images. A build
+ * with no digests at all (outside a release) names no image for either set,
+ * so nothing stops it.
+ */
+export function imageSetRefusal(set: ImageSet): string | undefined {
+  if (set !== "chainguard") return undefined;
+  const keys = Object.keys(active);
+  if (keys.length === 0 || keys.some((k) => k.endsWith(CHAINGUARD_TAG_SUFFIX))) return undefined;
+  return `plywood ${PLYWOOD_VERSION} publishes no Chainguard images, so its digest table has none to name; ${CHAINGUARD_IMAGES_SINCE} is the first release that does (plywood upgrade ${CHAINGUARD_IMAGES_SINCE}), or name your own image in image`;
+}
+
+/** One image a release builds and publishes: its name in chant's release.images and digests file, its Dockerfile and its reference at a version. */
+export interface ReleaseImage {
+  name: string;
+  engine: EngineName;
+  set: ImageSet;
+  dockerfile: string;
+  repository: string;
+  /** The tag at `version` (`{label}` in the release declaration). */
+  tag(version?: string): string;
+}
+
+/** The engines the images carry. */
+export const ENGINES: readonly EngineName[] = ["pulumi", "plunge"];
+
+/** Where the image's Dockerfile is, from the repository root: the Chainguard set has a directory beside the Debian one. */
+export function imageDockerfilePath(engine: EngineName, set: ImageSet = "debian"): string {
+  return `images/${imageName(engine)}${set === "chainguard" ? "-chainguard" : ""}/Dockerfile`;
+}
+
+/** The images a release builds: each engine's image in each set, Debian first. The name is the engine's, with `-chainguard` on the Chainguard set's. */
+export function releaseImages(): ReleaseImage[] {
+  return IMAGE_SETS.flatMap((set) =>
+    ENGINES.map((engine) => ({
+      name: set === "chainguard" ? `${engine}${CHAINGUARD_TAG_SUFFIX}` : engine,
+      engine,
+      set,
+      dockerfile: imageDockerfilePath(engine, set),
+      repository: `${REGISTRY}/${imageName(engine)}`,
+      tag: (version?: string) => imageTag(engine, version, set),
+    })),
+  );
 }
 
 /** How a pipeline names the image: by digest when it is known, with the tag kept beside it. */
@@ -192,21 +291,25 @@ const LABEL_REF = `\${${RELEASE_LABEL_ARG}}`;
  * provider, and the packed plywood package. curl never reaches the final
  * stage.
  */
-export function imageSpec(engine: EngineName): ProductImageSpec {
+export function imageSpec(engine: EngineName, set: ImageSet = "debian"): ProductImageSpec {
+  const chainguard = set === "chainguard";
+  if (chainguard) requireImageBase("plywood's Chainguard images");
   const version = TOOL_VERSIONS[engine];
   const engineTitle = engine === "pulumi" ? `Pulumi ${version}` : `plunge ${version}`;
   const tarball = `${PACK_DIR}/${packName(LABEL_REF)}`;
   return {
     name: imageName(engine),
     product: "plywood",
-    description: `${engineTitle}, the AWS CLI ${AWS_CLI_VERSION} and the plywood CLI`,
+    description: `${engineTitle}, the AWS CLI ${AWS_CLI_VERSION} and the plywood CLI${chainguard ? ", on Chainguard images" : ""}`,
     source: "https://github.com/INTENTIUS/plywood",
+    ...(chainguard ? { base: "chainguard" as const } : {}),
     tools: [
       { tool: engine, version, checksumsArg: "CHECKSUMS_URL" },
       { tool: "aws-cli", version: AWS_CLI_VERSION },
     ],
     toolRoot: ENGINE_ROOT,
-    env: [`PULUMI_HOME=${IMAGE_PULUMI_HOME}`, "PULUMI_SKIP_UPDATE_CHECK=true"],
+    // The Chainguard set's job installs link into CHAINGUARD_BIN_DIR, ahead of the image's own /usr/local/bin.
+    env: [`PULUMI_HOME=${IMAGE_PULUMI_HOME}`, "PULUMI_SKIP_UPDATE_CHECK=true", ...(chainguard ? [`PATH=${CHAINGUARD_BIN_DIR}:$PATH`] : [])],
     steps: [
       { run: `mkdir -p ${IMAGE_PULUMI_HOME} && chmod 1777 ${IMAGE_PULUMI_HOME} && ${engine} version && aws --version` },
       { run: pluginSteps(engine, IMAGE_PLUGINS) },
@@ -227,13 +330,13 @@ const DOCKERFILE_HEADER = [
 ];
 
 /** One image's Dockerfile: chant's `productImageDockerfile` of {@link imageSpec}. */
-export function dockerfile(engine: EngineName): string {
-  return productImageDockerfile(imageSpec(engine), DOCKERFILE_HEADER);
+export function dockerfile(engine: EngineName, set: ImageSet = "debian"): string {
+  return productImageDockerfile(imageSpec(engine, set), DOCKERFILE_HEADER);
 }
 
-/** Each image's Dockerfile, by its path from the repository root. */
+/** Each image's Dockerfile, by its path from the repository root: both engines, in both sets. */
 export function dockerfiles(): Record<string, string> {
-  return Object.fromEntries((["pulumi", "plunge"] as const).map((e) => [`images/${imageName(e)}/Dockerfile`, dockerfile(e)]));
+  return Object.fromEntries(releaseImages().map((i) => [i.dockerfile, dockerfile(i.engine, i.set)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +364,10 @@ export function parsePlugin(s: string): PluginPin | undefined {
  * their own CI and names it in `image`. chant's `derivedImageDockerfile`
  * writes it.
  */
-export function imageRecipe(engine: EngineName, plugins: readonly PluginPin[], from: ImageRef = imageFor(engine)): string {
+export function imageRecipe(engine: EngineName, plugins: readonly PluginPin[], from?: ImageRef, set: ImageSet = "debian"): string {
+  // The Chainguard set ends as a user that cannot run these steps: chant's derived image runs them as root and sets the user back.
+  if (set === "chainguard") requireImageBase("a prepared image on plywood's Chainguard set");
+  from ??= imageFor(engine, active, set);
   return derivedImageDockerfile({
     from: imageReference(from),
     header: [`A prepared image for plywood's jobs: ${engine} and the plugins below, so a job downloads none.`, "Build and push it in your own CI, then name it by digest in plywood.yml's image."],

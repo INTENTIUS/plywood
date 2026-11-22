@@ -69,29 +69,40 @@ behold-pin:
 chant-local +args:
     npx chant dev local {{args}} --build 'just build'
 
-# Render images/plywood-pulumi/Dockerfile and images/plywood-plunge/Dockerfile
-# from packages/plywood/src/images.ts, which holds the engine pins and their
-# checksums, with `chant dev render` of the module's dockerfiles export.
+# Render the four images' Dockerfiles (images/plywood-pulumi, plywood-plunge and the
+# -chainguard directory of each) from packages/plywood/src/images.ts, which holds the
+# engine pins and their checksums, with `chant dev render` of the module's dockerfiles
+# export. The Chainguard Dockerfiles need a chant that takes `base`.
 # generated-check fails when a committed Dockerfile differs.
 images-render:
     npx chant dev render packages/plywood/src/images.ts dockerfiles
 
-# Build the plywood-pulumi and plywood-plunge images into the local Docker
-# daemon for one platform (default: this machine's). Each checks its engine
-# against the release checksums; `checksums=<url>` builds against another
-# checksums file, so a tampered one can be shown to fail. Nothing is pushed.
-images platform="" checksums="": build
+# Build the plywood-pulumi and plywood-plunge images of one set (`debian`, the default, or
+# `chainguard`; `both` builds each) into the local Docker daemon for one platform (default:
+# this machine's). Each checks its engine against the release checksums; `checksums=<url>`
+# builds against another checksums file, so a tampered one can be shown to fail. The
+# Chainguard set takes the same tag with `-chainguard` on it. Nothing is pushed.
+images set="debian" platform="" checksums="": build
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p images/pack
     npm pack -w @intentius/plywood --pack-destination images/pack >/dev/null
     version="$(node -p 'require("./packages/plywood/package.json").version')"
-    for engine in pulumi plunge; do
-      tool="$(node -e 'const s=require("fs").readFileSync("packages/plywood/src/images.ts","utf8");const m=new RegExp(process.argv[1]+": \"([^\"]+)\"").exec(s);console.log(m[1])' "$engine")"
-      docker build {{ if platform == "" { "" } else { "--platform " + platform } }} \
-        {{ if checksums == "" { "" } else { "--build-arg CHECKSUMS_URL=" + checksums } }} \
-        --build-arg CHANT_RELEASE_LABEL="$version" \
-        -f "images/plywood-$engine/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool" .
+    case "{{set}}" in
+      debian) sets="debian" ;;
+      chainguard) sets="chainguard" ;;
+      both) sets="debian chainguard" ;;
+      *) echo "images: set is debian, chainguard or both, not {{set}}" >&2; exit 2 ;;
+    esac
+    for s in $sets; do
+      suffix=""; [ "$s" = chainguard ] && suffix="-chainguard"
+      for engine in pulumi plunge; do
+        tool="$(node -e 'const s=require("fs").readFileSync("packages/plywood/src/images.ts","utf8");const m=new RegExp(process.argv[1]+": \"([^\"]+)\"").exec(s);console.log(m[1])' "$engine")"
+        docker build {{ if platform == "" { "" } else { "--platform " + platform } }} \
+          {{ if checksums == "" { "" } else { "--build-arg CHECKSUMS_URL=" + checksums } }} \
+          --build-arg CHANT_RELEASE_LABEL="$version" \
+          -f "images/plywood-$engine$suffix/Dockerfile" -t "ghcr.io/intentius/plywood-$engine:$version-$engine$tool$suffix" .
+      done
     done
 
 # Render .github/workflows/ci.yml from ci/ci.ts and publish.yml from

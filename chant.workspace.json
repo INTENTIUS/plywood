@@ -1,6 +1,7 @@
 {
   "name": "plywood",
   "schema": 1,
-  "minReader": "0.108.0",
-  "members": []
+  "minReader": "0.124.33",
+  "members": [],
+  "security": ["supply-chain"]
 }

@@ -6,6 +6,7 @@
  *   pulumi   a version, or stack glob to version     member engineVersion, pipeline engineSetup
  *   plunge   the same, for plunge stacks              member engineVersion, pipeline engineSetup
  *   image    a reference, or { name, plugins }        pipeline image
+ *   image_base  debian (default) or chainguard        which published image set, and its install lines
  *   runners  a label, labels, a GitHub group, or     pipeline runner
  *            default/preview/up/drift to one of those
  *
@@ -18,7 +19,7 @@
  * the release checksums.
  */
 import { withVocabularyKeys } from "./vocabulary";
-import { DIGEST, ENGINE_ROOT, imageFor, imageReference, installLines, engineBin, parsePlugin, PLUGIN, TOOL_VERSIONS, type EngineName, type EnginePin } from "../images";
+import { DIGEST, ENGINE_ROOT, IMAGE_SETS, imageReference, imageSetRefusal, installLines, engineBin, parsePlugin, PLUGIN, publishedImageFor, TOOL_VERSIONS, type EngineName, type EnginePin, type ImageSet } from "../images";
 import type { ChantRunner } from "../chant-config";
 import { error, isObject, onlyKeys, warning, type ConfigGroup, type ConfigProblem, type JsonSchema, type RawConfig } from "./types";
 
@@ -120,6 +121,15 @@ function imageProblems(v: unknown): ConfigProblem[] {
   return out;
 }
 
+function imageBaseProblems(doc: RawConfig): ConfigProblem[] {
+  const v = doc.image_base;
+  if (v === undefined) return [];
+  if (typeof v !== "string" || !(IMAGE_SETS as readonly string[]).includes(v)) return [error("image_base", `is ${JSON.stringify(v)}; the image sets are ${IMAGE_SETS.join(" and ")}`)];
+  // plywood's own image is what a pick names; a user's image carries its own digest.
+  const refusal = userImage(doc) === undefined ? imageSetRefusal(v as ImageSet) : undefined;
+  return refusal ? [error("image_base", refusal)] : [];
+}
+
 /** The image reference `image` names, in either form. */
 export function userImage(doc: RawConfig): string | undefined {
   if (typeof doc.image === "string") return doc.image;
@@ -130,6 +140,11 @@ export function userImage(doc: RawConfig): string | undefined {
 export function imagePlugins(doc: RawConfig) {
   const list = isObject(doc.image) && Array.isArray(doc.image.plugins) ? (doc.image.plugins as unknown[]) : [];
   return list.flatMap((p) => (typeof p === "string" && parsePlugin(p) ? [parsePlugin(p)!] : []));
+}
+
+/** The image set `image_base` picks: Debian when absent. */
+export function imageSetOf(doc: RawConfig): ImageSet {
+  return doc.image_base === "chainguard" ? "chainguard" : "debian";
 }
 
 /** The release of `engine` most of `stacks` run: the linked one. Ties go to the top-level pin, then plywood's. */
@@ -144,7 +159,7 @@ function linkedVersion(engine: EngineName, doc: RawConfig, versions: string[]): 
 
 export const images: ConfigGroup = {
   name: "images",
-  keys: ["pulumi", "plunge", "image", "runners"],
+  keys: ["pulumi", "plunge", "image", "image_base", "runners"],
   schema: withVocabularyKeys({
     pulumi: versionSchema("Pulumi CLI", TOOL_VERSIONS.pulumi),
     plunge: versionSchema("plunge", TOOL_VERSIONS.plunge),
@@ -162,6 +177,11 @@ export const images: ConfigGroup = {
         },
       ],
     },
+    image_base: {
+      enum: [...IMAGE_SETS],
+      default: "debian",
+      description: "Which of plywood's published image sets the jobs run in: debian (Node 22 on Debian, root) or chainguard (Chainguard's images, Node 26, user 65532). With image, the set your own image was built FROM, which picks the install lines a job runs.",
+    },
     runners: {
       description: "The runner every job runs on: a label, a list of labels, or a GitHub runner group; or default, preview, up and drift each mapped to one. runs-on on GitHub and Forgejo, tags on GitLab.",
       anyOf: [runnerSpecSchema, { type: "object", minProperties: 1, not: { required: ["group"] }, propertyNames: { enum: [...RUNNER_STAGES] }, additionalProperties: runnerSpecSchema }],
@@ -169,7 +189,7 @@ export const images: ConfigGroup = {
   }, { runners: "runner" }),
   check(doc) {
     const forge = isObject(doc.forge) ? doc.forge.kind : undefined;
-    const out: ConfigProblem[] = [...versionProblems(doc.pulumi, "pulumi"), ...versionProblems(doc.plunge, "plunge"), ...imageProblems(doc.image), ...runnersProblems(doc.runners, forge)];
+    const out: ConfigProblem[] = [...versionProblems(doc.pulumi, "pulumi"), ...versionProblems(doc.plunge, "plunge"), ...imageProblems(doc.image), ...imageBaseProblems(doc), ...runnersProblems(doc.runners, forge)];
     const listed = isObject(doc.stacks) ? Object.keys(doc.stacks) : [];
     for (const key of ["pulumi", "plunge"] as const) {
       const pin = doc[key];
@@ -203,13 +223,14 @@ export const images: ConfigGroup = {
         pins.push({ engine, version, linked: false });
       }
     }
-    out.pipeline.engineSetup = installLines(pins);
+    const set = imageSetOf(doc);
+    out.pipeline.engineSetup = installLines(pins, set);
 
     const own = userImage(doc);
     if (own) out.pipeline.image = own;
     else {
       // plunge's image when every stack runs plunge, else Pulumi's; by digest only, so an unpublished image is never named.
-      const ref = imageFor(engines.size === 1 && engines.has("plunge") ? "plunge" : "pulumi");
+      const ref = publishedImageFor(engines.size === 1 && engines.has("plunge") ? "plunge" : "pulumi", set);
       if (ref.digest) out.pipeline.image = imageReference(ref);
     }
     if (doc.runners !== undefined) out.pipeline.runner = structuredClone(doc.runners) as ChantRunner;

@@ -29,4 +29,7 @@ LABEL org.opencontainers.image.description="plunge 0.2.0, the AWS CLI 2.22.0 and
 LABEL org.opencontainers.image.version="${CHANT_RELEASE_LABEL}"
 LABEL org.opencontainers.image.source="https://github.com/INTENTIUS/plywood"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.base.name="node:22-bookworm-slim"
+LABEL org.opencontainers.image.base.digest="sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392"
+LABEL io.intentius.chant.image.base="debian"
 CMD ["bash"]

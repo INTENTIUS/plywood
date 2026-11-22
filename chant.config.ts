@@ -1,8 +1,8 @@
 import type { ChantConfig } from "@intentius/chant";
-import { imageName, imageTag, REGISTRY, type EngineName } from "./packages/plywood/src/images";
+import { releaseImages } from "./packages/plywood/src/images";
 
-/** The images a release builds and pushes, one per engine. */
-const ENGINES: readonly EngineName[] = ["pulumi", "plunge"];
+/** The images a release builds and pushes: each engine's image in the Debian set and in the Chainguard set (plywood#181). */
+const IMAGES = releaseImages();
 
 /** What every image copies in: the bundle, built without the release's digests, packed into images/pack. */
 const PREPARE_IMAGES = "npm run build && mkdir -p images/pack && npm pack -w @intentius/plywood --pack-destination images/pack";
@@ -24,8 +24,8 @@ export default {
   // The declarations chant builds from this root when no directory is named: the release cut's compile reads them.
   sourceDir: "ci",
 
-  // The release (AGENTS.md, Releasing), as terragucci's: chant's cut builds both images as
-  // OCI archives from their Dockerfiles and records their digests, the bundle pins them
+  // The release (AGENTS.md, Releasing), as terragucci's: chant's cut builds the four images (two engines, each
+  // in the Debian set and the Chainguard set) as OCI archives from their Dockerfiles and records their digests, the bundle pins them
   // (scripts/build-cli.mjs passes them through chant's releaseImagePins), and chant's publish
   // pushes the images, publishes the package and makes the GitHub release. The label is the
   // version: the cut and the publish stamp it into the package (release.version below), so no
@@ -53,24 +53,25 @@ export default {
       file: ".github/workflows/publish.yml",
     },
     // Each image installs the packed package, built once before the images with no digest table.
-    images: ENGINES.map((name) => ({ name, dockerfile: `images/${imageName(name)}/Dockerfile`, prepare: PREPARE_IMAGES })),
+    // The base images are pinned by digest (chant's pins for the Chainguard set), which `supply-chain` in chant.workspace.json requires.
+    images: IMAGES.map(({ name, dockerfile }) => ({ name, dockerfile, prepare: PREPARE_IMAGES })),
     publish: [
-      ...ENGINES.map((name) => ({
+      // Each image keeps the SBOM chant makes from its layers, which lists the OS packages, and is scanned, signed and given provenance under supply-chain.
+      ...IMAGES.map(({ name, repository, tag }) => ({
         type: "oci" as const,
         image: `dist/images/${name}.tar`,
-        repository: `${REGISTRY}/${imageName(name)}`,
-        tags: [imageTag(name, "{label}")],
-        // The image's SBOM is not the repo's lockfile, so none is attached.
-        sbom: false as const,
+        repository,
+        tags: [tag("{label}")],
       })),
-      // The package pins the images by the digests the cut recorded; the plan refuses any other.
+      // The package pins the images by the digests the cut recorded; the plan refuses any other. The package is one bundle that
+      // npm installs from the registry, so it carries no SBOM file (one would differ between the cut's pack and the publish's, and
+      // the images install that pack); chant scans it from the lockfile.
       { type: "npm" as const, packages: ["packages/plywood"], access: "public" as const, stage: false, sbom: false as const, pins: "dist/image-digests.json" },
       {
         type: "forge" as const,
         forge: "github" as const,
         repo: "INTENTIUS/plywood",
         assets: [],
-        sbom: false as const,
         notes: {
           file: CHANGES,
           heading: "## In {version}",

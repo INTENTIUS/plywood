@@ -29,10 +29,10 @@ const external = new Set();
 const chantPkg = JSON.parse(readFileSync(join(root, "node_modules/@intentius/chant/package.json"), "utf8"));
 const builtChant = chantPkg.chantLocal ? `${chantPkg.version} (local ${String(chantPkg.chantLocal.commit).slice(0, 10)})` : chantPkg.version;
 
-// A release's build (chant's release block, chant.config.ts): the cut built both images
+// A release's build (chant's release block, chant.config.ts): the cut built the images of both sets
 // first and names their digests in the file CHANT_RELEASE_DIGESTS points at. chant's
 // releaseImagePins keys them by each image's reference at this version, which
-// src/images.ts names; the bundle carries the table, and dist/image-digests.json carries
+// src/images.ts names, for the Debian set and the Chainguard set; the bundle carries the table, and dist/image-digests.json carries
 // it for the npm target's `pins`. Any other build has no table, and a pipeline names the
 // images by tag.
 const digests = await chantRelease(async () => releaseImagePins({ images: await imageReferences(), version: pkg.version }));
@@ -75,14 +75,14 @@ writeFileSync(join(metaDir, "metafile.json"), JSON.stringify(result.metafile));
 
 console.log(`  dist/plywood.mjs ${(statSync(outfile).size / 1024).toFixed(1)} KB, chant ${builtChant}, ${external.size} chant imports external`);
 
-/** Each image's reference at this version, by engine, from src/images.ts. */
+/** Each image's reference at this version, by its name in release.images (both sets), from src/images.ts. */
 async function imageReferences() {
   const bundled = join(root, "node_modules/.cache/plywood/images-refs.mjs");
   await build({ entryPoints: [join(pkgDir, "src/images.ts")], outfile: bundled, bundle: true, platform: "node", format: "esm", target: "node22", plugins: [chantExternalPlugin(pkgDir)], logLevel: "warning" });
-  const { imageFor, TOOL_VERSIONS } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);
-  return Object.fromEntries(Object.keys(TOOL_VERSIONS).map((engine) => {
-    const ref = imageFor(engine, {});
-    return [engine, `${ref.repository}:${ref.tag}`];
+  const { imageFor, releaseImages } = await import(`${pathToFileURL(bundled).href}?t=${Date.now()}`);
+  return Object.fromEntries(releaseImages().map(({ name, engine, set }) => {
+    const ref = imageFor(engine, {}, set);
+    return [name, `${ref.repository}:${ref.tag}`];
   }));
 }
 

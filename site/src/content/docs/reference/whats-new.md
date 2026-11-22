@@ -5,11 +5,15 @@ description: 'Changes in each plywood release.'
 
 Each release lists its changes here, newest first.
 
-## In 0.4.1
+## In 0.4.2
+
+This release also carries the changes made for 0.4.1, which was tagged and never published, because the scan that runs before the push found critical vulnerabilities with fixed versions in the tools the images carry and in the lockfile and stopped the release before any image or package left the build.
 
 chant moves to `0.124.114` and the pulumi lexicon to `0.124.104`. The forgejo and github lexicons stay at `0.124.103`.
 
 Images now come in two sets under the same repositories. The Debian set is the default. The Chainguard set is built on Chainguard's public `node` and `wolfi-base` images and has `-chainguard` on the end of its tag. `image_base: chainguard` in `plywood.yml` picks it. Those images run as user 65532 on Node 26, and their apk packages are installed at the versions chant pins. Sigstore signs every image, with SLSA provenance, after a scan that runs before the push. `plywood ci` refuses `image_base: chainguard` on an earlier plywood, which has no Chainguard images to name.
+
+Moving Pulumi, its command provider and the AWS CLI to releases built with patched dependencies clears their findings, so both sets carry Pulumi `3.277.0` in place of `3.272.0`. Its binary and language hosts are built with Go `1.27.4`. The AWS CLI moves to `2.42.1` from `2.22.0` and bundles Python `3.14.10`. The command provider plugin in both images is now `1.3.0`. plywood records the sha256 of the new Pulumi and AWS CLI archives itself, since chant has none for them, and the images and the install lines check those sums as they check chant's. plunge stays at `0.2.0`, and a stack with no `pulumi:` pin in `plywood.yml` now runs Pulumi `3.277.0`.
 
 ## In 0.4.0
 

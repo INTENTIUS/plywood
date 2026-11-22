@@ -8,7 +8,7 @@ Each job runs in plywood's image for its engine, `plywood-pulumi` or `plywood-pl
 On the Debian set, the default:
 
 ```dockerfile
-FROM ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0
+FROM ghcr.io/intentius/plywood-pulumi:0.4.2-pulumi3.277.0
 USER root
 RUN pulumi plugin install resource aws 7.4.0
 RUN chmod -R a+rX /opt/plywood/pulumi-home
@@ -18,7 +18,7 @@ USER ${CHANT_IMAGE_USER:-root}
 On the Chainguard set, whose tag ends in `-chainguard`:
 
 ```dockerfile
-FROM ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0-chainguard
+FROM ghcr.io/intentius/plywood-pulumi:0.4.2-pulumi3.277.0-chainguard
 USER root
 RUN pulumi plugin install resource aws 7.4.0
 RUN chmod -R a+rX /opt/plywood/pulumi-home

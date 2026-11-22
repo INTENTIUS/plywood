@@ -38,8 +38,9 @@ Build the sets locally, with Docker and nothing pushed:
 
 ```
 just images                # Debian, as before
-just images chainguard     # the Chainguard images, tagged <version>-<engine><release>-chainguard
-just images both
+just images "" "" chainguard      # the Chainguard images, tagged <version>-<engine><release>-chainguard
+just images "" "" both
+just images linux/arm64 "" both  # the first argument is the platform, the second a checksums URL
 ```
 
 To check a Chainguard image by hand, run `docker run --rm --entrypoint id ghcr.io/intentius/plywood-pulumi:<tag>-chainguard` (65532), `plywood --version`, and `pulumi version`. The `release.images` Dockerfiles must name every `FROM` by digest, since the workspace turns on `supply-chain`: `chant workspace check` reports an unpinned one, and the release build refuses it.

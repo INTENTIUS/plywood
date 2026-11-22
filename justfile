@@ -77,12 +77,13 @@ chant-local +args:
 images-render:
     npx chant dev render packages/plywood/src/images.ts dockerfiles
 
-# Build the plywood-pulumi and plywood-plunge images of one set (`debian`, the default, or
-# `chainguard`; `both` builds each) into the local Docker daemon for one platform (default:
-# this machine's). Each checks its engine against the release checksums; `checksums=<url>`
-# builds against another checksums file, so a tampered one can be shown to fail. The
-# Chainguard set takes the same tag with `-chainguard` on it. Nothing is pushed.
-images set="debian" platform="" checksums="": build
+# Build the plywood-pulumi and plywood-plunge images into the local Docker daemon for one
+# platform (default: this machine's). Each checks its engine against the release checksums;
+# `checksums` is a URL of another checksums file, so a tampered one can be shown to fail.
+# The third argument picks the set: `debian` (the default), `chainguard` or `both`; the
+# Chainguard set takes the same tag with `-chainguard` on it. Arguments are positional, so
+# `just images "" "" chainguard` builds that set for this machine's platform. Nothing is pushed.
+images platform="" checksums="" set="debian": build
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p images/pack

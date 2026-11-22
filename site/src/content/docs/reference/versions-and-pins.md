@@ -1,6 +1,6 @@
 ---
 title: 'Versions and pins'
-description: 'The pins for the Pulumi CLI and plunge, and the CI image digests.'
+description: 'The pins for the Pulumi CLI and plunge, the two CI image sets and their digests.'
 ---
 
 | Pin | Where | Example |
@@ -8,10 +8,20 @@ description: 'The pins for the Pulumi CLI and plunge, and the CI image digests.'
 | Pulumi CLI | `pulumi:` in `plywood.yml`, one release or a map of stack glob to release; the image's release when absent | `3.272.0` |
 | plunge | `plunge:` in `plywood.yml`, the same forms; each install is checked against the release checksums | `0.2.0` |
 | Provider plugins | your program's lock file, as Pulumi reads it | `@pulumi/aws` in `package-lock.json` |
-| CI image | plywood's image for each stack's engine, by digest; `image:` in `plywood.yml` names your own in its place | `ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0@sha256:...`, `ghcr.io/intentius/plywood-plunge:0.3.0-plunge0.2.0@sha256:...` |
+| CI image | plywood's image for each stack's engine, from the set `image_base` picks (Debian by default), by digest; `image:` in `plywood.yml` names your own in its place | `ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0@sha256:...`, `ghcr.io/intentius/plywood-pulumi:0.3.0-pulumi3.272.0-chainguard@sha256:...` |
 | chant | `@intentius/chant` in plywood's own `package.json`, exact | `0.124.113` |
 | chant lexicons | each lexicon in plywood's own `package.json` at its own release, exact; `plywood init` pins the pulumi lexicon in `chant.workspace.json` at the same release | `0.124.103` |
 | behold | `plywood view` runs this release of `@intentius/behold` with `npx`, and the pulumi lexicon beside it; `BEHOLD_PIN` in `packages/plywood/src/view.ts` | `0.34.2` |
 | chant the stages read | the chant release whose CI stages plywood's preview, waves, drift and approval jobs run on | `0.124.113` |
 
 An image tag names plywood's version and the engine release the image carries. A job whose stack pins another release installs it at the start of the job.
+
+## The two image sets
+
+Each release publishes both engine images in two sets under the same repositories. The Debian set is the default: Node 22 on `node:22-bookworm-slim`, with root as its user. The Chainguard set has `-chainguard` on the end of its tag and is built on Chainguard's public `node` and `wolfi-base` images, which need no login to pull. It runs Node 26, because that is the Node Chainguard's image carries, and it ends as user 65532. Each has the same Pulumi or plunge release, AWS CLI and plywood CLI, and each carries `org.opencontainers.image.base.name`, `org.opencontainers.image.base.digest` and `io.intentius.chant.image.base` labels naming its base.
+
+Set `image_base: chainguard` in `plywood.yml` to run the jobs in the Chainguard set. Nothing else in `plywood.yml` changes.
+
+The digests come from the release. Its build pushes the four images, records each one's digest, and bakes the table into the `plywood` bundle, so a pipeline `plywood ci` writes names the image of the picked set by digest. The table covers both sets, which is why a release that predates the Chainguard images has no entry for them: `plywood config check` and `plywood ci` refuse `image_base: chainguard` on it, and `plywood upgrade` moves a repository to a release that has them. A pick that names your own `image` needs no entry. Each release's images are scanned before they are pushed, carry an SBOM of their layers, and are signed with Sigstore with SLSA provenance, so `cosign verify` and `cosign verify-attestation` check an image against the release.
+
+The Chainguard images are the free public ones. Chainguard's own registry for an organization, which carries version tags and FIPS images, is not one of plywood's keys: build your own image FROM plywood's set ([Run in a prepared image](/plywood/guides/run-in-a-prepared-image/)) or run the jobs in an image of your own with `image`.

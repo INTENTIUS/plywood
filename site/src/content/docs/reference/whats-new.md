@@ -9,7 +9,7 @@ Each release lists its changes here, newest first.
 
 This release also carries the changes made for 0.4.1, which was tagged and never published, because the scan that runs before the push found critical vulnerabilities with fixed versions in the tools the images carry and in the lockfile and stopped the release before any image or package left the build.
 
-chant moves to `0.124.114` and the pulumi lexicon to `0.124.104`. The forgejo and github lexicons stay at `0.124.103`.
+chant moves to `0.124.115` and the pulumi lexicon to `0.124.104`. The forgejo and github lexicons stay at `0.124.103`.
 
 Images now come in two sets under the same repositories. The Debian set is the default. The Chainguard set is built on Chainguard's public `node` and `wolfi-base` images and has `-chainguard` on the end of its tag. `image_base: chainguard` in `plywood.yml` picks it. Those images run as user 65532 on Node 26, and their apk packages are installed at the versions chant pins. Sigstore signs every image, with SLSA provenance, after a scan that runs before the push. `plywood ci` refuses `image_base: chainguard` on an earlier plywood, which has no Chainguard images to name.
 

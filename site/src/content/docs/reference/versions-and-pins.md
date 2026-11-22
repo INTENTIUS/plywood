@@ -9,10 +9,10 @@ description: 'The pins for the Pulumi CLI and plunge, and the Debian and Chaingu
 | plunge | `plunge:` in `plywood.yml`, the same forms; each install is checked against the release checksums | `0.2.0` |
 | Provider plugins | your program's lock file, as Pulumi reads it | `@pulumi/aws` in `package-lock.json` |
 | CI image | plywood's image for each stack's engine, from the set `image_base` picks (Debian by default), by digest; `image:` in `plywood.yml` names your own in its place | `ghcr.io/intentius/plywood-pulumi:0.4.2-pulumi3.277.0@sha256:...`, `ghcr.io/intentius/plywood-pulumi:0.4.2-pulumi3.277.0-chainguard@sha256:...` |
-| chant | `@intentius/chant` in plywood's own `package.json`, exact | `0.124.114` |
+| chant | `@intentius/chant` in plywood's own `package.json`, exact | `0.124.115` |
 | chant lexicons | each lexicon in plywood's own `package.json` at its own release, exact; `plywood init` pins the pulumi lexicon in `chant.workspace.json` at the same release | `0.124.104` |
 | behold | `plywood view` runs this release of `@intentius/behold` with `npx`, and the pulumi lexicon beside it; `BEHOLD_PIN` in `packages/plywood/src/view.ts` | `0.34.2` |
-| chant the stages read | the chant release whose CI stages plywood's preview, waves, drift and approval jobs run on | `0.124.114` |
+| chant the stages read | the chant release whose CI stages plywood's preview, waves, drift and approval jobs run on | `0.124.115` |
 
 An image tag names plywood's version and the engine release the image carries. A job whose stack pins another release installs it at the start of the job.
 

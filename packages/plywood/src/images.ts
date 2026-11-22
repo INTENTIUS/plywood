@@ -72,7 +72,7 @@ export const IMAGE_SETS: readonly ImageSet[] = ["debian", "chainguard"];
 export const CHAINGUARD_TAG_SUFFIX = "-chainguard";
 
 /** The first plywood release whose images include the Chainguard set, which a refusal names. */
-export const CHAINGUARD_IMAGES_SINCE = "0.5.0";
+export const CHAINGUARD_IMAGES_SINCE = "0.4.1";
 
 /** The directory of the job's PATH that the Chainguard set's install lines link into: it is on the image's PATH, and the final user owns /opt/plywood. */
 export const CHAINGUARD_BIN_DIR = "/opt/plywood/bin";

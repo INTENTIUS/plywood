@@ -72,7 +72,7 @@ export const IMAGE_SETS: readonly ImageSet[] = ["debian", "chainguard"];
 export const CHAINGUARD_TAG_SUFFIX = "-chainguard";
 
 /** The first plywood release whose images include the Chainguard set, which a refusal names. */
-export const CHAINGUARD_IMAGES_SINCE = "0.4.1";
+export const CHAINGUARD_IMAGES_SINCE = "0.4.2";
 
 /** The directory of the job's PATH that the Chainguard set's install lines link into: it is on the image's PATH, and the final user owns /opt/plywood. */
 export const CHAINGUARD_BIN_DIR = "/opt/plywood/bin";
@@ -96,11 +96,11 @@ export function requireImageBase(what: string): void {
 
 /**
  * The engine releases the images carry, and the version a job installs when
- * plywood.yml pins none. Pulumi matches the plunge corpus (3.272.0), which
- * plunge 0.2.0 is built from.
+ * plywood.yml pins none. Pulumi is the release whose binaries and language
+ * hosts the release scan passes; plunge 0.2.0 is built from Pulumi 3.272.0.
  */
 export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
-  pulumi: "3.272.0",
+  pulumi: "3.277.0",
   /** A plunge release (INTENTIUS/plunge, tag plunge-v<ver>), not the Pulumi version it is built from. */
   plunge: "0.2.0",
 };
@@ -113,7 +113,34 @@ export const TOOL_VERSIONS: Readonly<Record<EngineName, string>> = {
  * it from the release at build time, as a prepared image's plugins are
  * (imageRecipe); plywood records no sum for it.
  */
-export const IMAGE_PLUGINS: readonly PluginPin[] = [{ kind: "resource", name: "command", version: "1.0.1" }];
+export const IMAGE_PLUGINS: readonly PluginPin[] = [{ kind: "resource", name: "command", version: "1.3.0" }];
+
+/** The two architectures a release file is recorded for, in chant's ci-image words. */
+type Arch = "amd64" | "arm64";
+
+/**
+ * The sha256 plywood records for a pinned release chant records none for
+ * (chant's `CI_TOOL_SHA256` holds the others), by `<tool>-<version>` and
+ * architecture. Pulumi's are copied from `pulumi-<ver>-checksums.txt` and
+ * match the downloaded archives; the AWS CLI, which publishes no checksums
+ * file, has the sums of its archives, whose signatures check against the AWS
+ * CLI team's key. The images' fetch stage and every install line check them.
+ */
+export const RECORDED_SHA256: Readonly<Record<string, Readonly<Record<Arch, string>>>> = {
+  "pulumi-3.277.0": {
+    amd64: "1e38f0fb69a14a326cf3acfaf975770e8de5d0771042f26292f0013d237b8393",
+    arm64: "b9c2708bd13ffdcba79f555a0532893a9b5a44efca8e225d171b8f7b605b16ce",
+  },
+  "aws-cli-2.42.1": {
+    amd64: "ff2631c32c5db291b099600f404bc493454ec66c125ff4604625da90480c1f47",
+    arm64: "98f5f03bb6508a06ce9d9d6d2db97932dce735f3b7ad85616324a95edf4b815f",
+  },
+};
+
+/** plywood's recorded sums for `tool` at `version`, or undefined when chant's are the ones to use. */
+export function recordedSha256(tool: EngineName | "aws-cli", version: string): Readonly<Record<Arch, string>> | undefined {
+  return RECORDED_SHA256[`${tool}-${version}`];
+}
 
 /** Where plywood's images and install lines keep each release: the `engineRoot` a pinned step names. */
 export const ENGINE_ROOT = "/opt/plywood";
@@ -138,8 +165,10 @@ export function engineBin(engine: EngineName, version: string): string {
 export function installLine(engine: EngineName, version: string, link = true, set: ImageSet = "debian"): string {
   // The Chainguard set has no curl and its user cannot write /usr/local/bin: node downloads, and the link goes
   // into /opt/plywood/bin, which the image puts first on PATH and its user can make (chant's ciToolInstallLine).
-  if (set === "chainguard") return ciToolInstallLine(engine, version, { root: ENGINE_ROOT, link, binDir: CHAINGUARD_BIN_DIR, download: "node" });
-  const options = { root: ENGINE_ROOT, link };
+  const sums = recordedSha256(engine, version);
+  if (set === "chainguard") return ciToolInstallLine(engine, version, { root: ENGINE_ROOT, link, binDir: CHAINGUARD_BIN_DIR, download: "node", ...(sums ? { sha256: sums } : {}) });
+  // The pulumi lexicon names the architectures as Pulumi's archives do: x64 for amd64.
+  const options = { root: ENGINE_ROOT, link, ...(sums ? { sha256: { x64: sums.amd64, arm64: sums.arm64 } } : {}) };
   return engine === "pulumi" ? pulumiInstallLine(version, options) : plungeInstallLine(version, options);
 }
 
@@ -266,7 +295,7 @@ export const DIGEST = /@sha256:[0-9a-f]{64}$/;
  * Debian bookworm's package (2.9) does not, which is why the images fetch
  * AWS's own build, checked against chant's recorded sums, rather than apt's.
  */
-export const AWS_CLI_VERSION = "2.22.0";
+export const AWS_CLI_VERSION = "2.42.1";
 
 /** Where the images keep Pulumi's home, so plugins a derived image installs serve every uid. */
 export const IMAGE_PULUMI_HOME = "/opt/plywood/pulumi-home";
@@ -304,8 +333,8 @@ export function imageSpec(engine: EngineName, set: ImageSet = "debian"): Product
     source: "https://github.com/INTENTIUS/plywood",
     ...(chainguard ? { base: "chainguard" as const } : {}),
     tools: [
-      { tool: engine, version, checksumsArg: "CHECKSUMS_URL" },
-      { tool: "aws-cli", version: AWS_CLI_VERSION },
+      { tool: engine, version, checksumsArg: "CHECKSUMS_URL", ...sha256Of(engine, version) },
+      { tool: "aws-cli", version: AWS_CLI_VERSION, ...sha256Of("aws-cli", AWS_CLI_VERSION) },
     ],
     toolRoot: ENGINE_ROOT,
     // The Chainguard set's job installs link into CHAINGUARD_BIN_DIR, ahead of the image's own /usr/local/bin.
@@ -319,6 +348,12 @@ export function imageSpec(engine: EngineName, set: ImageSet = "debian"): Product
     bundle: { tarball, check: "plywood --version" },
     versionArg: RELEASE_LABEL_ARG,
   };
+}
+
+/** plywood's recorded sums as an image tool's `sha256`, or nothing when chant records the release. */
+function sha256Of(tool: EngineName | "aws-cli", version: string): { sha256?: Record<Arch, string> } {
+  const sums = recordedSha256(tool, version);
+  return sums ? { sha256: { ...sums } } : {};
 }
 
 /** The comment lines on top of each rendered Dockerfile. */

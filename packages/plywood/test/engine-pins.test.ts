@@ -3,7 +3,7 @@ import { plungeInstallLine, pulumiInstallLine } from "@intentius/chant-lexicon-p
 import { toChantSettings } from "../src/chant-config";
 import { parseConfig } from "../src/config/index";
 import { ciToolSha256 } from "@intentius/chant/ci-image";
-import { ENGINE_ROOT, installLine, installLines } from "../src/images";
+import { ENGINE_ROOT, installLine, installLines, recordedSha256, TOOL_VERSIONS } from "../src/images";
 import { initStacks } from "../src/init";
 import type { Detected } from "../src/init/detect";
 import { componentsFile, stepInput, wavesSpec } from "../src/init/render";
@@ -21,6 +21,11 @@ describe("install lines", () => {
     expect(installLine("pulumi", "3.272.0")).toBe(pulumiInstallLine("3.272.0", { root: ENGINE_ROOT }));
     expect(installLine("plunge", "0.2.0")).toBe(plungeInstallLine("0.2.0", { root: ENGINE_ROOT }));
     expect(installLine("pulumi", "3.272.0")).toContain(ciToolSha256("pulumi", "3.272.0").amd64!);
+  });
+
+  it("pass plywood's recorded sums for a pin chant records none for", () => {
+    const sums = recordedSha256("pulumi", TOOL_VERSIONS.pulumi)!;
+    expect(installLine("pulumi", TOOL_VERSIONS.pulumi)).toBe(pulumiInstallLine(TOOL_VERSIONS.pulumi, { root: ENGINE_ROOT, sha256: { x64: sums.amd64, arm64: sums.arm64 } }));
   });
 
   it("take chant's unlinked line for a pin that is not linked", () => {

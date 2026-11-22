@@ -21,7 +21,7 @@ describe("the bench's day-2 action", () => {
     expect(text).toContain('class RotateCommand extends pulumi.CustomResource');
     expect(text).toContain('super("command:local:Command", name, props, opts);');
     expect(text).toContain('new RotateCommand(\n        "rotate",');
-    expect(text).toContain('{ version: "1.0.1" }');
+    expect(text).toContain('{ version: "1.3.0" }');
     expect(text).toContain('new pulumi.Config("shop").get("rotateMarker")');
     expect(text).toContain("environment: { ROTATE_MARKER: marker }");
     expect(text).toContain('printf "%s %s\\\\n" "$ROTATE_MARKER"');
